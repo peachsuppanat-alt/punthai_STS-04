@@ -1,0 +1,39 @@
+/* Auth.css */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6); /* พื้นหลังสีดำโปร่งใส */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999; /* บังคับให้อยู่บนสุดของหน้าเว็บ */
+}
+
+.modal-content {
+  background-color: #ffffff;
+  padding: 30px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  position: relative;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  font-size: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #888;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #ff4d4f;
+}

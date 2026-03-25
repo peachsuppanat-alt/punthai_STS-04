@@ -1,0 +1,78 @@
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 60px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  position: sticky; 
+  top: 0;
+  z-index: 1000;
+}
+
+.menu {
+    display: flex !important;
+    gap: 20px;
+    /* background-color: #cacaca; */
+
+}
+
+.navbar a {
+  text-decoration: none;
+  color: #333;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 500;
+  transition: 0.3s;
+}
+
+.navbar a:hover, .active-link {
+  color: #ff6a00;
+}
+
+.logo-img {
+  height: 50px;     
+  width: auto;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* เอา CSS ปุ่มต่างๆ จาก Home.css มาใส่ด้วยเพื่อให้แสดงผลถูกต้องใน Navbar */
+.btn-primary {
+  background: #D35325;
+  color: white;
+  border: none;
+  height: 44px;             
+  padding: 0 22px;         
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.btn-outline {
+  border: 2px solid #D35325;
+  background: transparent;
+  color: #D35325;
+  height: 44px;             
+  padding: 0 22px;        
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.nav-icons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-users, .btn-world {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: #f1f1f1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
