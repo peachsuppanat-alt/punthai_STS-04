@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './MyProject.css';
-import { Link, useLocation } from 'react-router-dom'; // เปลี่ยนจาก useParams เป็น useLocation
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 // ดึงรูปภาพกลับมาใช้งาน
 import logoImg from './assets/logo.png';
@@ -11,23 +11,24 @@ export const MyProject = () => {
     // 1. State สำหรับจัดการ Sidebar
     const [isCollapsed, setIsCollapsed] = useState(false);
 
-    // 2. State สำหรับจัดการข้อมูลโปรเจกต์และ Popup
-    const [projectName, setProjectName] = useState('กำลังโหลดข้อมูล...'); // เก็บชื่อแบรนด์ที่ดึงมา
-    const [showEditPopup, setShowEditPopup] = useState(false);      // เปิด/ปิด Popup
-    const [editNameValue, setEditNameValue] = useState('');         // ค่าที่พิมพ์ใน Popup
+    // 2. State สำหรับเก็บชื่อโปรเจกต์ และ รายการสินค้า
+    const [projectName, setProjectName] = useState('กำลังโหลดข้อมูล...'); 
+    const [products, setProducts] = useState([]); // 👈 เพิ่ม State นี้เพื่อเก็บรายการสินค้า
 
-    // รับ projectId ที่ถูกส่งมาจากหน้า Home (ผ่านเมนู onClick)
+    // รับ projectId ที่ถูกส่งมาจากหน้า Home
     const location = useLocation();
+    const navigate = useNavigate();
     const projectId = location.state?.projectId;
 
-    // 3. ใช้ useEffect เพื่อดึงข้อมูลโปรเจกต์จาก Database เมื่อเข้าหน้านี้
+    // 3. ใช้ useEffect เพื่อดึงข้อมูลโปรเจกต์และสินค้าจาก Database เมื่อเข้าหน้านี้
     useEffect(() => {
         if (projectId) {
+            // ดึงชื่อโปรเจกต์
             fetch(`http://localhost:3000/api/projects/detail/${projectId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        setProjectName(data.project.name_concept); // ใส่ชื่อจาก Database จริงลงไป
+                        setProjectName(data.project.name_concept);
                     } else {
                         setProjectName('ไม่พบข้อมูลโปรเจกต์');
                     }
@@ -36,6 +37,17 @@ export const MyProject = () => {
                     console.error("Fetch error:", err);
                     setProjectName('ไม่สามารถดึงข้อมูลได้');
                 });
+
+            // 👈 ดึงรายการสินค้าของโปรเจกต์นี้
+            fetch(`http://localhost:3000/api/brand_product/${projectId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        setProducts(data.products);
+                    }
+                })
+                .catch(err => console.error("Fetch products error:", err));
+
         } else {
             setProjectName('ไม่พบรหัสโปรเจกต์');
         }
@@ -45,40 +57,9 @@ export const MyProject = () => {
         setIsCollapsed(!isCollapsed);
     };
 
-    // 4. ฟังก์ชันสำหรับกดปุ่ม "Edit Name"
-    const handleOpenEditPopup = () => {
-        setEditNameValue(projectName); // เอาชื่อปัจจุบันไปใส่ในช่องกรอก
-        setShowEditPopup(true);
-    };
-
-    // 5. ฟังก์ชันสำหรับบันทึกชื่อใหม่ลง Database
-    const handleSaveName = async (e) => {
-        e.preventDefault();
-        
-        if (!projectId) return alert('ไม่พบรหัสโปรเจกต์');
-
-        try {
-            const res = await fetch(`http://localhost:3000/api/projects/${projectId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name_concept: editNameValue })
-            });
-            const data = await res.json();
-            
-            if (data.status === 'success') {
-                setProjectName(editNameValue); // อัปเดตชื่อบนหน้าจอ
-                setShowEditPopup(false);       // ปิด Popup
-            } else {
-                alert('อัปเดตไม่สำเร็จ: ' + data.message);
-            }
-        } catch (err) {
-            alert('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
-        }
-    };
-
     return (
         <div className="mp-body-wrapper">
-            {/* --- Navbar และ Sidebar โค้ดเดิมของคุณ --- */}
+            {/* --- Navbar --- */}
             <header className="mp-navbar">
                 <div className="mp-logo">
                     <Link to="/">
@@ -93,6 +74,7 @@ export const MyProject = () => {
             </header>
 
             <div className="mp-container">
+                {/* --- Sidebar --- */}
                 <aside className={`mp-sidebar ${isCollapsed ? 'mp-collapsed' : ''}`} id="mp-sidebar">
                     <button className="mp-toggle-btn" id="mp-toggleBtn" onClick={toggleSidebar}>
                         {isCollapsed ? '❯' : '❮'}
@@ -105,7 +87,11 @@ export const MyProject = () => {
                     </ul>
                     <hr className="mp-hr" />
                     <ul className="mp-menu">
-                        <li><span className="mp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="mp-text">Yours Projects</span></li>
+                        {/* ลิงก์ไปหน้า YourProjects */}
+                        <li onClick={() => navigate('/your-projects', { state: { projectId } })}>
+                            <span className="mp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
+                            <span className="mp-text">Yours Projects</span>
+                        </li>
                     </ul>
                     <div className="mp-help">
                         <img src={helpImg} className="mp-help-img" alt="help" />
@@ -115,7 +101,7 @@ export const MyProject = () => {
                 </aside>
 
                 <main className="mp-main">
-                    <h1 lang="en" className="mp-h1">My Project</h1>
+                    <h1 lang="en" className="mp-h1">{projectName}</h1>
                     <p className="mp-subtitle">นี่คือสรุปสิ่งที่เราได้สร้างขึ้นสำหรับแบรนด์ของคุณจนถึงตอนนี้</p>
 
                     <div className="mp-grid">
@@ -125,7 +111,6 @@ export const MyProject = () => {
                             <div className="mp-pic-create">
                                 <img src={createImg} alt="" className="mp-pic" />
                             </div>
-                            {/* แสดงชื่อแบรนด์แบบ Dynamic ที่ก้อนซ้ายด้วย */}
                             <h2 className="mp-h2">ชื่อแบรนด์ ({projectName})</h2>
                             <p className="mp-p">Let’s get started on building your brand!</p>
                             
@@ -139,64 +124,71 @@ export const MyProject = () => {
 
                         {/* Right Column */}
                         <div className="mp-right-column">
-                            {/* 👇 แก้ไขส่วน Name Card ตรงนี้ 👇 */}
+                            {/* Name Card */}
                             <div className="mp-card mp-small">
                                 <h3 className="mp-h3">Name</h3>
                                 <div className="mp-name-box">
-                                    {/* แสดงชื่อโปรเจกต์ */}
                                     <span style={{ display: 'block', marginBottom: '15px', color: '#333' }}>
-                                        {projectName}
+                                        ให้ Ai ช่วยคิดชื่อให้สิ
                                     </span>
                                     <div className="mp-btn-group">
-                                        <button className="mp-btn" onClick={handleOpenEditPopup}>Edit Name</button>
+                                        <button className="mp-btn mp-btn-disabled">Edit Name</button>
                                         <button className="mp-btn mp-btn-disabled">View</button>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* colors, fonts, products โค้ดเดิม */}
+                            {/* Colors */}
                             <div className="mp-card mp-small">
                                 <h3 className="mp-h3">Colors</h3>
                                 <div className="mp-colors"><span className="mp-color mp-red"></span><span className="mp-color mp-orange"></span><span className="mp-color mp-green"></span><span className="mp-color mp-yellow"></span></div>
                                 <button className="mp-btn">Edit Colors</button>
                             </div>
+                            
+                            {/* Fonts */}
                             <div className="mp-card mp-small">
                                 <h3 className="mp-h3">Fonts</h3>
                                 <div className="mp-font-empty"></div>
                                 <button className="mp-btn mp-btn-disabled">Edit Fonts</button>
                             </div>
+                            
+                            {/* 👇 Products Section (อัปเดตใหม่) 👇 */}
                             <div className="mp-card mp-small mp-products-card">
                                 <h3 className="mp-h3">Products</h3>
-                                <div className="mp-products"><div className="mp-product-box"></div><div className="mp-product-box"></div><div className="mp-product-box"></div><div className="mp-product-box"></div></div>
-                                <div className="mp-btn-group"><button className="mp-btn">Generates Pictures</button><button className="mp-btn">View</button></div>
+                                <div className="mp-products">
+                                    {/* บังคับสร้างกล่องว่าง 4 กล่องเสมอ แต่ถ้ามีข้อมูลสินค้าก็จะเอารูปมาใส่แทนที่ */}
+                                    {[...Array(4)].map((_, index) => {
+                                        const product = products[index]; // ดึงข้อมูลสินค้าตาม index
+                                        return (
+                                            <div key={index} className="mp-product-box">
+                                                {/* ถ้ามีข้อมูลสินค้า และมีรูปภาพ ให้แสดงรูป */}
+                                                {product && product.image_product ? (
+                                                    <img 
+                                                        src={`http://localhost:3000/uploads/${product.image_product}`} 
+                                                        alt={product.name_product} 
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} 
+                                                    />
+                                                ) : null}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <div className="mp-btn-group">
+                                    <button className="mp-btn">Generates Pictures</button>
+                                    {/* เพิ่มการ Navigate ไปหน้า Your Projects เมื่อกดปุ่ม View */}
+                                    <button 
+                                        className="mp-btn" 
+                                        onClick={() => navigate('/your-projects', { state: { projectId } })}
+                                    >
+                                        View
+                                    </button>
+                                </div>
                             </div>
+                            {/* 👆 สิ้นสุดส่วน Products 👆 */}
                         </div>
                     </div>
                 </main>
             </div>
-
-            {/* 👇 6. เพิ่ม UI Popup ต่อจาก mp-container (ก่อนปิด div บนสุด) 👇 */}
-            {showEditPopup && (
-                <div className="mp-popup-overlay">
-                    <div className="mp-popup-content">
-                        <h3>แก้ไขชื่อแบรนด์</h3>
-                        <form onSubmit={handleSaveName}>
-                            <input 
-                                type="text" 
-                                value={editNameValue}
-                                onChange={(e) => setEditNameValue(e.target.value)}
-                                className="mp-popup-input"
-                                required
-                                placeholder="ตั้งชื่อแบรนด์ใหม่..."
-                            />
-                            <div className="mp-popup-actions">
-                                <button type="button" className="mp-btn-cancel" onClick={() => setShowEditPopup(false)}>ยกเลิก</button>
-                                <button type="submit" className="mp-btn-save">บันทึก</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

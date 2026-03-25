@@ -234,7 +234,42 @@ app.put('/api/projects/:id', async (req, res) => {
         return res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+// ดึงรายการสินค้าทั้งหมดของ Project นั้นๆ
+app.get('/api/brand_product/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        const [products] = await connection.query("SELECT * FROM brand_product WHERE project_id = ?", [projectId]);
+        connection.release();
+        res.json({ status: 'success', products });
+    } catch (err) {
+        console.error("Fetch products error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
 
+// บันทึกสินค้าใหม่ พร้อมรูปภาพ
+// สังเกตว่าเราใช้ upload.single('image_product') เพราะส่งมาจาก formData ฝั่ง React
+app.post('/api/brand_product', upload.single('image_product'), async (req, res) => {
+    const { project_id, name_product, type_product } = req.body;
+    const image_product = req.file ? req.file.filename : null; // ชื่อไฟล์รูป
+
+    if (!project_id || !name_product || !type_product) {
+        return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+        const sql = `INSERT INTO brand_product (project_id, name_product, type_product, image_product) VALUES (?, ?, ?, ?)`;
+        await connection.query(sql, [project_id, name_product, type_product, image_product]);
+        connection.release();
+
+        res.json({ status: 'success', message: 'เพิ่มสินค้าสำเร็จ' });
+    } catch (err) {
+        console.error("Insert product error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

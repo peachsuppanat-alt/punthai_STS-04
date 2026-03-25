@@ -1,0 +1,138 @@
+/* YourProjects.css */
+.yp-body {
+  background: #f5f5f5;
+  font-family: 'Bai Jamjuree', sans-serif;
+  min-height: 100vh;
+}
+.yp-body:lang(en) { font-family: 'Poppins', sans-serif; }
+
+.yp-navbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 15px 40px; background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  position: sticky; top: 0; z-index: 1000;
+}
+.yp-logo-img { height: 50px; width: auto; object-fit: contain; cursor: pointer; transition: 0.3s ease; }
+.yp-logo-img:hover { transform: scale(1.05); }
+
+.yp-btn-users, .yp-btn-world {
+  width: 44px; height: 44px; border-radius: 50%; border: none;
+  background: #f1f1f1; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.5s ease;
+}
+.yp-btn-users iconify-icon, .yp-btn-world iconify-icon { font-size: 22px; color: #D35325; }
+.yp-btn-users:hover, .yp-btn-world:hover { background: #f05a28; }
+.yp-btn-users:hover iconify-icon, .yp-btn-world:hover iconify-icon { color: #fff; }
+
+.yp-nav-icons { display: flex; gap: 10px; align-items: center; }
+.yp-container { display: flex; min-height: calc(100vh - 80px); }
+
+/* Sidebar */
+.yp-sidebar {
+  width: 240px; background: #ffffff; padding: 20px 15px; border-right: 1px solid #eee;
+  position: sticky; top: 70px; height: calc(100vh - 70px); transition: 0.3s; display: flex; flex-direction: column;
+}
+.yp-sidebar.yp-collapsed { width: 90px; padding: 20px 10px; border-radius: 0 30px 30px 0; align-items: center; }
+.yp-menu { list-style: none; padding: 0; margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.yp-menu li { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; cursor: pointer; transition: all 0.25s ease; font-weight: 500; }
+.yp-menu li:hover { background: #f3f6ea; color: #6b8e23; }
+.yp-icon iconify-icon { font-size: 25px; width: 24px; height: 24px; margin-top: 5px; }
+.yp-text { white-space: nowrap; transition: 0.3s; }
+.yp-sidebar hr.yp-hr { border: none; border-top: 1px solid #e5e5e5; margin: 10px 0 -15px 0; }
+.yp-sidebar.yp-collapsed .yp-text, .yp-sidebar.yp-collapsed .yp-help { display: none; }
+.yp-sidebar.yp-collapsed .yp-menu li { justify-content: center; width: 100%; }
+.yp-sidebar.yp-collapsed hr.yp-hr { width: 40px; margin: 10px auto; }
+.yp-toggle-btn {
+  position: absolute; top: 20px; right: -15px; width: 34px; height: 34px;
+  border-radius: 100%; border: none; background: #f1f1f1; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.yp-help { margin-top: auto; text-align: center; }
+.yp-help-img { width: 135px; margin-bottom: 10px; }
+.yp-help-text { color: #d75a2a; font-weight: 600; }
+.yp-contact-link { display: inline-block; color: #333; text-decoration: none; font-size: 14px; }
+.yp-contact-link:hover { text-decoration: underline; }
+
+/* Main */
+.yp-main { flex: 1; padding: 30px; }
+.yp-main h1.yp-h1 { color: #d75a2a; margin-bottom: 5px; font-weight: 900; }
+.yp-subtitle { color: #666; margin-bottom: 20px; font-size: 20px; }
+
+/* สร้าง Container สำหรับ Grid 3 คอลัมน์ */
+.yp-cards-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* แบ่งเป็น 3 ส่วนเท่าๆ กันใน 1 แถว */
+  gap: 20px;
+  width: 100%;
+}
+
+/* AI Card */
+.yp-ai-card {
+  width: 100%; padding: 20px; background: #ffffff; border-radius: 18px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); transition: all 0.3s ease;
+}
+.yp-ai-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12); }
+.yp-ai-card-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.yp-step-number { width: 40px; height: 40px; background: #c65428; color: white; font-size: 24px; font-weight: bold; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.yp-ai-card-header h2 { color: #c65428; font-size: 28px; margin: 0; }
+.yp-image-group { display: flex; gap: 16px; }
+.yp-image-box { flex: 1; height: 120px; background: #d9d9d9; border-radius: 12px; }
+
+/* FAB */
+.yp-fab {
+  position: fixed; bottom: 30px; right: 30px; width: 70px; height: 70px;
+  border-radius: 50%; border: none; background: #c65428; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2); transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.yp-fab iconify-icon { color: #fff; }
+.yp-fab:hover { transform: scale(1.08); box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3); }
+
+/* Modal */
+.yp-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  display: flex; justify-content: center; align-items: center; z-index: 3000;
+}
+.yp-modal-box {
+  background: #fff; width: 720px; padding: 30px 40px; border-radius: 20px;
+  position: relative; box-shadow: 0 25px 60px rgba(0,0,0,0.15); animation: yp-fadeIn 0.25s ease;
+}
+.yp-close-modal {
+  position: absolute; right: 20px; top: 15px; border: none; background: #f1f1f1;
+  width: 38px; height: 38px; border-radius: 50%; font-size: 20px; cursor: pointer; color: #d3542b;
+}
+.yp-close-modal:hover { background: #ffe6de; }
+
+/* Form Elements */
+.yp-form-group { margin-bottom: 25px; }
+.yp-form-group label { font-weight: 700; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+.yp-step { background: #d3542b; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+.yp-form-group input { width: 100%; padding: 14px 16px; margin-top: 10px; border-radius: 14px; border: 1px solid #ddd; font-size: 16px; outline: none; box-sizing: border-box;}
+
+/* Dropdown */
+.yp-dropdown { position: relative; margin-top: 10px; }
+.yp-dropdown-selected { background: #f5f5f5; padding: 14px 16px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; color: #777; transition: 0.25s; }
+.yp-dropdown-selected:hover { background: #eeeeee; }
+.yp-dropdown-menu { position: absolute; top: 110%; left: 0; width: 100%; background: #fff; border-radius: 14px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); list-style: none; padding: 8px 0; z-index: 10; margin: 0; }
+.yp-dropdown-menu li { padding: 12px 16px; cursor: pointer; transition: 0.2s; }
+.yp-dropdown-menu li:hover { background: #fff1ec; color: #d3542b; }
+
+/* Upload Box */
+.yp-upload-box {
+  margin-top: 10px; border: 2px dashed #cfcfcf; border-radius: 18px; padding: 40px;
+  text-align: center; color: #888; transition: 0.3s; display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.yp-upload-box:hover { border-color: #d3542b; background: #fff6f2; }
+.yp-drag { font-size: 20px; font-weight: 600; margin: 0;}
+.yp-sub { margin: 0; }
+.yp-upload-btn { background: #d3542b; color: #fff; border: none; padding: 10px 22px; border-radius: 20px; cursor: pointer; }
+.yp-upload-btn:hover { background: #b8431f; }
+.yp-preview-img { width: 160px; height: 160px; object-fit: cover; border-radius: 16px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
+.yp-change-btn { background: linear-gradient(145deg, #fff, #fff5f1); border: 1px solid #d3542b; color: #d3542b; padding: 9px 22px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.25s ease; }
+.yp-change-btn:hover { background: #d3542b; color: #fff; }
+
+/* Actions */
+.yp-modal-actions { display: flex; justify-content: flex-end; gap: 15px; margin-top: 10px; }
+.yp-cancel { background: #eee; color: #999; border-radius: 25px; padding: 12px 26px; border: none; cursor: pointer;}
+.yp-confirm { background: #d3542b; color: #fff; border-radius: 25px; padding: 12px 30px; border: none; cursor: pointer;}
+.yp-confirm:hover { background: #b8431f; }
+
+@keyframes yp-fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
