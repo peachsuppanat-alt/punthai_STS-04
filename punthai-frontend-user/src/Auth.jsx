@@ -50,7 +50,23 @@ function Auth({ onLoginSuccess, onClose }) {
         // 🚨 สำคัญมาก: ห้ามใส่ headers { 'Content-Type': 'application/json' } เด็ดขาด!
         body: formData 
       });
+      // 👇 2. เพิ่มโค้ดส่วนนี้เพื่อทำการ "เข้าสู่ระบบอัตโนมัติ" ทันที 👇
+        const loginRes = await fetch('http://localhost:3000/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // ส่งข้อมูลที่เพิ่งกรอกไปให้ API Login ทันที (เช็คให้ตรงกับ API Login ของคุณว่าใช้อะไรส่งไป)
+          body: JSON.stringify({ email: email, password: password }) 
+        });
+        const loginData = await loginRes.json();
 
+        if (loginData.status === 'success') {
+            onLoginSuccess(loginData.user); // อัปเดตข้อมูล user ขึ้นระบบ (App.jsx)
+            onClose();                      // ปิด Popup
+        } else {
+            // เผื่อกรณีผิดพลาด จะได้ให้ผู้ใช้ไปล็อกอินเอง
+            alert('เข้าสู่ระบบอัตโนมัติไม่สำเร็จ กรุณาล็อกอินด้วยตัวเอง');
+            // setIsLogin(true); // ค่อยให้สลับไปหน้าล็อกอินตรงนี้
+        }
       const data = await res.json();
       if (data.status === 'success') {
         alert('✅ สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ');
