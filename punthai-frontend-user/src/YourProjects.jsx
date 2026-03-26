@@ -151,7 +151,7 @@ export const YourProjects = () => {
               <span className="yp-icon"><iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon></span>
               <span className="yp-text">Projects</span>
             </li>
-            <li>
+            <li onClick={() => navigate('/brand-dna', { state: { projectId } })}>
               <span className="yp-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span>
               <span className="yp-text">Brand DNA</span>
             </li>

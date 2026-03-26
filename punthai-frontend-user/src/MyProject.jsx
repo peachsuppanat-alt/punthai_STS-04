@@ -125,13 +125,19 @@ export const MyProject = () => {
                             <p className="mp-p">Let’s get started on building your brand!</p>
                             
                             <div className="mp-action-list">
-                                <div className="mp-action-item">
-                                    <div className="mp-left">
+                                
+                                <div
+                                    className="mp-action-item"
+                                    onClick={() => navigate('/brand-dna', { state: { projectId } })}
+                                    style={{ cursor: 'pointer' }} 
+                                >
+                                    <div className="mp-left" >
                                         <iconify-icon icon="mdi:dna"></iconify-icon>
                                         <span>Generates Brand DNA</span>
                                     </div>
                                     <iconify-icon icon="mdi:chevron-right"></iconify-icon>
                                 </div>
+                            
                                 <div className="mp-action-item">
                                     <div className="mp-left">
                                         <iconify-icon icon="mdi:lightbulb-outline"></iconify-icon>

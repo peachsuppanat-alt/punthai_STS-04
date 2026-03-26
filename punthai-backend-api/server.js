@@ -6,7 +6,10 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import Replicate from "replicate"; // 1. เพิ่มบรรทัดนี้
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
 dotenv.config();
 
 const app = express();
@@ -270,6 +273,106 @@ app.post('/api/brand_product', upload.single('image_product'), async (req, res) 
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+//  API สำหรับวิเคราะห์ Brand DNA ด้วย Gemini (อัปเดตดึงสินค้าทั้งหมด)
+app.post('/api/generate-brand-dna', async (req, res) => {
+    //  ไม่ต้องรับ name_product, type_product จาก req.body  เพราะเราจะดึงจาก DB 
+    const { project_id, user_id, business_type, archetype, audience_data } = req.body;
+
+    if (!project_id) {
+        return res.status(400).json({ status: 'error', message: 'Missing project_id' });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+
+        //  ดึงข้อมูลสินค้าทั้งหมดของโปรเจกต์นี้จากฐานข้อมูล
+        const [products] = await connection.query(
+            "SELECT name_product, type_product FROM brand_product WHERE project_id = ?",
+            [project_id]
+        );
+        
+        // จัดรูปแบบข้อความรายการสินค้าเพื่อส่งให้ AI
+        let productsText = "ยังไม่มีข้อมูลสินค้า";
+        if (products.length > 0) {
+            productsText = products.map((p, index) => 
+                `        ${index + 1}. ชื่อสินค้า: ${p.name_product} (ประเภท: ${p.type_product})`
+            ).join('\n');
+        }
+
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        // Prompt 
+        const prompt = `
+        คุณเป็นผู้เชี่ยวชาญด้านการสร้างแบรนด์ (Brand Strategist) ระดับโลก
+        ข้อมูลเบื้องต้นของแบรนด์นี้:
+        - รูปแบบธุรกิจ: ${business_type}
+        - ตัวตนของแบรนด์ (Archetype): ${archetype}
+        - ข้อมูลลูกค้าเป้าหมายเบื้องต้นที่เจ้าของแบรนด์คิดไว้: ${audience_data}
+        - รายการสินค้าทั้งหมดของแบรนด์ที่จะขาย:
+${productsText}
+
+        ต้องการให้วิเคราะห์และส่งผลลัพธ์กลับมาเป็นรูปแบบ JSON เท่านั้น ห้ามมีข้อความอธิบายอื่นๆ นอกเหนือจาก JSON โดยให้มีโครงสร้าง Key ดังนี้:
+        {
+            "target_audience": "วิเคราะห์และเจาะลึกกลุ่มเป้าหมายให้ชัดเจนยิ่งขึ้น",
+            "brand_value": "สรุปคุณค่าหลักของแบรนด์ (Brand Value) สั้นๆ กระชับๆ",
+            "customer_perception": "เมื่อลูกค้าใช้สินค้าที่ระบุไว้ เขาจะรู้สึกหรือมองเห็นแบรนด์นี้เป็นแบบไหน",
+            "design_suggestions": ["คำแนะนำการออกแบบข้อ 1", "คำแนะนำการออกแบบข้อ 2", "คำแนะนำการออกแบบข้อ 3"]
+        }
+        `;
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+
+        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const aiData = JSON.parse(cleanedText);
+
+        const sqlDNA = `
+            INSERT INTO brand_dna (project_id, business_type, archetype_name, target_audience, brand_value, customer_perception, design_suggestions)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            business_type = VALUES(business_type), archetype_name = VALUES(archetype_name),
+            target_audience = VALUES(target_audience), brand_value = VALUES(brand_value),
+            customer_perception = VALUES(customer_perception), design_suggestions = VALUES(design_suggestions)
+        `;
+        await connection.query(sqlDNA, [
+            project_id, business_type, archetype, aiData.target_audience, 
+            aiData.brand_value, aiData.customer_perception, JSON.stringify(aiData.design_suggestions)
+        ]);
+
+        const sqlLog = `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`;
+        await connection.query(sqlLog, [user_id || 0, project_id, 'GENERATE_BRAND_DNA', prompt, cleanedText]);
+
+        connection.release();
+
+        res.json({ status: 'success', data: { archetype, ...aiData } });
+
+    } catch (err) {
+        console.error("Gemini/DB Error:", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการประมวลผล AI' });
+    }
+});
+app.get('/api/brand_dna/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query("SELECT * FROM brand_dna WHERE project_id = ?", [projectId]);
+        connection.release();
+
+        if (rows.length > 0) {
+            let dna = rows[0];
+            // แปลง string JSON กลับเป็น Array เพื่อให้ React ใช้งานได้
+            try { dna.design_suggestions = JSON.parse(dna.design_suggestions); } catch (e) {}
+            res.json({ status: 'success', data: dna });
+        } else {
+            res.json({ status: 'not_found' });
+        }
+    } catch (err) {
+        console.error("Fetch DNA error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

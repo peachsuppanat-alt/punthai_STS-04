@@ -4,6 +4,7 @@
   "main": "server.js",
   "type": "module",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "accepts": "^2.0.0",
     "aws-ssl-profiles": "^1.1.2",
     "body-parser": "^2.2.2",
