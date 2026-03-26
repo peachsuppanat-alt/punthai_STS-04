@@ -80,8 +80,18 @@ export const MyProject = () => {
                         {isCollapsed ? '❯' : '❮'}
                     </button>
                     <ul className="mp-menu">
-                        <li><span className="mp-icon"><iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon></span><span className="mp-text">Projects</span></li>
-                        <li><span className="mp-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span><span className="mp-text">Brand DNA</span></li>
+                        <li>
+                            <span className="mp-icon">
+                                <iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon>
+                            </span>
+                            <span className="mp-text">Projects</span>
+                        </li>
+                        <li onClick={() => navigate('/brand-dna', { state: { projectId } })}>
+                            <span className="mp-icon">
+                                <iconify-icon icon="mdi:palette-outline"></iconify-icon>
+                            </span>
+                            <span className="mp-text">Brand DNA</span>
+                        </li>
                         <li><span className="mp-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="mp-text">Create Concept</span></li>
                         <li><span className="mp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="mp-text">Create Pictures</span></li>
                     </ul>
@@ -115,8 +125,20 @@ export const MyProject = () => {
                             <p className="mp-p">Let’s get started on building your brand!</p>
                             
                             <div className="mp-action-list">
-                                <div className="mp-action-item"><div className="mp-left"><iconify-icon icon="mdi:dna"></iconify-icon><span>Generates Brand DNA</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
-                                <div className="mp-action-item"><div className="mp-left"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon><span>Create Your Brand Concept</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
+                                <div className="mp-action-item">
+                                    <div className="mp-left">
+                                        <iconify-icon icon="mdi:dna"></iconify-icon>
+                                        <span>Generates Brand DNA</span>
+                                    </div>
+                                    <iconify-icon icon="mdi:chevron-right"></iconify-icon>
+                                </div>
+                                <div className="mp-action-item">
+                                    <div className="mp-left">
+                                        <iconify-icon icon="mdi:lightbulb-outline"></iconify-icon>
+                                        <span>Create Your Brand Concept</span>
+                                    </div>
+                                    <iconify-icon icon="mdi:chevron-right"></iconify-icon>
+                                </div>
                                 <div className="mp-action-item"><div className="mp-left"><iconify-icon icon="mdi:image-outline"></iconify-icon><span>Generate Product Pictures</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
                                 <div className="mp-action-item"><div className="mp-left"><iconify-icon icon="mdi:folder-outline"></iconify-icon><span>Explore Other Projects</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
                             </div>

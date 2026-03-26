@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import './Auth.css'; // <-- เพิ่มบรรทัดนี้เพื่อให้ Popup ทำงาน
+import './Auth.css';
 
 function Auth({ onLoginSuccess, onClose }) {
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -31,7 +31,7 @@ function Auth({ onLoginSuccess, onClose }) {
   };
 
   // --- REGISTER FUNCTION ---
- const handleRegister = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     try {
       // 1. แพ็กข้อมูลลง FormData
@@ -44,38 +44,41 @@ function Auth({ onLoginSuccess, onClose }) {
         formData.append('img_profile', imgProfile); 
       }
 
-      // 2. ส่งข้อมูลไปที่ Backend
+      // 2. ส่งข้อมูลไปที่ Backend เพื่อสมัครสมาชิก
       const res = await fetch('http://localhost:3000/api/register', {
         method: 'POST',
-        // 🚨 สำคัญมาก: ห้ามใส่ headers { 'Content-Type': 'application/json' } เด็ดขาด!
         body: formData 
       });
-      // 👇 2. เพิ่มโค้ดส่วนนี้เพื่อทำการ "เข้าสู่ระบบอัตโนมัติ" ทันที 👇
+      
+      // 3. รออ่านผลลัพธ์จากการสมัครสมาชิกก่อน!
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        // 👇 4. ถ้าระบบบอกว่า "สมัครสำเร็จ" ค่อยทำการ "เข้าสู่ระบบอัตโนมัติ" 👇
         const loginRes = await fetch('http://localhost:3000/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // ส่งข้อมูลที่เพิ่งกรอกไปให้ API Login ทันที (เช็คให้ตรงกับ API Login ของคุณว่าใช้อะไรส่งไป)
-          body: JSON.stringify({ email: email, password: password }) 
+          // 🚨 สำคัญ: ดึงค่าจาก regData มาใช้ และส่ง user_name เหมือนที่ระบบล็อกอินต้องการ
+          body: JSON.stringify({ user_name: regData.user_name, password: regData.password }) 
         });
         const loginData = await loginRes.json();
 
         if (loginData.status === 'success') {
+            alert('✅ สมัครสมาชิกและเข้าสู่ระบบอัตโนมัติสำเร็จ!');
             onLoginSuccess(loginData.user); // อัปเดตข้อมูล user ขึ้นระบบ (App.jsx)
             onClose();                      // ปิด Popup
         } else {
-            // เผื่อกรณีผิดพลาด จะได้ให้ผู้ใช้ไปล็อกอินเอง
-            alert('เข้าสู่ระบบอัตโนมัติไม่สำเร็จ กรุณาล็อกอินด้วยตัวเอง');
-            // setIsLogin(true); // ค่อยให้สลับไปหน้าล็อกอินตรงนี้
+            // กรณีล็อกอินออโต้ไม่ติด (ซึ่งแทบไม่น่าเกิด)
+            alert('สมัครสมาชิกสำเร็จ แต่ระบบเข้าสู่ระบบอัตโนมัติขัดข้อง กรุณาล็อกอินด้วยตัวเอง');
+            setIsLoginMode(true); // สลับไปหน้าล็อกอินให้ผู้ใช้กรอกเอง
         }
-      const data = await res.json();
-      if (data.status === 'success') {
-        alert('✅ สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ');
-        setIsLoginMode(true);
+
       } else {
-        alert('❌ ' + data.message);
+        // กรณีสมัครสมาชิกไม่สำเร็จ (เช่น ชื่อซ้ำ, อีเมลซ้ำ)
+        alert('❌ สมัครไม่สำเร็จ: ' + data.message);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Register Error:", err);
       alert('เชื่อมต่อ Server ไม่ได้');
     }
   };
@@ -86,14 +89,12 @@ function Auth({ onLoginSuccess, onClose }) {
       if (e.target.className === 'modal-overlay') onClose();
     }}>
       <div className="modal-content">
-        {/* ปุ่ม X จะย้ายไปอยู่มุมขวาบนของกล่องขาวแล้ว */}
         <button className="close-btn" onClick={onClose}>&times;</button>
 
         <h2 style={{ textAlign: 'center', marginBottom: '20px', color: '#333' }}>
           {isLoginMode ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก'}
         </h2>
 
-        {/* ปุ่มสลับโหมด */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '20px' }}>
           <button onClick={() => setIsLoginMode(true)} style={{ background: isLoginMode ? '#D35325' : '#eee', color: isLoginMode ? '#fff' : '#333', border: 'none', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }}>Login</button>
           <button onClick={() => setIsLoginMode(false)} style={{ background: !isLoginMode ? '#D35325' : '#eee', color: !isLoginMode ? '#fff' : '#333', border: 'none', padding: '8px 16px', borderRadius: '20px', cursor: 'pointer' }}>Register</button>
