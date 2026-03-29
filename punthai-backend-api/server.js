@@ -372,6 +372,118 @@ app.get('/api/brand_dna/:projectId', async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+// ================= API สำหรับฟีเจอร์ Create Concept (Brand Name) =================
+
+// 1. API ให้ Gemini สร้างชื่อแบรนด์ 10 ชื่อ
+app.post('/api/generate-brand-names', async (req, res) => {
+    const { project_id, user_id, product, category, benefit, target, tags, special, use_dna } = req.body;
+
+    try {
+        const connection = await pool.getConnection();
+        let finalTarget = target;
+
+        // ถ้า User ติ๊กเลือกใช้ข้อมูลจาก Brand DNA
+        if (use_dna) {
+            const [dnaRows] = await connection.query("SELECT target_audience FROM brand_dna WHERE project_id = ?", [project_id]);
+            if (dnaRows.length > 0 && dnaRows[0].target_audience) {
+                finalTarget = dnaRows[0].target_audience; // ดึงกลุ่มเป้าหมายจากที่ AI เคยวิเคราะห์ไว้มาใช้
+            }
+        }
+
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        const prompt = `
+        คุณเป็นผู้เชี่ยวชาญด้านการตั้งชื่อแบรนด์ (Brand Naming Expert)
+        ข้อมูลสินค้า:
+        - สินค้า: ${product}
+        - ประเภท: ${category}
+        - ประโยชน์/จุดเด่น: ${benefit || 'ไม่ระบุ'}
+        - กลุ่มเป้าหมาย: ${finalTarget}
+        - สไตล์ชื่อที่ต้องการ: ${tags.join(', ')}
+        - ความต้องการพิเศษ: ${special || 'ไม่ระบุ'}
+
+        กรุณาคิดชื่อแบรนด์ที่เหมาะสมที่สุดมาจำนวน "10 ชื่อ" 
+        ส่งผลลัพธ์กลับมาเป็น JSON Array ที่มีแต่ String เท่านั้น ห้ามมีข้อความอื่น เช่น:
+        ["ชื่อที่1", "ชื่อที่2", "ชื่อที่3", ...]
+        `;
+
+        // เรียก Gemini
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const generatedNames = JSON.parse(cleanedText); // จะได้ Array ของชื่อ 10 อัน
+
+        // บันทึกชื่อทั้ง 10 ลงตาราง name_concept
+        for (const name of generatedNames) {
+            await connection.query(
+                "INSERT INTO name_concept (project_id, brand_name) VALUES (?, ?)",
+                [project_id, name]
+            );
+        }
+
+        // บันทึกประวัติลง generated_text_history
+        await connection.query(
+            "INSERT INTO generated_text_history (project_id, generation_type, prompt, text_result, model_name) VALUES (?, ?, ?, ?, ?)",
+            [project_id, 'BRAND_NAME', prompt, cleanedText, 'gemini-2.5-flash']
+        );
+
+        connection.release();
+        res.json({ status: 'success', message: 'สร้างชื่อสำเร็จ' });
+
+    } catch (err) {
+        console.error("Generate Name Error:", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการสร้างชื่อ' });
+    }
+});
+
+// 2. API ดึงรายชื่อแบรนด์ทั้งหมดของโปรเจกต์นี้
+app.get('/api/brand-names/:projectId', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        // เรียงลำดับ: ตัวที่ถูกเลือกขึ้นก่อน -> ตามด้วยกดใจ -> ตามด้วยไอดีล่าสุด
+        const [rows] = await connection.query(
+            "SELECT * FROM name_concept WHERE project_id = ? ORDER BY is_selected DESC, is_liked DESC, concept_id DESC",
+            [req.params.projectId]
+        );
+        connection.release();
+        res.json({ status: 'success', names: rows });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// 3. API สำหรับกด Like ชื่อ
+app.put('/api/brand-names/like/:conceptId', async (req, res) => {
+    const { is_liked } = req.body;
+    try {
+        const connection = await pool.getConnection();
+        await connection.query("UPDATE name_concept SET is_liked = ? WHERE concept_id = ?", [is_liked, req.params.conceptId]);
+        connection.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// 4. API สำหรับเลือกชื่อนี้ไปใช้ (Select)
+app.put('/api/brand-names/select/:conceptId', async (req, res) => {
+    const { project_id } = req.body;
+    const concept_id = req.params.conceptId;
+    try {
+        const connection = await pool.getConnection();
+        // 4.1 เคลียร์ให้ชื่ออื่นๆ ในโปรเจกต์นี้กลายเป็น ไม่ถูกเลือก (0)
+        await connection.query("UPDATE name_concept SET is_selected = FALSE WHERE project_id = ?", [project_id]);
+        // 4.2 ตั้งค่าให้ชื่อนี้ถูกเลือก (1)
+        await connection.query("UPDATE name_concept SET is_selected = TRUE WHERE concept_id = ?", [concept_id]);
+        // 4.3 อัปเดต ID กลับไปที่ตาราง project
+        await connection.query("UPDATE project SET name_concept_id = ? WHERE project_id = ?", [concept_id, project_id]);
+        connection.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

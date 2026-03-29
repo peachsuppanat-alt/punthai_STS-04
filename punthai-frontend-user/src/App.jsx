@@ -8,20 +8,29 @@ import Auth from './Auth';
 import { MyProject } from './MyProject';
 import { YourProjects } from './YourProjects';
 import { BrandDNA } from './BrandDNA'; 
+import { CreateConcept } from './CreateConcept';
+import  { CreateLogo }  from './CreateLogo';
+
+
 
 // หน้าชั่วคราว
 const Shopping = () => <h2 style={{marginTop: '100px', textAlign: 'center'}}>Shopping Page</h2>;
 const About = () => <h2 style={{marginTop: '100px', textAlign: 'center'}}>About Page</h2>;
 
 function App() {
-  const [user, setUser] = useState(null);       // เก็บข้อมูลผู้ใช้ (null = ยังไม่ Login)
-  const [showAuth, setShowAuth] = useState(false); // ควบคุมการเปิด Popup
+  const [user, setUser] = useState(null);       // (null = ยังไม่ Login)
+  const [showAuth, setShowAuth] = useState(false); //  Popup
 
-  // ดึงข้อมูล URL ปัจจุบัน
+  // ดึงข้อมูล URL 
   const location = useLocation();
 
   // isProjectPage เพื่อซ่อน Navbar ตัวหลัก
-  const isProjectPage = location.pathname === '/project' || location.pathname === '/your-projects' || location.pathname === '/brand-dna';
+  const isProjectPage = location.pathname === '/project' || 
+                      location.pathname === '/your-projects' || 
+                      location.pathname === '/brand-dna' || 
+                      location.pathname === '/create-concept' || 
+                      location.pathname === '/create-logo';
+
 
   return (
     <div>
@@ -38,7 +47,8 @@ function App() {
         <Route path="/" element={<Home user={user} />} />
         <Route path="/project" element={<MyProject />} /> 
         <Route path="/brand-dna" element={<BrandDNA />} />
-        
+        <Route path="/create-concept" element={<CreateConcept />} />
+        <Route path="/create-logo" element={<CreateLogo />} />
         <Route path="/your-projects" element={<YourProjects />} /> 
         
         {/* <Route path="/shopping" element={<Shopping />} />

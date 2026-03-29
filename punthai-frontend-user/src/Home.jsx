@@ -69,7 +69,6 @@ const Home = ({ user }) => {
   };
 return (
     <>
-      {/* 🚨 เปลี่ยนเงื่อนไขตรงนี้: จะโชว์ Dashboard ก็ต่อเมื่อ "ล็อกอินแล้ว" และ "มีโปรเจกต์อย่างน้อย 1 อัน" */}
       {user && projects.length > 0 ? (
         <section className="user-projects-dashboard">
           <div className="dashboard-header">

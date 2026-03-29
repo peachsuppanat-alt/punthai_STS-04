@@ -15,7 +15,7 @@ export const BrandDNA = () => {
   const userId = userData.user_id || 0;
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
+
   // 👇 State สำหรับควบคุมหน้าจอต่างๆ 👇
   const [showWelcome, setShowWelcome] = useState(true); // หน้าต่างต้อนรับ
   const [currentStep, setCurrentStep] = useState(1);
@@ -23,10 +23,10 @@ export const BrandDNA = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [dnaResult, setDnaResult] = useState(null);
 
-  const [products, setProducts] = useState([]); 
-  const [hasNoProduct, setHasNoProduct] = useState(false); 
-  const [isModalOpen, setIsModalOpen] = useState(false); 
-  
+  const [products, setProducts] = useState([]);
+  const [hasNoProduct, setHasNoProduct] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const [productName, setProductName] = useState('');
   const [productType, setProductType] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -78,7 +78,7 @@ export const BrandDNA = () => {
       const data = await res.json();
       if (data.status === 'success') {
         setProducts(data.products);
-        if (data.products.length > 0) setHasNoProduct(false); 
+        if (data.products.length > 0) setHasNoProduct(false);
       }
     } catch (err) {
       console.error("Fetch products error:", err);
@@ -121,7 +121,7 @@ export const BrandDNA = () => {
       const data = await res.json();
 
       if (data.status === 'success') {
-        fetchProducts(); 
+        fetchProducts();
         handleCloseModal();
       } else {
         alert("เพิ่มสินค้าไม่สำเร็จ: " + data.message);
@@ -156,7 +156,7 @@ export const BrandDNA = () => {
     for (const [key, value] of Object.entries(scores)) {
       if (value > maxScore) { maxScore = value; finalArchetype = key; }
     }
-    
+
     setArchetype(finalArchetype);
     return finalArchetype;
   };
@@ -167,12 +167,12 @@ export const BrandDNA = () => {
       // 👇 อัปเดต Payload แนบ user_id ไปด้วย
       const payload = {
         project_id: projectId,
-        user_id: userId, 
+        user_id: userId,
         business_type: q1Form,
         archetype: currentArchetype,
-        audience_data: q4Form.noAudience 
-            ? "ไม่รู้ / ยังไม่ได้เริ่มขาย" 
-            : `ลักษณะ: ${q4Form.type}, กลุ่ม: ${q4Form.tags.join(', ')}, รายละเอียดเพิ่มเติม: ${q4Form.desc}`
+        audience_data: q4Form.noAudience
+          ? "ไม่รู้ / ยังไม่ได้เริ่มขาย"
+          : `ลักษณะ: ${q4Form.type}, กลุ่ม: ${q4Form.tags.join(', ')}, รายละเอียดเพิ่มเติม: ${q4Form.desc}`
       };
 
       const res = await fetch('http://localhost:3000/api/generate-brand-dna', {
@@ -183,8 +183,8 @@ export const BrandDNA = () => {
       const data = await res.json();
 
       if (data.status === 'success') {
-        setDnaResult(data.data); 
-        setShowResult(true);     
+        setDnaResult(data.data);
+        setShowResult(true);
       } else {
         alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + data.message);
       }
@@ -229,13 +229,13 @@ export const BrandDNA = () => {
 
   return (
     <div className="bdna-body">
-      
+
       {/* Loading Screen */}
       {isLoading && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-            <iconify-icon icon="line-md:loading-loop" style={{ fontSize: '60px', color: '#d75a2a' }}></iconify-icon>
-            <h2 style={{ marginTop: '20px', color: '#d75a2a' }}>Gemini AI กำลังวิเคราะห์ Brand DNA ของคุณ...</h2>
-            <p style={{ color: '#666' }}>อาจใช้เวลาประมาณ 5 - 10 วินาที กรุณารอสักครู่</p>
+          <iconify-icon icon="line-md:loading-loop" style={{ fontSize: '60px', color: '#d75a2a' }}></iconify-icon>
+          <h2 style={{ marginTop: '20px', color: '#d75a2a' }}>Gemini AI กำลังวิเคราะห์ Brand DNA ของคุณ...</h2>
+          <p style={{ color: '#666' }}>อาจใช้เวลาประมาณ 5 - 10 วินาที กรุณารอสักครู่</p>
         </div>
       )}
 
@@ -256,8 +256,11 @@ export const BrandDNA = () => {
           <ul className="bdna-menu">
             <li onClick={() => navigate('/project', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon></span><span className="bdna-text">Projects</span></li>
             <li className="bdna-active" style={{ background: '#f3f6ea', color: '#6b8e23' }}><span className="bdna-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span><span className="bdna-text">Brand DNA</span></li>
-            <li><span className="bdna-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="bdna-text">Create Concept</span></li>
-            <li><span className="bdna-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="bdna-text">Create Pictures</span></li>
+            <li onClick={() => navigate('/create-concept', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="bdna-text">Create Concept</span></li>
+            <li onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}>
+              <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
+              <span className="cncpt-text">Create Pictures</span>
+            </li>
           </ul>
           <hr className="bdna-hr" />
           <ul className="bdna-menu">
@@ -267,7 +270,7 @@ export const BrandDNA = () => {
         </aside>
 
         <main className="bdna-main bdna-dna-main">
-          
+
           {/* 👇 1. หน้าต่างต้อนรับ Welcome Screen 👇 */}
           {!showResult && showWelcome && (
             <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginTop: '20px' }}>
@@ -333,7 +336,7 @@ export const BrandDNA = () => {
                         {products.map((product, index) => (
                           <div key={product.product_id || index} className="bdna-ai-card">
                             <div className="bdna-ai-card-header"><div className="bdna-step-number" style={{ background: '#c65428', color: 'white', width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>{index + 1}</div><h3 style={{ margin: 0, color: '#c65428' }}>{product.name_product}</h3></div>
-                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px' }}>{product.image_product ? (<img src={`http://localhost:3000/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : <div style={{width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'#aaa'}}>ไม่มีรูปภาพ</div>}</div>
+                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px' }}>{product.image_product ? (<img src={`http://localhost:3000/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
                           </div>
                         ))}
                       </div>
@@ -436,7 +439,7 @@ export const BrandDNA = () => {
                     </div>
                     <div className="bdna-result-design-right">
                       <div className="bdna-result-design-block"><h3 className="bdna-result-col-title">ตัวหนังสือ</h3><p className="bdna-result-col-body">ควรใช้ฟอนต์ที่อ่านง่ายและสื่อถึงความเป็นตัวคุณ</p></div>
-                      <div className="bdna-result-design-block"><h3 className="bdna-result-col-title">กลุ่มเป้าหมาย (วิเคราะห์โดย AI)</h3><p className="bdna-result-col-body" style={{ color: '#d75a2a', fontWeight:'500'}}>{dnaResult.target_audience}</p></div>
+                      <div className="bdna-result-design-block"><h3 className="bdna-result-col-title">กลุ่มเป้าหมาย (วิเคราะห์โดย AI)</h3><p className="bdna-result-col-body" style={{ color: '#d75a2a', fontWeight: '500' }}>{dnaResult.target_audience}</p></div>
                     </div>
                   </div>
                 </div>
@@ -454,10 +457,10 @@ export const BrandDNA = () => {
 
                 {/* 👇 ปุ่มทำแบบทดสอบใหม่อีกครั้ง 👇 */}
                 <div style={{ textAlign: 'center', marginTop: '40px' }}>
-                    <button className="bdna-btn-back-form" style={{ padding: '12px 30px', border: '1.5px solid #d75a2a', color: '#d75a2a', background: 'transparent' }} onClick={handleRetakeQuiz}>
-                        <iconify-icon icon="mdi:refresh" style={{ marginRight: '8px', verticalAlign: 'middle', fontSize: '18px' }}></iconify-icon>
-                        ทำแบบทดสอบ Brand DNA ใหม่อีกครั้ง
-                    </button>
+                  <button className="bdna-btn-back-form" style={{ padding: '12px 30px', border: '1.5px solid #d75a2a', color: '#d75a2a', background: 'transparent' }} onClick={handleRetakeQuiz}>
+                    <iconify-icon icon="mdi:refresh" style={{ marginRight: '8px', verticalAlign: 'middle', fontSize: '18px' }}></iconify-icon>
+                    ทำแบบทดสอบ Brand DNA ใหม่อีกครั้ง
+                  </button>
                 </div>
               </>
             )}

@@ -155,11 +155,11 @@ export const YourProjects = () => {
               <span className="yp-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span>
               <span className="yp-text">Brand DNA</span>
             </li>
-            <li>
+            <li onClick={() => navigate('/create-concept', { state: { projectId } })}>
               <span className="yp-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span>
               <span className="yp-text">Create Concept</span>
             </li>
-            <li>
+            <li onClick={() => navigate('/create-logo', { state: { projectId}})} >
               <span className="yp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
               <span className="yp-text">Create Pictures</span>
             </li>
