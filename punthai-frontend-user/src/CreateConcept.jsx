@@ -161,6 +161,10 @@ export const CreateConcept = () => {
             <li className="cncpt-active"><span className="cncpt-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="cncpt-text">Create Concept</span></li>
             <li onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}>
               <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
+              <span className="cncpt-text">Create Logo</span>
+            </li>
+            <li onClick={() => navigate('/result', { state: { projectId } })} style={{ cursor: 'pointer' }}>
+              <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
               <span className="cncpt-text">Create Pictures</span>
             </li>
           </ul>

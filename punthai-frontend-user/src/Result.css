@@ -1,0 +1,133 @@
+/* ยึดตามไฟล์ result.css ต้นฉบับของคุณ 100% */
+
+.rs-body { 
+    background: #f5f5f5; 
+    font-family: 'Bai Jamjuree'sans-serif; 
+     min-height: 100vh; 
+     display: flex; 
+     flex-direction: column; }
+
+/* Navbar & Sidebar - ยึดตามสัดส่วนเดิมของคุณ */
+.rs-navbar { 
+    display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 40px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 1000; 
+}
+.rs-logo-img { 
+    height: 50px;     
+  width: auto;       
+  object-fit: contain;
+  cursor: pointer;
+  transition: 0.3s ease; }
+.rs-logo-img:hover{
+    transform: scale(1.05);
+}
+.rs-nav-icons { 
+    display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rs-btn-world, .rs-btn-users { width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f1f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.5s ease;
+ }
+
+.rs-container { 
+    display: flex;
+  min-height: calc(100vh - 80px); 
+}
+.rs-sidebar { 
+    width: 240px;
+  background: #ffffff;
+  padding: 20px 15px;
+  border-right: 1px solid #eee;
+  position: sticky;  
+  top: 70px;  
+  height: calc(100vh - 70px); 
+  transition: 0.3s;
+  display: flex;
+  flex-direction: column; 
+}
+
+.rs-collapsed { 
+    width: 80px; 
+}
+
+.rs-toggle-btn { 
+    position: absolute;
+  top: 20px;
+  right: -15px;
+  width: 34px;
+  height: 34px;
+  border-radius: 100%;
+  border: none;
+  background: #f1f1f1;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  padding: 0;
+}
+
+.rs-menu { 
+    list-style: none;
+  padding: 0;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rs-menu li { display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-weight: 500; 
+}
+.rs-menu li:hover {
+  background: #f3f6ea;
+  color: #6b8e23;
+}
+
+
+/*.rs-menu li:hover, .rs-menu li.rs-active { background: #fff3ee; color: #d3542b; }*/
+.rs-icon { font-size: 22px; margin-right: 15px; }
+.rs-collapsed .rs-text { display: none; }
+.rs-hr { border-top: 1px solid #eee; margin: 10px 20px; border-bottom: none; }
+.rs-help { margin-top: auto; text-align: center; padding: 20px; }
+.rs-help-img { width: 80px; }
+.rs-contact-link { color: #d3542b; text-decoration: none; font-weight: 600; }
+
+.rs-main-content { flex: 1; padding: 30px; overflow-y: auto; }
+
+/* Tabs - ยึดตามสัดส่วนเป๊ะๆ */
+.rs-tabs-wrapper { position: relative; z-index: 5; margin-bottom: -18px; }
+.rs-tabs { position: relative; display: flex; background: #e6e6e6; border-radius: 20px 20px 0 0; overflow: hidden; width: fit-content; }
+.rs-tab { position: relative; padding: 10px 40px; border: none; background: transparent; font-size: 18px; font-weight: 500; color: #9e9e9e; cursor: pointer; transition: color .3s ease; font-family: 'Poppins', sans-serif; z-index: 2; }
+.rs-tab.rs-active { color: #fff; }
+.rs-tab-indicator { position: absolute; top: 0; left: 0; height: 100%; width: 0; border-radius: 20px 20px 0 0; transition: all 0.35s cubic-bezier(.77,0,.18,1); box-shadow: 0 6px 14px rgba(0,0,0,0.18); z-index: 1; }
+
+/* Logo Grid - ยึดตามค่า 336px */
+.rs-logo-grid { display: grid; grid-template-columns: repeat(3, 336px); gap: 30px; margin-top: 30px; justify-content: start; }
+.rs-logo-card { position: relative; width: 336px; background: #fff; border-radius: 20px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); transition: 0.25s ease; cursor: pointer; }
+.rs-logo-card:hover { transform: translateY(-5px); box-shadow: 0 18px 40px rgba(0,0,0,0.08); }
+.rs-logo-box { width: 100%; height: 242px; border-radius: 14px; border: 2px dashed #ddd; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 18px; box-sizing: border-box; }
+.rs-logo-actions { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.9); padding: 6px; border-radius: 14px; backdrop-filter: blur(6px); z-index: 10; }
+.rs-action-btn { width: 34px; height: 34px; border: none; background: #f5f5f5; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s ease; }
+.rs-action-btn:hover { background: #D35325; color: #fff; }

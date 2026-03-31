@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import Replicate from "replicate"; // 1. เพิ่มบรรทัดนี้
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import axios from 'axios';
 
 import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
@@ -478,6 +479,141 @@ app.put('/api/brand-names/select/:conceptId', async (req, res) => {
         await connection.query("UPDATE name_concept SET is_selected = TRUE WHERE concept_id = ?", [concept_id]);
         // 4.3 อัปเดต ID กลับไปที่ตาราง project
         await connection.query("UPDATE project SET name_concept_id = ? WHERE project_id = ?", [concept_id, project_id]);
+        connection.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+
+
+///********สร้าง logo ******* */
+
+// ================= ฟังก์ชันช่วยเหลือ: ดาวน์โหลดรูปภาพจาก AI URL มาเซฟในเครื่อง =================
+const downloadImage = async (url, filepath) => {
+    const response = await axios({
+        url,
+        method: 'GET',
+        responseType: 'stream'
+    });
+    return new Promise((resolve, reject) => {
+        response.data.pipe(fs.createWriteStream(filepath))
+            .on('error', reject)
+            .on('finish', () => resolve(filepath));
+    });
+};
+
+// ================= API สำหรับสร้างโลโก้ (FLUX.1 Schnell) =================
+app.post('/api/generate-logo', async (req, res) => {
+    const { 
+        project_id, user_id, 
+        brand_name, brand_value, products, 
+        styles, details, not_want 
+    } = req.body;
+
+    if (!project_id) {
+        return res.status(400).json({ status: 'error', message: 'Missing project_id' });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+
+        // 1. 👇 เตรียมข้อมูลเพื่อสร้าง Prompt ภาษาอังกฤษ (ต้องมีลอจิกแปลภาษา หรือใช้ AI แปล)
+        // ** สำคัญ **: FLUX เข้าใจภาษาอังกฤษได้ดีที่สุด 
+        // ในขั้นตอนนี้คุณควรมีฟังก์ชันแปลความหมายภาษาไทย -> คีย์เวิร์ดภาษาอังกฤษ
+        // สมมติว่าแปลแล้วได้ดังนี้:
+        const translatedStyle = styles.join(', '); // เช่น "modern, luxury, traditional Thai"
+        const productSubject = products.length > 0 ? products[0].name_product : 'abstract symbol'; // เอาสินค้าตัวแรกมาเป็นประธาน
+        
+        // 2. 👇 ผสม Prompt ภาษาอังกฤษ (ตัวอย่างปรับแต่งสำหรับ FLUX)
+        const englishPrompt = `
+            professional vector logo, flat design, minimal, clean lines, isolated on solid white background, 
+            featuring a stylized icon of ${productSubject} reflecting brand values of ${brand_value}. 
+            Style tags: ${translatedStyle}, stylized Thai art elements. 
+            Include text "${brand_name}" underneath in a modern clean sans-serif font. 
+            ${details ? 'Additional details: ' + details : ''}
+            High quality, intricate details.
+        `;
+        const negativePrompt = not_want || '';
+
+        console.log("Sending Prompt to FLUX:", englishPrompt);
+
+       // 3. 👇 เรียกใช้ AI ของจริง (FLUX.1 Schnell)
+        console.log("🎨 กำลังสั่งให้ FLUX.1 Schnell วาดโลโก้...");
+        
+        const output = await replicate.run(
+            "black-forest-labs/flux-schnell",
+            {
+                input: {
+                    prompt: englishPrompt,
+                    go_fast: true,
+                    megapixels: "1",
+                    num_outputs: 1,
+                    aspect_ratio: "1:1",
+                    output_format: "png", // บังคับให้ออกมาเป็น PNG
+                    output_quality: 100
+                }
+            }
+        );
+
+        // ดึง URL รูปภาพแรกที่ AI เจนเสร็จ
+        const aiImageUrl = output[0]; 
+        console.log("✅ ได้ URL รูปโลโก้จาก AI แล้ว:", aiImageUrl);
+        // -------------------------------------------------------------
+
+       // 4. 👇 ดาวน์โหลดรูปภาพจาก AI มาเซฟใน Server ของเรา
+        const filename = `logo_${project_id}_${Date.now()}.png`;
+        
+        // ใช้ process.cwd() แทน __dirname สำหรับโหมด ES Module
+        const targetDir = path.join(process.cwd(), 'uploads', 'generated', 'logos');
+        
+        // เช็คว่ามีโฟลเดอร์รองรับรูปหรือยัง ถ้ายังไม่มีให้สร้างเลย (recursive: true คือสร้างโฟลเดอร์ซ้อนๆ กันให้ครบ)
+        if (!fs.existsSync(targetDir)) {
+            fs.mkdirSync(targetDir, { recursive: true });
+        }
+
+        const localPath = path.join(targetDir, filename);
+        const dbImagePath = `/uploads/generated/logos/${filename}`; // path สำหรับเก็บใน DB
+
+        await downloadImage(aiImageUrl, localPath);
+
+       // 5. 👇 บันทึกประวัติลงฐานข้อมูล generated_history (ปรับให้ตรงกับ DB ของคุณ)
+        const sqlLog = `
+            INSERT INTO generated_history 
+            (project_id, generation_type, prompt, image_url, credits_used, model_name) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        `;
+        
+        await connection.query(sqlLog, [
+            project_id, 
+            'LOGO', 
+            englishPrompt, 
+            dbImagePath, 
+            1, // สมมติว่าใช้ 1 เครดิต
+            'flux.1-schnell'
+        ]);
+
+        connection.release();
+
+        // 6. 👇 ส่ง Path รูปภาพกลับไปให้ Frontend
+        res.json({ status: 'success', imageUrl: dbImagePath });
+    } catch (err) {
+        console.error("Generate Logo Error:", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการสร้างโลโก้' });
+    }
+});
+
+// ================= API สำหรับกด Like/Unlike รูปที่เจน =================
+app.put('/api/like-generated-item/:historyId', async (req, res) => {
+    const { historyId } = req.params;
+    const { is_liked } = req.body;
+    try {
+        const connection = await pool.getConnection();
+        await connection.query(
+            "UPDATE generated_history SET is_liked = ? WHERE history_id = ?", 
+            [is_liked, historyId]
+        );
         connection.release();
         res.json({ status: 'success' });
     } catch (err) {

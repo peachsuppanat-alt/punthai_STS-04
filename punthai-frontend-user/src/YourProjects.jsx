@@ -161,6 +161,10 @@ export const YourProjects = () => {
             </li>
             <li onClick={() => navigate('/create-logo', { state: { projectId}})} >
               <span className="yp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
+              <span className="yp-text">Create Logo</span>
+            </li>
+            <li onClick={() => navigate('/result', { state: { projectId } })} style={{ cursor: 'pointer' }} >
+              <span className="yp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
               <span className="yp-text">Create Pictures</span>
             </li>
           </ul>

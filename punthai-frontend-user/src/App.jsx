@@ -10,6 +10,7 @@ import { YourProjects } from './YourProjects';
 import { BrandDNA } from './BrandDNA'; 
 import { CreateConcept } from './CreateConcept';
 import  { CreateLogo }  from './CreateLogo';
+import Result from './Result';
 
 
 
@@ -29,7 +30,8 @@ function App() {
                       location.pathname === '/your-projects' || 
                       location.pathname === '/brand-dna' || 
                       location.pathname === '/create-concept' || 
-                      location.pathname === '/create-logo';
+                      location.pathname === '/create-logo' ||
+                      location.pathname === '/result';
 
 
   return (
@@ -49,6 +51,7 @@ function App() {
         <Route path="/brand-dna" element={<BrandDNA />} />
         <Route path="/create-concept" element={<CreateConcept />} />
         <Route path="/create-logo" element={<CreateLogo />} />
+        <Route path="/result" element={<Result />} />
         <Route path="/your-projects" element={<YourProjects />} /> 
         
         {/* <Route path="/shopping" element={<Shopping />} />
