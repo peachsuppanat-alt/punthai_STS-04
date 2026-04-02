@@ -477,6 +477,434 @@ app.put('/api/brand-names/select/:conceptId', async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+// *******************************************//
+// ================= API Color Palette (color_concept) =================
+
+// 0. บันทึก palette เดียวลง DB (upsert) — ใช้เมื่อกดหัวใจหรือกดเลือก
+app.post('/api/color-palettes/save-one', async (req, res) => {
+  const { project_id, name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5 } = req.body;
+  if (!project_id || !name_palette) {
+    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+  }
+  try {
+    const connection = await pool.getConnection();
+
+    // upsert ลง table color
+    const [existing] = await connection.query(
+      'SELECT color_id FROM color WHERE name_palette = ?',
+      [name_palette]
+    );
+    let color_id;
+    if (existing.length > 0) {
+      color_id = existing[0].color_id;
+      await connection.query(
+        'UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
+        [color_code_1||'', color_code_2||'', color_code_3||'', color_code_4||'', color_code_5||'', color_id]
+      );
+    } else {
+      const [result] = await connection.query(
+        'INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
+        [name_palette, color_code_1||'', color_code_2||'', color_code_3||'', color_code_4||'', color_code_5||'']
+      );
+      color_id = result.insertId;
+    }
+
+    // upsert ลง table color_concept
+    const [existingConcept] = await connection.query(
+      'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?',
+      [project_id, color_id]
+    );
+    let concept_id;
+    if (existingConcept.length > 0) {
+      concept_id = existingConcept[0].id;
+    } else {
+      const [result] = await connection.query(
+        'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)',
+        [color_id, project_id]
+      );
+      concept_id = result.insertId;
+    }
+
+    connection.release();
+    res.json({ status: 'success', color_id, concept_id });
+  } catch (err) {
+    console.error('❌ Save One Palette Error:', err);
+    res.status(500).json({ status: 'error', message: 'บันทึก palette ไม่สำเร็จ', error: err.message });
+  }
+});
+
+// 1. บันทึก palettes ทั้งหมดลง DB (upsert: ถ้ามีแล้วข้ามไป)
+app.post('/api/color-palettes/save', async (req, res) => {
+  const { project_id, palettes } = req.body;
+  if (!project_id || !Array.isArray(palettes) || palettes.length === 0) {
+    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+  }
+
+  try {
+    const connection = await pool.getConnection();
+
+    for (const p of palettes) {
+      // 1.1 upsert ลง table color (ถ้า name_palette ซ้ำกันให้ update color_code แทน)
+      const [existing] = await connection.query(
+        'SELECT color_id FROM color WHERE name_palette = ?',
+        [p.name_palette]
+      );
+
+      let color_id;
+      if (existing.length > 0) {
+        color_id = existing[0].color_id;
+        // อัปเดต color_code ให้เป็นปัจจุบัน (กรณีมีการ re-generate)
+        await connection.query(
+          'UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
+          [p.color_code_1||'', p.color_code_2||'', p.color_code_3||'', p.color_code_4||'', p.color_code_5||'', color_id]
+        );
+      } else {
+        // insert ใหม่
+        const [result] = await connection.query(
+          'INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
+          [p.name_palette, p.color_code_1||'', p.color_code_2||'', p.color_code_3||'', p.color_code_4||'', p.color_code_5||'']
+        );
+        color_id = result.insertId;
+      }
+
+      // 1.2 upsert ลง table color_concept (project_id + color_id เป็น unique pair)
+      const [existingConcept] = await connection.query(
+        'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?',
+        [project_id, color_id]
+      );
+
+      if (existingConcept.length === 0) {
+        await connection.query(
+          'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)',
+          [color_id, project_id]
+        );
+      }
+    }
+
+    connection.release();
+    res.json({ status: 'success', message: 'บันทึก palettes สำเร็จ' });
+  } catch (err) {
+    console.error('❌ Save Color Palettes Error:', err);
+    res.status(500).json({ status: 'error', message: 'บันทึก palettes ไม่สำเร็จ', error: err.message });
+  }
+});
+
+// 2. ดึง palettes ทั้งหมดของโปรเจกต์นี้ (join color + color_concept)
+app.get('/api/color-palettes/:projectId', async (req, res) => {
+  const { projectId } = req.params;
+  if (!projectId || projectId === 'undefined') {
+    return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    const [rows] = await connection.query(
+      `SELECT 
+         cc.id        AS concept_id,
+         cc.color_id,
+         cc.is_liked,
+         cc.is_selected,
+         cc.created_at,
+         c.name_palette,
+         c.color_code_1,
+         c.color_code_2,
+         c.color_code_3,
+         c.color_code_4,
+         c.color_code_5
+       FROM color_concept cc
+       JOIN color c ON cc.color_id = c.color_id
+       WHERE cc.project_id = ?
+       ORDER BY cc.is_selected DESC, cc.is_liked DESC, cc.id DESC`,
+      [projectId]
+    );
+    connection.release();
+    res.json({ status: 'success', palettes: rows });
+  } catch (err) {
+    console.error('❌ Fetch Color Palettes Error:', err);
+    res.status(500).json({ status: 'error', message: 'ดึงข้อมูล palettes ไม่สำเร็จ' });
+  }
+});
+
+// 3. กด Like / Unlike palette (อัปเดต is_liked ใน color_concept ตาม project_id + color_id)
+app.put('/api/color-palettes/like/:colorId', async (req, res) => {
+  const { colorId } = req.params;
+  const { is_liked, project_id } = req.body;
+  if (!project_id) {
+    return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    await connection.query(
+      'UPDATE color_concept SET is_liked = ? WHERE color_id = ? AND project_id = ?',
+      [is_liked ? 1 : 0, colorId, project_id]
+    );
+    connection.release();
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error('❌ Like Color Palette Error:', err);
+    res.status(500).json({ status: 'error', message: 'Database error' });
+  }
+});
+
+// 4. เลือก palette (is_selected) + อัปเดต color_id ใน project
+app.put('/api/color-palettes/select/:conceptId', async (req, res) => {
+  const { conceptId } = req.params;
+  const { project_id } = req.body;
+  if (!project_id) {
+    return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
+  }
+  try {
+    const connection = await pool.getConnection();
+
+    // 4.1 ดึง color_id จาก DB โดยตรง (ไม่พึ่ง body เพราะอาจ undefined/stale)
+    const [conceptRows] = await connection.query(
+      'SELECT color_id FROM color_concept WHERE id = ?',
+      [conceptId]
+    );
+    if (conceptRows.length === 0) {
+      connection.release();
+      console.error(`❌ ไม่พบ color_concept id = ${conceptId}`);
+      return res.status(404).json({ status: 'error', message: 'ไม่พบ concept นี้' });
+    }
+    const finalColorId = conceptRows[0].color_id;
+    console.log(`🔍 concept_id=${conceptId} → color_id=${finalColorId}`);
+
+    // 4.2 เคลียร์ is_selected ทุก palette ของโปรเจกต์นี้ก่อน
+    await connection.query(
+      'UPDATE color_concept SET is_selected = 0 WHERE project_id = ?',
+      [project_id]
+    );
+
+    // 4.3 ตั้งค่า is_selected = 1 ให้กับ palette ที่เลือก
+    await connection.query(
+      'UPDATE color_concept SET is_selected = 1 WHERE id = ?',
+      [conceptId]
+    );
+
+    // 4.4 อัปเดต project.color_id
+    await connection.query(
+      'UPDATE project SET color_id = ? WHERE project_id = ?',
+      [finalColorId, project_id]
+    );
+    console.log(`✅ อัปเดต project.color_id = ${finalColorId} สำหรับ project_id = ${project_id}`);
+
+    connection.release();
+    res.json({ status: 'success', color_id: finalColorId });
+  } catch (err) {
+    console.error('❌ Select Color Palette Error:', err);
+    res.status(500).json({ status: 'error', message: 'Database error' });
+  }
+});
+
+// sync Google Fonts ลง table font (เรียกจาก frontend ตอนโหลด Google Fonts API)
+app.post('/api/fonts/sync-google', async (req, res) => {
+  const { fonts } = req.body; // array ของ { font_name }
+  if (!Array.isArray(fonts) || fonts.length === 0) {
+    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    let inserted = 0;
+    for (const f of fonts) {
+      const [existing] = await connection.query(
+        'SELECT font_id FROM font WHERE font_name = ?', [f.font_name]
+      );
+      if (existing.length === 0) {
+        await connection.query(
+          'INSERT INTO font (font_name, file_font) VALUES (?, NULL)',
+          [f.font_name]
+        );
+        inserted++;
+      }
+    }
+    connection.release();
+    console.log(`✅ Synced ${inserted} new Google Fonts to DB`);
+    res.json({ status: 'success', inserted });
+  } catch (err) {
+    console.error('❌ Sync Google Fonts Error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// ดึง font ทั้งหมดจาก table font พร้อม concept info ของ project นี้
+app.get('/api/fonts/all/:projectId', async (req, res) => {
+  const { projectId } = req.params;
+  try {
+    const connection = await pool.getConnection();
+    const [rows] = await connection.query(
+      `SELECT
+         f.font_id,
+         f.font_name,
+         f.file_font,
+         fc.id         AS concept_id,
+         fc.is_liked,
+         fc.is_selected
+       FROM font f
+       LEFT JOIN font_concept fc ON f.font_id = fc.font_id AND fc.project_id = ?
+       ORDER BY f.font_id ASC`,
+      [projectId]
+    );
+    connection.release();
+    res.json({ status: 'success', fonts: rows });
+  } catch (err) {
+    console.error('❌ Fetch All Fonts Error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+
+// ================= API Font (font_concept) =================
+
+// 0. บันทึก font เดียวลง DB (upsert) — ใช้เมื่อกดหัวใจหรือกดเลือก
+app.post('/api/fonts/save-one', async (req, res) => {
+  const { project_id, font_name, file_font } = req.body;
+  if (!project_id || !font_name) {
+    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+  }
+  try {
+    const connection = await pool.getConnection();
+
+    // upsert ลง table font
+    const [existing] = await connection.query(
+      'SELECT font_id FROM font WHERE font_name = ?',
+      [font_name]
+    );
+    let font_id;
+    if (existing.length > 0) {
+      font_id = existing[0].font_id;
+    } else {
+      const [result] = await connection.query(
+        'INSERT INTO font (font_name, file_font) VALUES (?, ?)',
+        [font_name, file_font || null]
+      );
+      font_id = result.insertId;
+    }
+
+    // upsert ลง table font_concept
+    const [existingConcept] = await connection.query(
+      'SELECT id FROM font_concept WHERE project_id = ? AND font_id = ?',
+      [project_id, font_id]
+    );
+    let concept_id;
+    if (existingConcept.length > 0) {
+      concept_id = existingConcept[0].id;
+    } else {
+      const [result] = await connection.query(
+        'INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)',
+        [font_id, project_id]
+      );
+      concept_id = result.insertId;
+    }
+
+    connection.release();
+    res.json({ status: 'success', font_id, concept_id });
+  } catch (err) {
+    console.error('❌ Save One Font Error:', err);
+    res.status(500).json({ status: 'error', message: 'บันทึก font ไม่สำเร็จ', error: err.message });
+  }
+});
+
+// 1. ดึง fonts ทั้งหมดของโปรเจกต์นี้ (join font + font_concept)
+app.get('/api/fonts/:projectId', async (req, res) => {
+  const { projectId } = req.params;
+  if (!projectId || projectId === 'undefined') {
+    return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    const [rows] = await connection.query(
+      `SELECT
+         fc.id         AS concept_id,
+         fc.font_id,
+         fc.is_liked,
+         fc.is_selected,
+         fc.created_at,
+         f.font_name,
+         f.file_font
+       FROM font_concept fc
+       JOIN font f ON fc.font_id = f.font_id
+       WHERE fc.project_id = ?
+       ORDER BY fc.is_selected DESC, fc.is_liked DESC, fc.id DESC`,
+      [projectId]
+    );
+    connection.release();
+    res.json({ status: 'success', fonts: rows });
+  } catch (err) {
+    console.error('❌ Fetch Fonts Error:', err);
+    res.status(500).json({ status: 'error', message: 'ดึงข้อมูล fonts ไม่สำเร็จ' });
+  }
+});
+
+// 2. กด Like / Unlike font
+app.put('/api/fonts/like/:fontId', async (req, res) => {
+  const { fontId } = req.params;
+  const { is_liked, project_id } = req.body;
+  if (!project_id) {
+    return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    await connection.query(
+      'UPDATE font_concept SET is_liked = ? WHERE font_id = ? AND project_id = ?',
+      [is_liked ? 1 : 0, fontId, project_id]
+    );
+    connection.release();
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error('❌ Like Font Error:', err);
+    res.status(500).json({ status: 'error', message: 'Database error' });
+  }
+});
+
+// 3. เลือก font (is_selected) + อัปเดต font_id ใน project
+app.put('/api/fonts/select/:conceptId', async (req, res) => {
+  const { conceptId } = req.params;
+  const { project_id } = req.body;
+  if (!project_id) {
+    return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
+  }
+  try {
+    const connection = await pool.getConnection();
+
+    // ดึง font_id จาก DB โดยตรง
+    const [conceptRows] = await connection.query(
+      'SELECT font_id FROM font_concept WHERE id = ?',
+      [conceptId]
+    );
+    if (conceptRows.length === 0) {
+      connection.release();
+      console.error(`❌ ไม่พบ font_concept id = ${conceptId}`);
+      return res.status(404).json({ status: 'error', message: 'ไม่พบ concept นี้' });
+    }
+    const finalFontId = conceptRows[0].font_id;
+    console.log(`🔍 font concept_id=${conceptId} → font_id=${finalFontId}`);
+
+    // เคลียร์ is_selected ทุก font ของโปรเจกต์นี้
+    await connection.query(
+      'UPDATE font_concept SET is_selected = 0 WHERE project_id = ?',
+      [project_id]
+    );
+
+    // ตั้งค่า is_selected = 1
+    await connection.query(
+      'UPDATE font_concept SET is_selected = 1 WHERE id = ?',
+      [conceptId]
+    );
+
+    // อัปเดต project.font_id
+    await connection.query(
+      'UPDATE project SET font_id = ? WHERE project_id = ?',
+      [finalFontId, project_id]
+    );
+    console.log(`✅ อัปเดต project.font_id = ${finalFontId} สำหรับ project_id = ${project_id}`);
+
+    connection.release();
+    res.json({ status: 'success', font_id: finalFontId });
+  } catch (err) {
+    console.error('❌ Select Font Error:', err);
+    res.status(500).json({ status: 'error', message: 'Database error' });
+  }
+});
+// *******************************************//
 
 
 
