@@ -5,16 +5,20 @@ import './CreateLogo.css';
 // นำเข้ารูปภาพ (ปรับ Path ให้ตรงกับโปรเจกต์ของคุณ)
 import logoImg from './assets/logo.png';
 import helpImg from './assets/help.png';
-//mport createLogoImg from './assets/create logo.png'; /
+//import createLogoImg from './assets/create logo.png';
 
 export const CreateLogo = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const projectId = location.state?.projectId;
-
+  const forceCreate = location.state?.forceCreate; // รับค่า forceCreate เพื่อเช็คว่าผู้ใช้จงใจกดปุ่ม "เจนรูปใหม่อีกครั้ง" มาหรือไม่
+  
   // ดึง User ID
   const userData = JSON.parse(localStorage.getItem('user') || '{}');
   const userId = userData.user_id || 0;
+  
+  // State สำหรับโชว์หน้าจอโหลดระหว่างเช็คข้อมูล
+  const [isChecking, setIsChecking] = useState(true);
 
   // --- States สำหรับ Layout ---
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -28,8 +32,34 @@ export const CreateLogo = () => {
   const [selectedStyles, setSelectedStyles] = useState([]);
   const [detailsInput, setDetailsInput] = useState('');
   const [negativeInput, setNegativeInput] = useState('');
-
+  
   const styleOptions = ['ทันสมัย', 'ความเป็นไทย', 'หรูหรา', 'เรียบง่าย', 'มินิมอล', 'เป็นกันเอง', 'การ์ตูน', 'ตัวหนังสือ', 'คลาสสิค'];
+
+  // ================= 🚨 เพิ่มฟังก์ชันตรวจสอบรูปภาพอัตโนมัติ =================
+  useEffect(() => {
+      // ถ้าไม่มี projectId หรือ ผู้ใช้จงใจกดปุ่มเจนใหม่ (forceCreate) ให้อยู่หน้านี้ต่อ
+      if (!projectId || forceCreate) {
+          setIsChecking(false);
+          return;
+      }
+
+      // ตรวจสอบว่าโปรเจกต์นี้มีโลโก้ในระบบหรือยัง
+      fetch(`http://localhost:3000/api/generated-logos/${projectId}`)
+          .then(res => res.json())
+          .then(data => {
+              // ถ้ามีรูปโลโก้อยู่แล้ว ให้เด้งไปหน้า Result อัตโนมัติ
+              if (data.status === 'success' && data.images && data.images.length > 0) {
+                  navigate('/result-logo', { state: { projectId } });
+              } else {
+                  // ถ้ายังไม่มีรูป ให้อยู่หน้า CreateLogo ต่อไป
+                  setIsChecking(false);
+              }
+          })
+          .catch(err => {
+              console.error("Error checking generated logos:", err);
+              setIsChecking(false); // ถึงจะ error ก็ปล่อยให้อยู่หน้านี้เพื่อทำงานต่อ
+          });
+  }, [projectId, forceCreate, navigate]);
 
   // ================= ฟังก์ชันนำเข้าข้อมูลจาก DB =================
   const handleImportBrandName = async () => {
@@ -97,7 +127,7 @@ export const CreateLogo = () => {
     }
   };
 
-  // ================= ฟังก์ชันส่งข้อมูลไปให้ FLUX =================
+  // ================= ฟังก์ชันส่งข้อมูลไปให้ DALL-E 3 =================
   const handleSubmitLogo = async () => {
     if (!brandName.trim()) return alert("กรุณาระบุชื่อแบรนด์");
     if (selectedStyles.length === 0) return alert("กรุณาเลือกสไตล์อย่างน้อย 1 อย่าง");
@@ -114,7 +144,7 @@ export const CreateLogo = () => {
         details: detailsInput,
         not_want: negativeInput
       };
-
+      localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
       const res = await fetch('http://localhost:3000/api/generate-logo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,7 +156,7 @@ export const CreateLogo = () => {
       if (data.status === 'success') {
         resetModal();
         setIsModalOpen(false);
-        // ไปหน้าโชว์ผลลัพธ์ (สมมติว่าคุณสร้างไฟล์ ResultLogo.jsx ไว้รอแล้ว)
+        // ไปหน้าโชว์ผลลัพธ์
         navigate('/result-logo', { state: { projectId } }); 
       } else {
         alert("เกิดข้อผิดพลาด: " + data.message);
@@ -138,6 +168,16 @@ export const CreateLogo = () => {
       setIsLoading(false);
     }
   };
+
+  // 👇 ระหว่างรอเช็คข้อมูลจาก Database ให้ขึ้นหน้าโหลดก่อน ป้องกันหน้าเว็บกะพริบ
+  if (isChecking) {
+      return (
+          <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: '#f5f5f5' }}>
+              <iconify-icon icon="line-md:loading-loop" style={{ fontSize: '50px', color: '#d75a2a' }}></iconify-icon>
+              <h3 style={{ marginTop: '20px', color: '#666' }}>กำลังตรวจสอบข้อมูลโปรเจกต์...</h3>
+          </div>
+      );
+  }
 
   return (
     <div className="clg-body-wrapper">
@@ -176,7 +216,7 @@ export const CreateLogo = () => {
               <span className="clg-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="clg-text">Create Concept</span>
             </li>
             <li className="clg-active" style={{ cursor: 'pointer' }}>
-              <span className="clg-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="clg-text">Create Iogo</span>
+              <span className="clg-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="clg-text">Create Logo</span>
             </li>
             <li onClick={() => navigate('/result', { state: { projectId } })} style={{ cursor: 'pointer' }}>
               <span className="clg-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="clg-text">Create Pictures</span>
@@ -330,7 +370,8 @@ export const CreateLogo = () => {
       {isLoading && (
         <div style={{position:'fixed', inset:0, background:'rgba(255,255,255,0.85)', zIndex:9999, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
             <iconify-icon icon="line-md:loading-loop" style={{fontSize:'60px', color:'#d75a2a'}}></iconify-icon>
-            <h2 style={{marginTop:'20px', color:'#d75a2a'}}>FLUX.1 Schnell กำลังวาดโลโก้ให้คุณ...</h2>
+            {/* 👇 อัปเดตชื่อ AI ตรงนี้ 👇 */}
+            <h2 style={{marginTop:'20px', color:'#d75a2a'}}>DALL·E 3 กำลังวาดโลโก้ให้คุณ...</h2>
             <p style={{color:'#666', marginTop:'10px'}}>อาจใช้เวลาประมาณ 10 - 20 วินาที กรุณารอสักครู่</p>
         </div>
       )}
@@ -338,4 +379,3 @@ export const CreateLogo = () => {
     </div>
   );
 };
-

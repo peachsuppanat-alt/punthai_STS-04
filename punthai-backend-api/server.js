@@ -5,7 +5,8 @@ import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import Replicate from "replicate"; // 1. เพิ่มบรรทัดนี้
+//import Replicate from "replicate"; 
+import OpenAI from "openai";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
 
@@ -17,6 +18,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // สร้าง Connection Pool Database
 const pool = mysql.createPool({
@@ -46,9 +51,9 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // 2. Setup Replicate (AI)
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN, // ต้องมั่นใจว่าใส่ Token ใน .env แล้ว
-});
+//const replicate = new Replicate({
+  //auth: process.env.REPLICATE_API_TOKEN,
+//});
 
 
 // ================= API LOGIN & REGISTER =================
@@ -58,7 +63,7 @@ const replicate = new Replicate({
 app.post('/api/register', upload.single('img_profile'), async (req, res) => {
   const { user_name, password, email } = req.body; 
   const image_profile = req.file ? req.file.filename : null; 
-  const subscription_status = 'expired';
+  const subscription_status = 'STANDARD';
 
   // 1. ดักจับปัญหากรณีส่งข้อมูลมาไม่ครบ
   if (!user_name || !password || !email) {
@@ -119,54 +124,22 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// ================= 3. API สร้างรูปภาพ (FLUX) (ใหม่!) =================
-app.post('/api/generate-image', async (req, res) => {
-    const { prompt } = req.body;
-  
-    if (!prompt) {
-      return res.status(400).json({ status: 'error', message: 'กรุณาระบุคำสั่ง (Prompt)' });
-    }
-  
-    try {
-      console.log("🎨 กำลังให้ AI วาดรูป:", prompt);
-  
-      const output = await replicate.run(
-        "black-forest-labs/flux-schnell",
-        {
-          input: {
-            prompt: prompt,
-            go_fast: true,
-            megapixels: "1",
-            num_outputs: 1,
-            aspect_ratio: "1:1",
-            output_format: "webp",
-            output_quality: 90
-          }
-        }
-      );
-  
-      console.log("✅ ได้รูปมาแล้ว:", output);
-      res.json({ status: 'success', imageUrl: output[0] });
-  
-    } catch (error) {
-      console.error("❌ Replicate Error:", error);
-      res.status(500).json({ status: 'error', message: 'สร้างรูปไม่สำเร็จ', error: error.message });
-    }
-  });
+
 // ================= 4. API จัดการโปรเจกต์ (Projects) =================
 
-// 4.1 สร้างโปรเจกต์ใหม่
+// 4.1 สร้างโปรเจกต์ใหม่ (สร้างทันทีโดยไม่ต้องใส่ชื่อ)
 app.post('/api/projects', async (req, res) => {
-  const { user_id, name_concept } = req.body;
-  if (!user_id || !name_concept) {
-    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+  const { user_id } = req.body;
+  if (!user_id) {
+    return res.status(400).json({ status: 'error', message: 'ไม่พบ user_id' });
   }
 
   try {
     const connection = await pool.getConnection();
+    // สร้างโปรเจกต์เปล่าๆ ทิ้งไว้ (project_name เป็น null อัตโนมัติ)
     const [result] = await connection.query(
-      'INSERT INTO project (user_id, name_concept, status) VALUES (?, ?, ?)',
-      [user_id, name_concept, 'ยังไม่ได้เริ่ม']
+      'INSERT INTO project (user_id, status) VALUES (?, ?)',
+      [user_id, 'ยังไม่ได้เริ่ม']
     );
     connection.release();
     res.json({ status: 'success', message: 'สร้างโปรเจกต์สำเร็จ', project_id: result.insertId });
@@ -218,18 +191,19 @@ app.get('/api/projects/detail/:id', async (req, res) => {
     }
 });
 
-// อัปเดตชื่อโปรเจกต์
+// 4.3 อัปเดตชื่อโปรเจกต์ 
 app.put('/api/projects/:id', async (req, res) => {
     const projectId = req.params.id;
-    const { name_concept } = req.body;
+    const { project_name } = req.body; // 👈 เปลี่ยนมารับตัวแปร project_name
 
-    if (!name_concept) {
+    if (!project_name) {
         return res.status(400).json({ status: 'error', message: 'กรุณาส่งชื่อโปรเจกต์มาด้วย' });
     }
 
     try {
         const connection = await pool.getConnection();
-        await connection.query("UPDATE project SET name_concept = ? WHERE project_id = ?", [name_concept, projectId]);
+        // 👈 อัปเดตลงคอลัมน์ project_name ให้ตรงกับ DB ของคุณ
+        await connection.query("UPDATE project SET project_name = ? WHERE project_id = ?", [project_name, projectId]);
         connection.release();
         
         return res.json({ status: 'success', message: 'อัปเดตชื่อสำเร็จ' });
@@ -238,6 +212,24 @@ app.put('/api/projects/:id', async (req, res) => {
         return res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+// 4.4 ลบโปรเจกต์
+app.delete('/api/projects/:id', async (req, res) => {
+    const projectId = req.params.id;
+
+    try {
+        const connection = await pool.getConnection();
+        // ⚠️ หมายเหตุ: หากขึ้น Error ลบไม่ได้ แสดงว่าต้องไปตั้งค่า Foreign Key เป็น ON DELETE CASCADE ใน DBeaver ครับ
+        await connection.query("DELETE FROM project WHERE project_id = ?", [projectId]);
+        connection.release();
+        
+        return res.json({ status: 'success', message: 'ลบโปรเจกต์สำเร็จ' });
+    } catch (err) {
+        console.error("Delete Project Error:", err);
+        return res.status(500).json({ status: 'error', message: 'ไม่สามารถลบโปรเจกต์ได้ อาจมีข้อมูลเชื่อมโยงอยู่' });
+    }
+});
+
+
 // ดึงรายการสินค้าทั้งหมดของ Project นั้นๆ
 app.get('/api/brand_product/:projectId', async (req, res) => {
     const { projectId } = req.params;
@@ -488,9 +480,8 @@ app.put('/api/brand-names/select/:conceptId', async (req, res) => {
 
 
 
-///********สร้าง logo ******* */
-
 // ================= ฟังก์ชันช่วยเหลือ: ดาวน์โหลดรูปภาพจาก AI URL มาเซฟในเครื่อง =================
+// (ฟังก์ชัน downloadImage ยังคงใช้ตัวเดิมของคุณได้เลย)
 const downloadImage = async (url, filepath) => {
     const response = await axios({
         url,
@@ -504,7 +495,7 @@ const downloadImage = async (url, filepath) => {
     });
 };
 
-// ================= API สำหรับสร้างโลโก้ (FLUX.1 Schnell) =================
+// ================= API สำหรับสร้างโลโก้ (OpenAI DALL·E 3) =================
 app.post('/api/generate-logo', async (req, res) => {
     const { 
         project_id, user_id, 
@@ -519,66 +510,53 @@ app.post('/api/generate-logo', async (req, res) => {
     try {
         const connection = await pool.getConnection();
 
-        // 1. 👇 เตรียมข้อมูลเพื่อสร้าง Prompt ภาษาอังกฤษ (ต้องมีลอจิกแปลภาษา หรือใช้ AI แปล)
-        // ** สำคัญ **: FLUX เข้าใจภาษาอังกฤษได้ดีที่สุด 
-        // ในขั้นตอนนี้คุณควรมีฟังก์ชันแปลความหมายภาษาไทย -> คีย์เวิร์ดภาษาอังกฤษ
-        // สมมติว่าแปลแล้วได้ดังนี้:
-        const translatedStyle = styles.join(', '); // เช่น "modern, luxury, traditional Thai"
-        const productSubject = products.length > 0 ? products[0].name_product : 'abstract symbol'; // เอาสินค้าตัวแรกมาเป็นประธาน
+        // 1. 👇 เตรียมข้อมูลเพื่อสร้าง Prompt
+        const translatedStyle = styles.join(', '); 
+        const productSubject = products.length > 0 ? products[0].name_product : 'abstract symbol'; 
         
-        // 2. 👇 ผสม Prompt ภาษาอังกฤษ (ตัวอย่างปรับแต่งสำหรับ FLUX)
+        // 2. 👇 ผสม Prompt (DALL-E 3 เข้าใจบริบทได้ดีมาก และรองรับการพิมพ์ตัวหนังสือ)
         const englishPrompt = `
-            professional vector logo, flat design, minimal, clean lines, isolated on solid white background, 
+            professional vector logo,isolated on solid white background, 
             featuring a stylized icon of ${productSubject} reflecting brand values of ${brand_value}. 
-            Style tags: ${translatedStyle}, stylized Thai art elements. 
+            Style tags: ${translatedStyle} 
             Include text "${brand_name}" underneath in a modern clean sans-serif font. 
             ${details ? 'Additional details: ' + details : ''}
+            Do not include: ${not_want || '3D render, realistic photos, messy backgrounds'}.
             High quality, intricate details.
-        `;
-        const negativePrompt = not_want || '';
+        `;  
 
-        console.log("Sending Prompt to FLUX:", englishPrompt);
+        console.log("Sending Prompt to DALL-E 3:", englishPrompt);
 
-       // 3. 👇 เรียกใช้ AI ของจริง (FLUX.1 Schnell)
-        console.log("🎨 กำลังสั่งให้ FLUX.1 Schnell วาดโลโก้...");
+       // 3. 👇 เรียกใช้ AI ของจริง (OpenAI DALL-E 3)
+        console.log("กำลังสั่งให้ Ai วาดโลโก้...");
         
-        const output = await replicate.run(
-            "black-forest-labs/flux-schnell",
-            {
-                input: {
-                    prompt: englishPrompt,
-                    go_fast: true,
-                    megapixels: "1",
-                    num_outputs: 1,
-                    aspect_ratio: "1:1",
-                    output_format: "png", // บังคับให้ออกมาเป็น PNG
-                    output_quality: 100
-                }
-            }
-        );
+        const response = await openai.images.generate({
+            model: "dall-e-3",
+            prompt: englishPrompt,
+            n: 1, // DALL-E 3 บังคับสร้างทีละ 1 รูปเสมอ
+            size: "1024x1024", // ขนาดมาตรฐาน
+        });
 
-        // ดึง URL รูปภาพแรกที่ AI เจนเสร็จ
-        const aiImageUrl = output[0]; 
+        // ดึง URL รูปภาพแรกที่ AI เจนเสร็จจาก OpenAI
+        const aiImageUrl = response.data[0].url; 
         console.log("✅ ได้ URL รูปโลโก้จาก AI แล้ว:", aiImageUrl);
         // -------------------------------------------------------------
 
        // 4. 👇 ดาวน์โหลดรูปภาพจาก AI มาเซฟใน Server ของเรา
         const filename = `logo_${project_id}_${Date.now()}.png`;
         
-        // ใช้ process.cwd() แทน __dirname สำหรับโหมด ES Module
         const targetDir = path.join(process.cwd(), 'uploads', 'generated', 'logos');
         
-        // เช็คว่ามีโฟลเดอร์รองรับรูปหรือยัง ถ้ายังไม่มีให้สร้างเลย (recursive: true คือสร้างโฟลเดอร์ซ้อนๆ กันให้ครบ)
         if (!fs.existsSync(targetDir)) {
             fs.mkdirSync(targetDir, { recursive: true });
         }
 
         const localPath = path.join(targetDir, filename);
-        const dbImagePath = `/uploads/generated/logos/${filename}`; // path สำหรับเก็บใน DB
+        const dbImagePath = `/uploads/generated/logos/${filename}`; 
 
         await downloadImage(aiImageUrl, localPath);
 
-       // 5. 👇 บันทึกประวัติลงฐานข้อมูล generated_history (ปรับให้ตรงกับ DB ของคุณ)
+       // 5. 👇 บันทึกประวัติลงฐานข้อมูล generated_history
         const sqlLog = `
             INSERT INTO generated_history 
             (project_id, generation_type, prompt, image_url, credits_used, model_name) 
@@ -590,8 +568,8 @@ app.post('/api/generate-logo', async (req, res) => {
             'LOGO', 
             englishPrompt, 
             dbImagePath, 
-            1, // สมมติว่าใช้ 1 เครดิต
-            'flux.1-schnell'
+            1, 
+            'dall-e-3' // 👈 เปลี่ยนชื่อโมเดลที่บันทึกลง DB เป็น dall-e-3
         ]);
 
         connection.release();
@@ -605,6 +583,7 @@ app.post('/api/generate-logo', async (req, res) => {
 });
 
 // ================= API สำหรับกด Like/Unlike รูปที่เจน =================
+// (ใช้ตัวเดิมของคุณได้เลย)
 app.put('/api/like-generated-item/:historyId', async (req, res) => {
     const { historyId } = req.params;
     const { is_liked } = req.body;
@@ -620,8 +599,55 @@ app.put('/api/like-generated-item/:historyId', async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+// ================= API สำหรับดึงรูปภาพโลโก้ที่สร้างแล้ว =================
+app.get('/api/generated-logos/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        // เรียงรูปที่ถูกเลือกไว้บนสุด -> ตามด้วยกดใจ -> ตามด้วยเจนล่าสุด
+        const [rows] = await connection.query(
+            "SELECT * FROM generated_history WHERE project_id = ? AND generation_type = 'LOGO' ORDER BY is_selected DESC, is_liked DESC, history_id DESC", 
+            [projectId]
+        );
+        connection.release();
+        res.json({ status: 'success', images: rows });
+    } catch (err) {
+        console.error("Fetch logos error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// ================= API สำหรับเลือกโลโก้ไปใช้งานจริง (ใหม่!) =================
+// ================= API สำหรับเลือก/ยกเลิกเลือกโลโก้ (อัปเดตใหม่ รองรับการกดซ้ำเพื่อยกเลิก) =================
+app.put('/api/generated-logos/select/:historyId', async (req, res) => {
+    const { project_id, image_url, action } = req.body; // 👈 เพิ่มตัวแปร action เพื่อบอกว่า เลือก หรือ ยกเลิก
+    const history_id = req.params.historyId;
+    try {
+        const connection = await pool.getConnection();
+
+        if (action === 'deselect') {
+            // ถ้ายกเลิกการเลือก
+            await connection.query("UPDATE generated_history SET is_selected = 0 WHERE history_id = ?", [history_id]);
+            await connection.query("UPDATE project SET image_logo = NULL WHERE project_id = ?", [project_id]); // 👈 ลบรูปออกจากหน้า Project
+        } else {
+            // ถ้าเป็นการเลือกรูปใหม่
+            // 1. เคลียร์โลโก้อื่นๆ ในโปรเจกต์นี้ให้กลายเป็นไม่ได้เลือก (0)
+            await connection.query("UPDATE generated_history SET is_selected = 0 WHERE project_id = ? AND generation_type = 'LOGO'", [project_id]);
+            // 2. ตั้งค่าโลโก้นี้เป็นถูกเลือก (1)
+            await connection.query("UPDATE generated_history SET is_selected = 1 WHERE history_id = ?", [history_id]);
+            // 3. อัปเดต Path รูปภาพลงในตาราง project
+            await connection.query("UPDATE project SET image_logo = ? WHERE project_id = ?", [image_url, project_id]);
+        }
+        
+        connection.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        console.error("Select Logo Error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`รันได้แล้ว Server running on http://localhost:${PORT}`);
 });

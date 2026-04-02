@@ -1,0 +1,621 @@
+/* =====================================================
+   PunThai – profile.css
+   Fonts : Bai Jamjuree (Thai UI) + Poppins (EN headings)
+   Brand : #d3542b  /  #f5f5f5 bg  /  white surfaces
+   ===================================================== */
+
+/* ── Reset ─────────────────────────────────────────── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── Base ────────────────────────────────────────────  */
+body {
+  background: #f5f5f5;
+  font-family: 'Bai Jamjuree', sans-serif;
+  color: #333;
+  min-height: 100vh;
+   
+}
+
+h1, h2, h3, button,
+.pf-username, .pf-section-title,
+.pf-bb-title, .pf-modal-title {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* ===== NAVBAR ===== */
+.pf-navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 40px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  z-index: 1000;
+}
+
+.pf-logo-img {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+.pf-logo-img:hover { transform: scale(1.05); }
+
+.pf-btn-users,
+.pf-btn-world {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f1f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.5s ease;
+}
+.pf-btn-users iconify-icon,
+.pf-btn-world iconify-icon { font-size: 22px; color: #D35325; }
+.pf-btn-users:hover,
+.pf-btn-world:hover { background: #f05a28; }
+.pf-btn-users:hover iconify-icon,
+.pf-btn-world:hover iconify-icon { color: #fff; }
+
+.pf-nav-right { display: flex; align-items: center; gap: 16px; }
+.pf-nav-icons  { display: flex; gap: 10px; align-items: center; }
+
+/* ===== LAYOUT ===== */
+.pf-container {
+  display: flex;
+  position: fixed;
+  top: 80px;        /* sit directly below the fixed navbar */
+  left: 0;
+  right: 0;
+  bottom: 0;        /* stretch to viewport bottom */
+  overflow: hidden;
+}
+
+/* ===== SIDEBAR ===== */
+.pf-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: #ffffff;
+  padding: 20px 15px;
+  border-right: 1px solid #eee;
+  height: 100%;     /* fill .container height */
+  overflow-y: auto;
+  overflow-x: visible;
+  transition: width 0.3s, min-width 0.3s, padding 0.3s;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 101;
+  flex-shrink: 0;
+}
+
+.pf-sidebar.pf-collapsed {
+  width: 80px;
+  min-width: 80px;
+  padding: 20px 10px;
+  border-radius: 0 30px 30px 0;
+  align-items: center;
+}
+.pf-sidebar.pf-collapsed .pf-text    { display: none; }
+.pf-sidebar.pf-collapsed .pf-menu li { justify-content: center; width: 100%; }
+.pf-sidebar.pf-collapsed .pf-help    { display: none; }
+.pf-sidebar.pf-collapsed hr       { width: 40px; margin: 10px auto; }
+
+.pf-toggle-btn {
+  position: fixed;
+  top: calc(80px + 20px); /* navbar height + offset */
+  width: 34px;
+  height: 34px;
+  border-radius: 100%;
+  border: none;
+  background: #f1f1f1;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  padding: 0;
+  z-index: 9999;
+  transition: left 0.3s;
+}
+
+/* Shift button when sidebar is collapsed */
+.pf-sidebar.pf-collapsed ~ * .pf-toggle-btn,
+body.pf-sidebar-collapsed .pf-toggle-btn {
+  left: calc(80px - 17px);
+}
+
+.pf-menu {
+  list-style: none;
+  padding: 0;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pf-menu li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-weight: 500;
+}
+.pf-menu li:hover  { background: #f3f6ea; color: #6b8e23; }
+.pf-menu li.pf-active { background: #fff3ee; color: #D35325; font-weight: 600; }
+
+.pf-icon iconify-icon {
+  font-size: 25px;
+  width: 24px;
+  height: 24px;
+  margin-top: 5px;
+}
+.pf-text { white-space: nowrap; transition: 0.3s; }
+
+.pf-sidebar hr {
+  border: none;
+  border-top: 1px solid #e5e5e5;
+  margin: 10px 0 -15px 0;
+}
+
+.pf-help { margin-top: auto; text-align: center; }
+.pf-help-img { width: 135px; margin-bottom: 10px; }
+.pf-help-text { color: #d75a2a; font-weight: 600; }
+.pf-contact-link {
+  display: inline-block;
+  color: #333;
+  text-decoration: none;
+  font-size: 14px;
+}
+.pf-contact-link:hover { text-decoration: underline; }
+
+/* ── Main ────────────────────────────────────────────  */
+.pf-main {
+  flex: 1;
+  padding: 28px 36px;
+  overflow-y: auto;   /* main content scrolls independently */
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* ── Profile Bar ─────────────────────────────────────  */
+.pf-profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #ececec;
+  padding: 18px 24px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+}
+
+.pf-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d3542b, #f09060);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  color: #ffffff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(211,84,43,0.25);
+}
+
+.pf-profile-info { flex: 1; }
+
+.pf-username {
+  font-size: 18px;
+  font-weight: 600;
+  color: #222;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-edit-inline-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  font-size: 16px;
+  transition: color 0.2s;
+}
+.pf-edit-inline-btn:hover { color: #d3542b; }
+.pf-edit-inline-btn iconify-icon { pointer-events: none; }
+
+.pf-profile-sub {
+  font-size: 13px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.pf-profile-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.pf-btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #d3542b;
+  color: #ffffff;
+  border: none;
+  padding: 9px 20px;
+  border-radius: 999px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.pf-btn-primary:hover {
+  background: #b8431f;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(211,84,43,0.28);
+}
+.pf-btn-primary iconify-icon { pointer-events: none; }
+
+.pf-btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f7f7f7;
+  color: #666;
+  border: 1px solid #e0e0e0;
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.pf-btn-secondary:hover { background: #efefef; border-color: #ccc; }
+.pf-btn-secondary iconify-icon { pointer-events: none; }
+
+/* ── Stats Row ───────────────────────────────────────  */
+.pf-stats-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pf-stat-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #ececec;
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.pf-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+
+.pf-stat-icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+.pf-stat-icon-wrap iconify-icon { pointer-events: none; }
+
+.pf-stat-icon-wrap.pf-orange { background: #fff1ec; color: #d3542b; }
+.pf-stat-icon-wrap.pf-green  { background: #edf7e9; color: #3B6D11; }
+
+.pf-stat-num {
+  font-family: 'Poppins', sans-serif;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+.pf-stat-num.pf-orange { color: #d3542b; }
+.pf-stat-num.pf-green  { color: #3B6D11; }
+
+.pf-stat-label {
+  font-size: 13px;
+  color: #aaa;
+  text-transform: lowercase;
+  letter-spacing: 0.3px;
+}
+
+/* ── Section Header ──────────────────────────────────  */
+.pf-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pf-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.pf-see-all-btn {
+  background: none;
+  border: none;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  color: #d3542b;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.pf-see-all-btn:hover { opacity: 0.7; }
+
+/* ── Projects Grid ───────────────────────────────────  */
+.pf-projects-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.pf-project-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #ececec;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.pf-project-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.09);
+}
+
+.pf-project-thumb {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+}
+.pf-project-thumb iconify-icon { pointer-events: none; opacity: 0.55; }
+
+.pf-thumb-blue   { background: #dbeafe; color: #185FA5; }
+.pf-thumb-teal   { background: #ccfbf1; color: #0F6E56; }
+.pf-thumb-amber  { background: #fef9c3; color: #BA7517; }
+.pf-thumb-rose   { background: #ffe4e6; color: #993556; }
+.pf-thumb-purple { background: #f3e8ff; color: #534AB7; }
+
+.pf-project-body { padding: 14px; }
+
+.pf-project-name {
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pf-progress-track {
+  flex: 1;
+  height: 5px;
+  background: #f0f0f0;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.pf-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.6s ease;
+}
+
+.pf-progress-pct {
+  font-family: 'Poppins', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 34px;
+  text-align: right;
+}
+
+.pf-project-btns { display: flex; gap: 8px; }
+
+.pf-project-btns button {
+  flex: 1;
+  padding: 7px 0;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.pf-btn-view {
+  background: #f7f7f7;
+  border: 1px solid #e0e0e0;
+  color: #666;
+}
+.pf-btn-view:hover { background: #efefef; }
+
+.pf-btn-edit {
+  background: #fff1ec;
+  border: 1px solid #f4c4aa;
+  color: #d3542b;
+}
+.pf-btn-edit:hover { background: #ffe6d9; }
+
+.pf-card-add {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px dashed #e0dbd8;
+  background: #fafafa;
+  cursor: pointer;
+  color: #ccc;
+  font-size: 32px;
+  font-family: 'Poppins', sans-serif;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.pf-card-add span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #bbb;
+}
+.pf-card-add iconify-icon { pointer-events: none; }
+.pf-card-add:hover { border-color: #d3542b; color: #d3542b; background: #fff8f5; }
+.pf-card-add:hover span { color: #d3542b; }
+
+/* ── Scrollbar ───────────────────────────────────────  */
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e0d8d5; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #c8b0aa; }
+
+/* ── Responsive ──────────────────────────────────────  */
+@media (max-width: 960px) {
+  .pf-projects-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .pf-navbar  { padding: 0 20px; }
+  .pf-sidebar {
+    position: fixed;
+    top: 80px;
+    left: 0;
+    height: calc(100vh - 80px);
+    z-index: 500;
+    width: 240px;
+    min-width: 240px;
+  }
+  .pf-main { padding: 20px 16px; }
+  .pf-profile-bar { flex-wrap: wrap; }
+  .pf-profile-actions { width: 100%; justify-content: flex-end; }
+  .pf-stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .pf-projects-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .pf-stats-row     { grid-template-columns: 1fr; }
+  .pf-projects-grid { grid-template-columns: 1fr; }
+}
+/* =========================================
+   การ์ดสไตล์หน้า Home (ใช้ในหน้า Profile)
+   ========================================= */
+.pf-projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.pf-home-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #ececec;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  text-align: center;
+  position: relative;
+  min-height: 200px;
+}
+
+.pf-home-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+}
+
+.pf-home-card-icon {
+  width: 65px;
+  height: 65px;
+  background: #f5f5f5;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 15px;
+  font-size: 32px;
+  color: #aaa;
+  overflow: hidden;
+}
+
+.pf-home-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pf-home-card h3 {
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.pf-status-badge {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+.pf-status-badge.pending {
+  background: #f5f5f5;
+  color: #888;
+}
+.pf-status-badge.active {
+  background: #e8f5e9;
+  color: #4caf50;
+}
+
+.pf-home-card.pf-create-new {
+  border: 2px dashed #d75a2a;
+  background: #fffaf8;
+}
+.pf-home-card.pf-create-new:hover {
+  background: #ffebe3;
+}

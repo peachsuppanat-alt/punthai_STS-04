@@ -11,27 +11,32 @@ export const MyProject = () => {
     // State สำหรับจัดการ Sidebar
     const [isCollapsed, setIsCollapsed] = useState(false);
     
-    // 👇 State สำหรับเก็บชื่อแบรนด์ที่เลือกจาก AI
+    // State สำหรับเก็บชื่อแบรนด์ที่เลือกจาก AI
     const [selectedBrandName, setSelectedBrandName] = useState(null);
 
     // State สำหรับเก็บชื่อโปรเจกต์ และ รายการสินค้า
     const [projectName, setProjectName] = useState('กำลังโหลดข้อมูล...');
+    const [projectLogo, setProjectLogo] = useState(null);
     const [products, setProducts] = useState([]);
+
+    // 👇 เพิ่ม State สำหรับ Popup แก้ไขชื่อโปรเจกต์ 👇
+    const [showNamePopup, setShowNamePopup] = useState(false);
+    const [editNameInput, setEditNameInput] = useState('');
 
     // รับ projectId ที่ถูกส่งมาจากหน้า Home
     const location = useLocation();
     const navigate = useNavigate();
     const projectId = location.state?.projectId;
 
-    // useEffect เพื่อดึงข้อมูลโปรเจกต์ สินค้า และชื่อแบรนด์ เมื่อเข้าหน้านี้
     useEffect(() => {
         if (projectId) {
-            // 1. ดึงชื่อโปรเจกต์ (แก้เป็น project_name ตาม DB ใหม่)
+            // 1. ดึงชื่อโปรเจกต์
             fetch(`http://localhost:3000/api/projects/detail/${projectId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        setProjectName(data.project.project_name || 'ไม่มีชื่อโปรเจกต์');
+                        // ถ้า project_name เป็น null หรือว่าง ให้ใช้คำว่า "โปรเจกต์ยังไม่ได้ตั้งชื่อ"
+                        setProjectName(data.project.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ');setProjectLogo(data.project.image_logo);
                     } else {
                         setProjectName('ไม่พบข้อมูลโปรเจกต์');
                     }
@@ -73,6 +78,27 @@ export const MyProject = () => {
         setIsCollapsed(!isCollapsed);
     };
 
+    // 👇 ฟังก์ชันจัดการการบันทึกชื่อใหม่ 👇
+    const handleSaveProjectName = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`http://localhost:3000/api/projects/${projectId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project_name: editNameInput }) // ส่งค่าไปให้ server.js
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                setProjectName(editNameInput); // อัปเดตหน้าจอทันที
+                setShowNamePopup(false);       // ปิด Popup
+            } else {
+                alert('❌ ' + data.message);
+            }
+        } catch (err) {
+            alert('เชื่อมต่อ Server ไม่ได้');
+        }
+    };
+
     return (
         <div className="mp-body-wrapper">
             {/* --- Navbar --- */}
@@ -96,7 +122,7 @@ export const MyProject = () => {
                         {isCollapsed ? '❯' : '❮'}
                     </button>
                     <ul className="mp-menu">
-                        <li>
+                        <li className="active">
                             <span className="mp-icon">
                                 <iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon>
                             </span>
@@ -138,18 +164,40 @@ export const MyProject = () => {
                 </aside>
 
                 <main className="mp-main">
-                    <h1 lang="en" className="mp-h1">{projectName}</h1>
+                    
+                    {/* 👇 กดที่ชื่อเพื่อแก้ไขชื่อโปรเจกต์ 👇 */}
+                    <h1 
+                        lang="en" 
+                        className="mp-h1" 
+                        style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '10px', color: projectName === 'โปรเจกต์ยังไม่ได้ตั้งชื่อ' ? '#888' : '#d75a2a' }}
+                        onClick={() => {
+                            setEditNameInput(projectName === 'โปรเจกต์ยังไม่ได้ตั้งชื่อ' ? '' : projectName);
+                            setShowNamePopup(true);
+                        }}
+                        title="คลิกเพื่อตั้งชื่อโปรเจกต์"
+                    >
+                        {projectName}
+                        <iconify-icon icon="mdi:pencil-outline" style={{fontSize: '24px', color: '#aaa'}}></iconify-icon>
+                    </h1>
+                    
                     <p className="mp-subtitle">นี่คือสรุปสิ่งที่เราได้สร้างขึ้นสำหรับแบรนด์ของคุณจนถึงตอนนี้</p>
 
                     <div className="mp-grid">
                         {/* Left Card */}
                         <div className="mp-card mp-large">
                             <div className="mp-illustration"></div>
-                            <div className="mp-pic-create">
-                                <img src={createImg} alt="" className="mp-pic" />
+                            <div className="mp-pic-create" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', marginBottom: '20px' }}>
+                                {projectLogo ? (
+                                    <img 
+                                        src={`http://localhost:3000${projectLogo}`} 
+                                        alt="Project Logo" 
+                                        style={{ width: '200px', height: '200px', objectFit: 'contain', borderRadius: '50%', background: '#fff', padding: '10px', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' }} 
+                                    />
+                                ) : (
+                                    <img src={createImg} alt="" className="mp-pic" />
+                                )}
                             </div>
                             
-                            {/* 👇 อัปเดตแสดงชื่อแบรนด์ที่เลือก 👇 */}
                             <h2 className="mp-h2">
                                  {selectedBrandName ? selectedBrandName : " ชื่อแบรนด์ ยังไม่ได้ตั้งชื่อ"}
                             </h2>
@@ -187,15 +235,12 @@ export const MyProject = () => {
                         {/* Right Column */}
                         <div className="mp-right-column">
                             
-                            {/* 👇 Name Card 👇 */}
+                            {/* Name Card */}
                             <div className="mp-card">
                                 <div className="mp-card-title" style={{ color: '#d75a2a', fontWeight: 'bold', marginBottom: '15px' }}>Name</div>
-
-                                {/* แสดงชื่อแบรนด์ ถ้ายังไม่มีให้ขึ้นข้อความชวนไปทำ */}
                                 <h3 style={{ marginBottom: '20px', color: '#333' }}>
                                     {selectedBrandName ? selectedBrandName : "ให้ Ai ช่วยคิดชื่อให้สิ"}
                                 </h3>
-
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button
                                         className="mp-btn-edit"
@@ -261,6 +306,49 @@ export const MyProject = () => {
                     </div>
                 </main>
             </div>
+
+            {/* 👇 Popup สำหรับเปลี่ยนชื่อโปรเจกต์ (ย้ายมาจากหน้า Home) 👇 */}
+            {showNamePopup && (
+                <div style={popupOverlayStyle} onClick={() => setShowNamePopup(false)}>
+                    <div style={popupContentStyle} onClick={e => e.stopPropagation()}>
+                        <h2 style={{color: '#d3542b', marginBottom: '15px'}}>ตั้งชื่อโปรเจกต์ของคุณ</h2>
+                        <form onSubmit={handleSaveProjectName}>
+                            <input 
+                                type="text" 
+                                placeholder="พิมพ์ชื่อโปรเจกต์ที่นี่..." 
+                                value={editNameInput}
+                                onChange={(e) => setEditNameInput(e.target.value)}
+                                required
+                                style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '10px', border: '1px solid #ccc', fontSize: '16px' }}
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowNamePopup(false)}
+                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#eee', color: '#333' }}
+                                >
+                                    ยกเลิก
+                                </button>
+                                <button 
+                                    type="submit"
+                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#d3542b', color: '#fff', fontWeight: 'bold' }}
+                                >
+                                    บันทึกชื่อ
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
+};
+
+// สไตล์สำหรับ Popup 
+const popupOverlayStyle = {
+    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(3px)'
+};
+const popupContentStyle = {
+    backgroundColor: 'white', padding: '30px', borderRadius: '16px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
 };
