@@ -19,7 +19,11 @@ export const MyProject = () => {
     const [projectLogo, setProjectLogo] = useState(null);
     const [products, setProducts] = useState([]);
 
-    // 👇 เพิ่ม State สำหรับ Popup แก้ไขชื่อโปรเจกต์ 👇
+    // 👇 1. เพิ่ม State สำหรับเก็บสีและฟอนต์ที่เลือก 👇
+    const [selectedColors, setSelectedColors] = useState([]); 
+    const [selectedFont, setSelectedFont] = useState(null);
+
+    // เพิ่ม State สำหรับ Popup แก้ไขชื่อโปรเจกต์
     const [showNamePopup, setShowNamePopup] = useState(false);
     const [editNameInput, setEditNameInput] = useState('');
 
@@ -30,13 +34,13 @@ export const MyProject = () => {
 
     useEffect(() => {
         if (projectId) {
-            // 1. ดึงชื่อโปรเจกต์
+            // 1. ดึงชื่อโปรเจกต์และโลโก้
             fetch(`http://localhost:3000/api/projects/detail/${projectId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        // ถ้า project_name เป็น null หรือว่าง ให้ใช้คำว่า "โปรเจกต์ยังไม่ได้ตั้งชื่อ"
-                        setProjectName(data.project.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ');setProjectLogo(data.project.image_logo);
+                        setProjectName(data.project.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ');
+                        setProjectLogo(data.project.image_logo);
                     } else {
                         setProjectName('ไม่พบข้อมูลโปรเจกต์');
                     }
@@ -56,7 +60,7 @@ export const MyProject = () => {
                 })
                 .catch(err => console.error("Fetch products error:", err));
 
-            // 3. ดึงชื่อแบรนด์ที่เคยสร้างและถูกเลือกไว้ (is_selected = 1)
+            // 3. ดึงชื่อแบรนด์ที่เคยสร้างและถูกเลือกไว้
             fetch(`http://localhost:3000/api/brand-names/${projectId}`)
                 .then(res => res.json())
                 .then(data => {
@@ -69,6 +73,29 @@ export const MyProject = () => {
                 })
                 .catch(err => console.error("Fetch brand names error:", err));
 
+            // 👇 4. ดึงข้อมูล สี และ ฟอนต์ ที่ถูกเลือกจาก API ใหม่ 👇
+            fetch(`http://localhost:3000/api/projects/${projectId}/selected-assets`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // ถ้ามีสีที่ถูกเลือก
+                        if (data.color) {
+                            setSelectedColors([
+                                data.color.color_code_1, 
+                                data.color.color_code_2, 
+                                data.color.color_code_3, 
+                                data.color.color_code_4, 
+                                data.color.color_code_5
+                            ].filter(Boolean));
+                        }
+                        // ถ้ามีฟอนต์ที่ถูกเลือก
+                        if (data.font) {
+                            setSelectedFont(data.font);
+                        }
+                    }
+                })
+                .catch(err => console.error("Fetch selected assets error:", err));
+
         } else {
             setProjectName('ไม่พบรหัสโปรเจกต์');
         }
@@ -78,19 +105,18 @@ export const MyProject = () => {
         setIsCollapsed(!isCollapsed);
     };
 
-    // 👇 ฟังก์ชันจัดการการบันทึกชื่อใหม่ 👇
     const handleSaveProjectName = async (e) => {
         e.preventDefault();
         try {
             const res = await fetch(`http://localhost:3000/api/projects/${projectId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ project_name: editNameInput }) // ส่งค่าไปให้ server.js
+                body: JSON.stringify({ project_name: editNameInput }) 
             });
             const data = await res.json();
             if (data.status === 'success') {
-                setProjectName(editNameInput); // อัปเดตหน้าจอทันที
-                setShowNamePopup(false);       // ปิด Popup
+                setProjectName(editNameInput); 
+                setShowNamePopup(false);       
             } else {
                 alert('❌ ' + data.message);
             }
@@ -165,7 +191,6 @@ export const MyProject = () => {
 
                 <main className="mp-main">
                     
-                    {/* 👇 กดที่ชื่อเพื่อแก้ไขชื่อโปรเจกต์ 👇 */}
                     <h1 
                         lang="en" 
                         className="mp-h1" 
@@ -227,7 +252,7 @@ export const MyProject = () => {
                                     </div>
                                     <iconify-icon icon="mdi:chevron-right"></iconify-icon>
                                 </div>
-                                <div className="mp-action-item"><div className="mp-left"><iconify-icon icon="mdi:image-outline"></iconify-icon><span>Generate Product Pictures</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
+                                <div className="mp-action-item" onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><iconify-icon icon="mdi:image-outline"></iconify-icon><span>Generate Product Pictures</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
                                 <div className="mp-action-item" onClick={() => navigate('/your-projects', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><iconify-icon icon="mdi:folder-outline"></iconify-icon><span>Explore Other Projects</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
                             </div>
                         </div>
@@ -244,14 +269,14 @@ export const MyProject = () => {
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button
                                         className="mp-btn-edit"
-                                        onClick={() => navigate('/create-concept', { state: { projectId } })}
+                                        onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'name' } })}
                                         style={{ padding: '8px 16px', background: '#ffe6de', color: '#d75a2a', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
                                     >
                                         Edit Name
                                     </button>
                                     <button
                                         className="mp-btn-view"
-                                        onClick={() => navigate('/create-concept', { state: { projectId } })}
+                                        onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'name' } })}
                                         style={{ padding: '8px 16px', background: '#ffe6de', color: '#d75a2a', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
                                     >
                                         View
@@ -259,18 +284,50 @@ export const MyProject = () => {
                                 </div>
                             </div>
 
-                            {/* Colors */}
+                            {/* 👇 Colors 👇 */}
                             <div className="mp-card mp-small">
                                 <h3 className="mp-h3">Colors</h3>
-                                <div className="mp-colors"><span className="mp-color mp-red"></span><span className="mp-color mp-orange"></span><span className="mp-color mp-green"></span><span className="mp-color mp-yellow"></span></div>
-                                <button className="mp-btn">Edit Colors</button>
+                                <div className="mp-colors" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                                    {selectedColors.length > 0 ? (
+                                        selectedColors.map((hex, idx) => (
+                                            <span key={idx} className="mp-color" style={{ backgroundColor: hex, border: '1px solid #eee' }}></span>
+                                        ))
+                                    ) : (
+                                        <>
+                                            <span className="mp-color" style={{backgroundColor: '#e0e0e0'}}></span>
+                                            <span className="mp-color" style={{backgroundColor: '#e0e0e0'}}></span>
+                                            <span className="mp-color" style={{backgroundColor: '#e0e0e0'}}></span>
+                                            <span className="mp-color" style={{backgroundColor: '#e0e0e0'}}></span>
+                                        </>
+                                    )}
+                                </div>
+                                <button 
+                                    className="mp-btn" 
+                                    // ส่งค่า activeTab ไปให้หน้า CreateConcept
+                                    onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'color' } })}
+                                >
+                                    Edit Colors
+                                </button>
                             </div>
 
-                            {/* Fonts */}
+                            {/* 👇 Fonts 👇 */}
                             <div className="mp-card mp-small">
                                 <h3 className="mp-h3">Fonts</h3>
-                                <div className="mp-font-empty"></div>
-                                <button className="mp-btn mp-btn-disabled">Edit Fonts</button>
+                                <div className="mp-font-empty" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50px', marginBottom: '15px', background: '#f9f9f9', borderRadius: '8px' }}>
+                                    {selectedFont ? (
+                                        <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', fontFamily: selectedFont.font_name }}>{selectedFont.font_name}</span>
+                                    ) : (
+                                        <span style={{ color: '#aaa', fontSize: '14px' }}>ยังไม่ได้เลือกฟอนต์</span>
+                                    )}
+                                </div>
+                                <button 
+                                    className="mp-btn" 
+                                    style={{ background: selectedFont ? '#fff3ee' : '#f5f5f5', color: selectedFont ? '#d75a2a' : '#aaa' }}
+                                    // ส่งค่า activeTab ไปให้หน้า CreateConcept
+                                    onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'font' } })}
+                                >
+                                    Edit Fonts
+                                </button>
                             </div>
 
                             {/* Products Section */}
@@ -293,7 +350,7 @@ export const MyProject = () => {
                                     })}
                                 </div>
                                 <div className="mp-btn-group">
-                                    <button className="mp-btn">Generates Pictures</button>
+                                    <button className="mp-btn" onClick={() => navigate('/create-logo', { state: { projectId } })}>Generates Pictures</button>
                                     <button
                                         className="mp-btn"
                                         onClick={() => navigate('/your-projects', { state: { projectId } })}
@@ -307,7 +364,7 @@ export const MyProject = () => {
                 </main>
             </div>
 
-            {/* 👇 Popup สำหรับเปลี่ยนชื่อโปรเจกต์ (ย้ายมาจากหน้า Home) 👇 */}
+            {/* Popup สำหรับเปลี่ยนชื่อโปรเจกต์ */}
             {showNamePopup && (
                 <div style={popupOverlayStyle} onClick={() => setShowNamePopup(false)}>
                     <div style={popupContentStyle} onClick={e => e.stopPropagation()}>

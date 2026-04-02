@@ -212,6 +212,42 @@ app.put('/api/projects/:id', async (req, res) => {
         return res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+
+// ================= API สำหรับดึงสีและฟอนต์ที่ "ถูกเลือก (is_selected=1)" ไปโชว์หน้า MyProject =================
+app.get('/api/projects/:projectId/selected-assets', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        
+        // ดึงชุดสีที่ถูกเลือก (JOIN ตาราง color_concept กับ color)
+        const [colorRows] = await connection.query(`
+            SELECT c.* FROM color_concept cc
+            JOIN color c ON cc.color_id = c.color_id
+            WHERE cc.project_id = ? AND cc.is_selected = 1
+            LIMIT 1
+        `, [projectId]);
+
+        // ดึงฟอนต์ที่ถูกเลือก (JOIN ตาราง font_concept กับ font)
+        const [fontRows] = await connection.query(`
+            SELECT f.* FROM font_concept fc
+            JOIN font f ON fc.font_id = f.font_id
+            WHERE fc.project_id = ? AND fc.is_selected = 1
+            LIMIT 1
+        `, [projectId]);
+
+        connection.release();
+
+        res.json({
+            status: 'success',
+            color: colorRows.length > 0 ? colorRows[0] : null,
+            font: fontRows.length > 0 ? fontRows[0] : null
+        });
+    } catch (err) {
+        console.error("Fetch selected assets error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
 // 4.4 ลบโปรเจกต์
 app.delete('/api/projects/:id', async (req, res) => {
     const projectId = req.params.id;
@@ -365,6 +401,112 @@ app.get('/api/brand_dna/:projectId', async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+// ================= API สำหรับให้ AI แนะนำสีและฟอนต์ (จากข้อมูล Brand DNA) =================
+app.get('/api/recommend-assets/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+
+        // 1. ดึงข้อมูล DNA และ สินค้า
+        const [dnaRows] = await connection.query("SELECT * FROM brand_dna WHERE project_id = ?", [projectId]);
+        const [prodRows] = await connection.query("SELECT name_product, type_product FROM brand_product WHERE project_id = ?", [projectId]);
+
+        if (dnaRows.length === 0) {
+            connection.release();
+            return res.status(400).json({ status: 'error', message: 'ไม่พบข้อมูล Brand DNA กรุณาวิเคราะห์ก่อน' });
+        }
+
+        const dna = dnaRows[0];
+        let productsText = prodRows.map(p => `${p.name_product} (${p.type_product})`).join(', ') || 'ไม่มีข้อมูลสินค้า';
+
+        // 2. ส่ง Prompt ให้ Gemini แนะนำสีและฟอนต์
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        const prompt = `
+        คุณเป็นนักออกแบบแบรนด์มืออาชีพ
+        ข้อมูลแบรนด์:
+        - รูปแบบธุรกิจ: ${dna.business_type}
+        - ตัวตนแบรนด์ (Archetype): ${dna.archetype_name}
+        - กลุ่มเป้าหมาย: ${dna.target_audience}
+        - สินค้า: ${productsText}
+
+        กรุณาแนะนำ "1 ชุดสี" (ประกอบด้วย 5 สี) และ "1 ฟอนต์" (ขอเป็น Google Fonts ที่รองรับภาษาไทย เช่น Prompt, Kanit, Sarabun, Noto Sans Thai, Mali, Mitr)
+        ตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่น โครงสร้างดังนี้:
+        {
+            "color": {
+                "name_palette": "ชื่อเรียกชุดสี (เช่น Earth Tone)",
+                "hex1": "#...", "hex2": "#...", "hex3": "#...", "hex4": "#...", "hex5": "#..."
+            },
+            "font": {
+                "font_name": "ชื่อฟอนต์"
+            }
+        }
+        `;
+
+        const result = await model.generateContent(prompt);
+        const cleanedText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+        const aiData = JSON.parse(cleanedText);
+
+        // 3. บันทึกชุดสีลง Database อัตโนมัติ (เพื่อให้พร้อมกด Like / Select)
+        const c = aiData.color;
+        let color_id, color_concept_id;
+        const [exColor] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [c.name_palette]);
+        if (exColor.length > 0) {
+            color_id = exColor[0].color_id;
+            await connection.query('UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?', 
+                [c.hex1, c.hex2, c.hex3, c.hex4, c.hex5, color_id]);
+        } else {
+            const [rColor] = await connection.query('INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)', 
+                [c.name_palette, c.hex1, c.hex2, c.hex3, c.hex4, c.hex5]);
+            color_id = rColor.insertId;
+        }
+        const [exCConcept] = await connection.query('SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?', [projectId, color_id]);
+        if (exCConcept.length > 0) {
+            color_concept_id = exCConcept[0].id;
+        } else {
+            const [rCConcept] = await connection.query('INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [color_id, projectId]);
+            color_concept_id = rCConcept.insertId;
+        }
+
+        // 4. บันทึกฟอนต์ลง Database อัตโนมัติ
+        const f = aiData.font;
+        let font_id, font_concept_id;
+        const [exFont] = await connection.query('SELECT font_id FROM font WHERE font_name = ?', [f.font_name]);
+        if (exFont.length > 0) {
+            font_id = exFont[0].font_id;
+        } else {
+            const [rFont] = await connection.query('INSERT INTO font (font_name) VALUES (?)', [f.font_name]);
+            font_id = rFont.insertId;
+        }
+        const [exFConcept] = await connection.query('SELECT id FROM font_concept WHERE project_id = ? AND font_id = ?', [projectId, font_id]);
+        if (exFConcept.length > 0) {
+            font_concept_id = exFConcept[0].id;
+        } else {
+            const [rFConcept] = await connection.query('INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [font_id, projectId]);
+            font_concept_id = rFConcept.insertId;
+        }
+
+        connection.release();
+
+        // 5. ส่งผลลัพธ์กลับไปให้หน้าเว็บ พร้อม id สำหรับกดถูกใจ
+        res.json({
+            status: 'success',
+            color: { id: color_concept_id, color_id: color_id, ...c },
+            font: { id: font_concept_id, font_id: font_id, ...f }
+        });
+
+    } catch (err) {
+        console.error("Recommend Assets Error:", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดจาก AI' });
+    }
+});
+
+
+
+
+
+
 // ================= API สำหรับฟีเจอร์ Create Concept (Brand Name) =================
 
 // 1. API ให้ Gemini สร้างชื่อแบรนด์ 10 ชื่อ
@@ -924,89 +1066,111 @@ const downloadImage = async (url, filepath) => {
 };
 
 // ================= API สำหรับสร้างโลโก้ (OpenAI DALL·E 3) =================
+// ================= API สำหรับ Generate โลโก้ด้วย DALL-E 3 =================
+// ================= API สำหรับ Generate โลโก้ด้วย DALL-E 3 =================
 app.post('/api/generate-logo', async (req, res) => {
     const { 
-        project_id, user_id, 
-        brand_name, brand_value, products, 
-        styles, details, not_want 
+        project_id, user_id, brand_name, brand_value, 
+        products, styles, details, negative_prompt,
+        use_imported_color, use_imported_font 
     } = req.body;
 
-    if (!project_id) {
-        return res.status(400).json({ status: 'error', message: 'Missing project_id' });
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'Project ID is required' });
+
+    // 👇 1. ดักจับ user_id ถ้าเป็น 0 หรือไม่มีค่า ให้เปลี่ยนเป็น null เพื่อไม่ให้ติด Foreign Key
+    const finalUserId = (!user_id || user_id === 0) ? null : user_id;
+
+    // 👇 2. ดักจับ products ให้ชัวร์ว่าเป็นข้อความแน่ๆ ป้องกันการเกิด [object Object]
+    let productsText = "";
+    if (Array.isArray(products)) {
+        productsText = products.map(p => p.name_product || p).join(', ');
+    } else {
+        productsText = products || "";
     }
 
     try {
         const connection = await pool.getConnection();
-
-        // 1. 👇 เตรียมข้อมูลเพื่อสร้าง Prompt
-        const translatedStyle = styles.join(', '); 
-        const productSubject = products.length > 0 ? products[0].name_product : 'abstract symbol'; 
         
-        // 2. 👇 ผสม Prompt (DALL-E 3 เข้าใจบริบทได้ดีมาก และรองรับการพิมพ์ตัวหนังสือ)
-        const englishPrompt = `
-            professional vector logo,isolated on solid white background, 
-            featuring a stylized icon of ${productSubject} reflecting brand values of ${brand_value}. 
-            Style tags: ${translatedStyle} 
-            Include text "${brand_name}" underneath in a modern clean sans-serif font. 
-            ${details ? 'Additional details: ' + details : ''}
-            Do not include: ${not_want || '3D render, realistic photos, messy backgrounds'}.
-            High quality, intricate details.
-        `;  
+        let colorText = "";
+        let fontText = "";
 
-        console.log("Sending Prompt to DALL-E 3:", englishPrompt);
-
-       // 3. 👇 เรียกใช้ AI ของจริง (OpenAI DALL-E 3)
-        console.log("กำลังสั่งให้ Ai วาดโลโก้...");
-        
-        const response = await openai.images.generate({
-            model: "dall-e-3",
-            prompt: englishPrompt,
-            n: 1, // DALL-E 3 บังคับสร้างทีละ 1 รูปเสมอ
-            size: "1024x1024", // ขนาดมาตรฐาน
-        });
-
-        // ดึง URL รูปภาพแรกที่ AI เจนเสร็จจาก OpenAI
-        const aiImageUrl = response.data[0].url; 
-        console.log("✅ ได้ URL รูปโลโก้จาก AI แล้ว:", aiImageUrl);
-        // -------------------------------------------------------------
-
-       // 4. 👇 ดาวน์โหลดรูปภาพจาก AI มาเซฟใน Server ของเรา
-        const filename = `logo_${project_id}_${Date.now()}.png`;
-        
-        const targetDir = path.join(process.cwd(), 'uploads', 'generated', 'logos');
-        
-        if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
+        if (use_imported_color) {
+            const [colorRows] = await connection.query(`
+                SELECT c.* FROM color_concept cc
+                JOIN color c ON cc.color_id = c.color_id
+                WHERE cc.project_id = ? AND cc.is_selected = 1 LIMIT 1
+            `, [project_id]);
+            
+            if (colorRows.length > 0) {
+                const c = colorRows[0];
+                const hexColors = [c.color_code_1, c.color_code_2, c.color_code_3, c.color_code_4, c.color_code_5].filter(Boolean).join(', ');
+                colorText = `STRICT COLOR PALETTE: You MUST strictly use ONLY these exact color hex codes (or visually identical tones): ${hexColors}.`;
+            }
         }
 
-        const localPath = path.join(targetDir, filename);
-        const dbImagePath = `/uploads/generated/logos/${filename}`; 
-
-        await downloadImage(aiImageUrl, localPath);
-
-       // 5. 👇 บันทึกประวัติลงฐานข้อมูล generated_history
-        const sqlLog = `
-            INSERT INTO generated_history 
-            (project_id, generation_type, prompt, image_url, credits_used, model_name) 
-            VALUES (?, ?, ?, ?, ?, ?)
-        `;
-        
-        await connection.query(sqlLog, [
-            project_id, 
-            'LOGO', 
-            englishPrompt, 
-            dbImagePath, 
-            1, 
-            'dall-e-3' // 👈 เปลี่ยนชื่อโมเดลที่บันทึกลง DB เป็น dall-e-3
-        ]);
-
+        if (use_imported_font) {
+            const [fontRows] = await connection.query(`
+                SELECT f.* FROM font_concept fc
+                JOIN font f ON fc.font_id = f.font_id
+                WHERE fc.project_id = ? AND fc.is_selected = 1 LIMIT 1
+            `, [project_id]);
+            
+            if (fontRows.length > 0) {
+                fontText = `TYPOGRAPHY STYLE: The text should be styled specifically to look like the font "${fontRows[0].font_name}". Make it clean and highly legible.`;
+            }
+        }
         connection.release();
 
-        // 6. 👇 ส่ง Path รูปภาพกลับไปให้ Frontend
-        res.json({ status: 'success', imageUrl: dbImagePath });
+        let prompt = `I need a pure, flat, 2D vector logo graphic. YOU MUST STRICTLY FOLLOW THESE RULES:
+1. ABSOLUTELY NO MOCKUPS: Do not place the logo on paper, business cards, wood, or walls. Do not draw pens, pencils, clips, or hands.
+2. BACKGROUND MUST BE  ONLY WHITE (#FFFFFF) : NO shadows, NO gradients, NO scenes, NO textures.
+3. The image must contain ONLY the logo icon and the brand name, placed directly in the center of the white canvas.\n\n`;
+        
+       
+
+        prompt += `BRAND NAME: EXACTLY "${brand_name}". \n`;
+        prompt += `Draw the typography cleanly below or next to the icon. Treat the text as a simple graphic element.\n\n`;
+        
+        if (brand_value) prompt += `CORE VALUE: ${brand_value}\n`;
+        if (styles) prompt += `DESIGN STYLE: ${styles} (Remember: FLAT 2D VECTOR ONLY)\n`;
+        if (details) prompt += `SPECIFIC DETAILS: ${details}\n`;
+        
+        if (colorText) prompt += `\n${colorText}\n`;
+        if (fontText) prompt += `\n${fontText}\n`;
+
+        // ย้ำ Negative Prompt ดักทาง DALL-E 3 ขั้นสูงสุด
+        prompt += `\nCRITICAL NEGATIVE PROMPT (DO NOT INCLUDE): `;
+        prompt += negative_prompt ? `${negative_prompt}, ` : ``;
+        prompt += ` mockups, presentation slides, stationery, realistic photography, 3D rendering, drop shadows, lighting effects, messy backgrounds, human hands, coffee shop backgrounds. ONLY THE LOGO ON WHITE.`;
+
+        const response = await openai.images.generate({
+            model: "dall-e-3",
+            prompt: prompt,
+            n: 1,
+            size: "1024x1024",
+            response_format: "b64_json",
+        });
+
+        const base64Data = response.data[0].b64_json;
+        const fileName = `logo_${Date.now()}.png`;
+        const filePath = path.join('uploads', fileName);
+
+        fs.writeFileSync(filePath, base64Data, 'base64');
+        const imageUrl = `/uploads/${fileName}`;
+
+        const conn2 = await pool.getConnection();
+        await conn2.query(
+            // 👇 3. บันทึก prompt และใช้ finalUserId ที่เราเคลียร์ค่าแล้ว 👇
+            "INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)",
+            [project_id, finalUserId, 'LOGO', imageUrl, prompt]
+        );
+        conn2.release();
+
+        res.json({ status: 'success', image_url: imageUrl, prompt: prompt });
+
     } catch (err) {
         console.error("Generate Logo Error:", err);
-        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการสร้างโลโก้' });
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการ Generate รูปภาพ' });
     }
 });
 
@@ -1073,6 +1237,109 @@ app.put('/api/generated-logos/select/:historyId', async (req, res) => {
         console.error("Select Logo Error:", err);
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
+});
+
+// ================= API สำหรับจัดการ Package Catalog (brand_product + package_catalog) =================
+// paaaaaaaaaaaaaaaaaaaaaaaaccccccccccccckkkkkkkkkagggggeeeeeeeeeeeeeeeeeeeee ตรงนี้เป็นต้นไปปปปปปปปปปปปปปปปปปปปปปปปปปปปปปปป
+// 1. บันทึก package_id ลง brand_product (เมื่อเลือกแพ็กเกจในหน้า Catalog)
+app.patch('/api/brand_product/:id/package', async (req, res) => {
+  const { id } = req.params;
+  const { package_id } = req.body;
+
+  try {
+    const connection = await pool.getConnection();
+    await connection.query(
+      'UPDATE brand_product SET package_id = ? WHERE product_id = ?',
+      [package_id, id]
+    );
+    connection.release();
+    res.json({ status: 'success', message: 'บันทึก package เรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+// บันทึก is_liked ลง package_catalog (จาก heart picker บนการ์ด)
+app.post('/api/package-catalog/like', async (req, res) => {
+  const { product_id, package_id, is_liked } = req.body;
+  if (!product_id || !package_id) {
+    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+  }
+  try {
+    const connection = await pool.getConnection();
+    const [existing] = await connection.query(
+      'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?',
+      [product_id, package_id]
+    );
+    if (existing.length > 0) {
+      await connection.query(
+        'UPDATE package_catalog SET is_liked = ? WHERE product_id = ? AND package_id = ?',
+        [is_liked ? 1 : 0, product_id, package_id]
+      );
+    } else {
+      await connection.query(
+        'INSERT INTO package_catalog (package_id, product_id, is_liked, is_selected) VALUES (?, ?, ?, 0)',
+        [package_id, product_id, is_liked ? 1 : 0]
+      );
+    }
+    connection.release();
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error('❌ Package like error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
+
+// บันทึก package_catalog (liked หรือ selected)
+app.post('/api/package-catalog', async (req, res) => {
+  const { product_id, package_id, action } = req.body;
+
+  if (!product_id || !package_id || !action) {
+    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+  }
+
+  try {
+    const connection = await pool.getConnection();
+
+    // ถ้าเป็น select → clear is_selected ของ product นี้ก่อน (1 product มีได้ 1 อัน)
+    if (action === 'select') {
+      await connection.query(
+        'UPDATE package_catalog SET is_selected = 0 WHERE product_id = ?',
+        [product_id]
+      );
+    }
+
+    // เช็คว่ามีแถวนี้อยู่แล้วไหม
+    const [existing] = await connection.query(
+      'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?',
+      [product_id, package_id]
+    );
+
+    if (existing.length > 0) {
+      if (action === 'select') {
+        await connection.query(
+          'UPDATE package_catalog SET is_selected = 1 WHERE product_id = ? AND package_id = ?',
+          [product_id, package_id]
+        );
+      } else {
+        // toggle like
+        await connection.query(
+          'UPDATE package_catalog SET is_liked = NOT is_liked WHERE product_id = ? AND package_id = ?',
+          [product_id, package_id]
+        );
+      }
+    } else {
+      await connection.query(
+        'INSERT INTO package_catalog (package_id, product_id, is_liked, is_selected) VALUES (?, ?, ?, ?)',
+        [package_id, product_id, action === 'like' ? 1 : 0, action === 'select' ? 1 : 0]
+      );
+    }
+
+    connection.release();
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error('Package catalog error:', err);
+    res.status(500).json({ status: 'error', message: err.message });
+  }
 });
 
 const PORT = process.env.PORT || 3000;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 
 import './MyProject.css'; 
 import './ResultLogo.css'; 
@@ -16,7 +16,7 @@ export const ResultLogo = () => {
     const [generatedImages, setGeneratedImages] = useState([]);
     const [selectedImage, setSelectedImage] = useState(null);
 
-    // --- States สำหรับ Form สร้างโลโก้ (ดึงมาจากหน้า Create) ---
+    // --- States สำหรับ Form สร้างโลโก้ ---
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [brandName, setBrandName] = useState('');
@@ -25,9 +25,12 @@ export const ResultLogo = () => {
     const [selectedStyles, setSelectedStyles] = useState([]);
     const [detailsInput, setDetailsInput] = useState('');
     const [negativeInput, setNegativeInput] = useState('');
+    
+    const [useImportedColor, setUseImportedColor] = useState(false);
+    const [useImportedFont, setUseImportedFont] = useState(false);
+
     const styleOptions = ['ทันสมัย', 'ความเป็นไทย', 'หรูหรา', 'เรียบง่าย', 'มินิมอล', 'เป็นกันเอง', 'การ์ตูน', 'ตัวหนังสือ', 'คลาสสิค'];
 
-    // ฟังก์ชันดึงรูปภาพจาก Database 
     const fetchImages = () => {
         fetch(`http://localhost:3000/api/generated-logos/${projectId}`)
             .then(res => res.json())
@@ -37,7 +40,7 @@ export const ResultLogo = () => {
                         id: img.history_id,
                         url: img.image_url, 
                         isLiked: img.is_liked === 1,
-                        isSelected: img.is_selected === 1 // 👈 1. เพิ่มการรับค่า is_selected จาก DB
+                        isSelected: img.is_selected === 1
                     }));
                     setGeneratedImages(formattedImages);
                 }
@@ -45,22 +48,27 @@ export const ResultLogo = () => {
             .catch(err => console.error("Error fetching logos:", err));
     };
 
-    // ทำงานเมื่อเปิดหน้านี้ครั้งแรก
     useEffect(() => {
         if (projectId) {
             fetchImages();
             
-            // ดึงข้อมูลฟอร์มล่าสุดที่เคยเจนไว้มาเก็บใน State เพื่อรอแก้ไข
             const savedData = localStorage.getItem(`lastLogoForm_${projectId}`);
             if (savedData) {
                 try {
                     const parsed = JSON.parse(savedData);
                     setBrandName(parsed.brand_name || '');
                     setBrandValue(parsed.brand_value || '');
-                    setImportedProducts(parsed.products || []);
+                    
+                    // 💡 แก้บั๊ก: ถ้าโหลดมาเป็น String ให้แปลงกลับเป็น Array หรือเก็บค่าไว้ให้ปลอดภัย
+                    let loadedProducts = parsed.products || [];
+                    if (typeof loadedProducts === 'string') {
+                        loadedProducts = [{ name_product: loadedProducts }];
+                    }
+                    setImportedProducts(loadedProducts);
+
                     setSelectedStyles(parsed.styles || []);
                     setDetailsInput(parsed.details || '');
-                    setNegativeInput(parsed.not_want || '');
+                    setNegativeInput(parsed.negative_prompt || parsed.not_want || '');
                 } catch (e) { console.error("Error parsing saved form data:", e); }
             }
         } else {
@@ -69,7 +77,6 @@ export const ResultLogo = () => {
         }
     }, [projectId, navigate]);
 
-    // ฟังก์ชันกดใจ
     const handleLike = async (id) => {
         const imgToUpdate = generatedImages.find(img => img.id === id);
         const newLikeStatus = !imgToUpdate.isLiked;
@@ -89,22 +96,18 @@ export const ResultLogo = () => {
         }
     };
 
-    // 👇 2. เพิ่มฟังก์ชันเลือกโลโก้ (ติ๊กถูก) 👇
     const handleSelect = async (id, url, isCurrentlySelected) => {
-        // กำหนด action ว่าจะเป็นการ 'select' (เลือก) หรือ 'deselect' (ยกเลิก)
         const actionType = isCurrentlySelected ? 'deselect' : 'select';
 
-        // อัปเดต UI ทันทีให้หน้าเว็บตอบสนองเร็ว
         setGeneratedImages(images => 
             images.map(img => {
                 if (img.id === id) {
-                    return { ...img, isSelected: !isCurrentlySelected }; // สลับสถานะตัวที่ถูกคลิก
+                    return { ...img, isSelected: !isCurrentlySelected };
                 }
-                return { ...img, isSelected: false }; // ตัวอื่นให้เอาติ๊กถูกออกให้หมด
+                return { ...img, isSelected: false };
             })
         );
 
-        // ยิง API ไปอัปเดตในฐานข้อมูล
         try {
             await fetch(`http://localhost:3000/api/generated-logos/select/${id}`, {
                 method: 'PUT',
@@ -122,7 +125,6 @@ export const ResultLogo = () => {
         }
     };
 
-    // ฟังก์ชันดาวน์โหลดรูป (อัปเดตให้โหลดได้จริงผ่าน Blob)
     const handleDownload = async (url, filename) => {
         try {
             const response = await fetch(`http://localhost:3000${url}`);
@@ -144,7 +146,6 @@ export const ResultLogo = () => {
         }
     };
 
-    // ================= ฟังก์ชันจัดการ Modal ใหม่ =================
     const toggleStyle = (style) => {
         if (selectedStyles.includes(style)) {
             setSelectedStyles(selectedStyles.filter(s => s !== style));
@@ -192,18 +193,26 @@ export const ResultLogo = () => {
         setIsLoading(true);
         try {
             const userData = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            // 💡 แก้บั๊ก: แปลงข้อมูลสินค้าให้เป็นข้อความก่อนส่ง API เสมอ
+            const productsText = Array.isArray(importedProducts) 
+                ? importedProducts.map(p => p.name_product || p).join(', ') 
+                : importedProducts;
+
             const payload = {
                 project_id: projectId,
                 user_id: userData.user_id || 0,
                 brand_name: brandName,
                 brand_value: brandValue,
-                products: importedProducts,
+                products: productsText, // 👈 ส่งเป็นข้อความให้ API
                 styles: selectedStyles,
                 details: detailsInput,
-                not_want: negativeInput
+                negative_prompt: negativeInput,
+                use_imported_color: useImportedColor,
+                use_imported_font: useImportedFont
             };
 
-            // อัปเดตข้อมูลล่าสุดลง LocalStorage เผื่อเปิดแก้รอบหน้า
+            // เซฟลง LocalStorage ไว้โหลดครั้งหน้า
             localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
 
             const res = await fetch('http://localhost:3000/api/generate-logo', {
@@ -215,8 +224,8 @@ export const ResultLogo = () => {
             const data = await res.json();
 
             if (data.status === 'success') {
-                setIsModalOpen(false); // ปิด Popup
-                fetchImages(); // รีเฟรชดึงรูปภาพใหม่มาแสดงใน Grid ทันทีโดยไม่ต้องโหลดหน้าใหม่!
+                setIsModalOpen(false); 
+                fetchImages(); 
             } else {
                 alert("เกิดข้อผิดพลาด: " + data.message);
             }
@@ -288,7 +297,6 @@ export const ResultLogo = () => {
                                             <iconify-icon icon={img.isLiked ? "solar:heart-bold" : "solar:heart-linear"}></iconify-icon>
                                         </button>
 
-                                        {/* 👇 3. เพิ่มปุ่มติ๊กถูกเพื่อเลือกโลโก้ 👇 */}
                                         <button 
                                             className="rl-action-btn" 
                                             onClick={() => handleSelect(img.id, img.url, img.isSelected)}
@@ -370,8 +378,11 @@ export const ResultLogo = () => {
                                     <iconify-icon icon="mdi:basket"></iconify-icon> นำเข้าสินค้า
                                 </button>
                             </label>
+                            {/* 💡 แก้บั๊ก: รองรับทั้งแบบ Array และแบบ String ในหน้า UI */}
                             <p style={{fontSize:'13px', color:'#888', marginTop:'5px'}}>
-                                {importedProducts.length > 0 ? `ใช้สินค้า: ${importedProducts.map(p => p.name_product).join(', ')}` : '*ไม่ระบุ'}
+                                {importedProducts.length > 0 
+                                    ? `ใช้สินค้า: ${Array.isArray(importedProducts) ? importedProducts.map(p => p.name_product || p).join(', ') : importedProducts}` 
+                                    : '*ไม่ระบุ'}
                             </p>
                         </div>
 
@@ -404,7 +415,18 @@ export const ResultLogo = () => {
                             <input type="text" placeholder="เช่น สีดำ, รูปกะโหลก..." value={negativeInput} onChange={(e) => setNegativeInput(e.target.value)} />
                         </div>
 
-                        <div className="rl-modal-actions">
+                        <div className="rl-form-group" style={{ display: 'flex', gap: '20px', marginTop: '15px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: '#f9f9f9', padding: '10px 15px', borderRadius: '8px', border: '1px solid #eee', width: '100%' }}>
+                                <input type="checkbox" checked={useImportedColor} onChange={(e) => setUseImportedColor(e.target.checked)} style={{ width: '20px', height: '20px', accentColor: '#d3542b' }} />
+                                <span style={{ fontWeight: '500', color: '#444' }}><span className="rl-step" style={{ width:'24px', height:'24px', fontSize:'12px', display:'inline-flex', alignItems:'center', justifyContent:'center'}}>7</span> นำเข้า <b>ชุดสี</b> ที่เลือกไว้</span>
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: '#f9f9f9', padding: '10px 15px', borderRadius: '8px', border: '1px solid #eee', width: '100%' }}>
+                                <input type="checkbox" checked={useImportedFont} onChange={(e) => setUseImportedFont(e.target.checked)} style={{ width: '20px', height: '20px', accentColor: '#d3542b' }} />
+                                <span style={{ fontWeight: '500', color: '#444' }}><span className="rl-step" style={{ width:'24px', height:'24px', fontSize:'12px', display:'inline-flex', alignItems:'center', justifyContent:'center'}}>8</span> นำเข้า <b>ฟอนต์</b> ที่เลือกไว้</span>
+                            </label>
+                        </div>
+
+                        <div className="rl-modal-actions" style={{ marginTop: '20px' }}>
                             <button className="rl-btn-cancel" onClick={() => setIsModalOpen(false)}>ยกเลิก</button>
                             <button className="rl-btn-confirm" onClick={handleSubmitLogo} disabled={isLoading}>
                                 {isLoading ? 'Ai กำลังวาดรูป...' : 'ให้ AI เจนโลโก้ใหม่'}

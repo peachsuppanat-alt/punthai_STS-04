@@ -35,6 +35,8 @@ export const CreateLogo = () => {
   
   const styleOptions = ['ทันสมัย', 'ความเป็นไทย', 'หรูหรา', 'เรียบง่าย', 'มินิมอล', 'เป็นกันเอง', 'การ์ตูน', 'ตัวหนังสือ', 'คลาสสิค'];
 
+  const [useImportedColor, setUseImportedColor] = useState(false);
+  const [useImportedFont, setUseImportedFont] = useState(false);
   // ================= 🚨 เพิ่มฟังก์ชันตรวจสอบรูปภาพอัตโนมัติ =================
   useEffect(() => {
       // ถ้าไม่มี projectId หรือ ผู้ใช้จงใจกดปุ่มเจนใหม่ (forceCreate) ให้อยู่หน้านี้ต่อ
@@ -135,15 +137,17 @@ export const CreateLogo = () => {
     setIsLoading(true);
     try {
       const payload = {
-        project_id: projectId,
-        user_id: userId,
-        brand_name: brandName,
-        brand_value: brandValue,
-        products: importedProducts,
-        styles: selectedStyles,
-        details: detailsInput,
-        not_want: negativeInput
-      };
+      project_id: projectId,
+      user_id: userId,
+      brand_name: brandName,
+      brand_value: brandValue,
+      products: importedProducts.join(', '),
+      styles: selectedStyles.join(', '),
+      details: detailsInput,
+      negative_prompt: negativeInput,
+      use_imported_color: useImportedColor,
+      use_imported_font: useImportedFont
+    };
       localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
       const res = await fetch('http://localhost:3000/api/generate-logo', {
         method: 'POST',
@@ -352,6 +356,17 @@ export const CreateLogo = () => {
                 value={negativeInput}
                 onChange={(e) => setNegativeInput(e.target.value)}
               />
+            </div>
+            {/* 👇 เพิ่มข้อ 7 และ 8 👇 */}
+            <div className="clg-form-group" style={{ display: 'flex', gap: '20px', marginTop: '15px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: '#f9f9f9', padding: '10px 15px', borderRadius: '8px', border: '1px solid #eee', width: '100%' }}>
+                    <input type="checkbox" checked={useImportedColor} onChange={(e) => setUseImportedColor(e.target.checked)} style={{ width: '20px', height: '20px', accentColor: '#d3542b' }} />
+                    <span style={{ fontWeight: '500', color: '#444' }}>นำเข้า <b>ชุดสี</b> ที่เลือกไว้แล้ว</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: '#f9f9f9', padding: '10px 15px', borderRadius: '8px', border: '1px solid #eee', width: '100%' }}>
+                    <input type="checkbox" checked={useImportedFont} onChange={(e) => setUseImportedFont(e.target.checked)} style={{ width: '20px', height: '20px', accentColor: '#d3542b' }} />
+                    <span style={{ fontWeight: '500', color: '#444' }}>นำเข้า <b>ฟอนต์</b> ที่เลือกไว้แล้ว</span>
+                </label>
             </div>
 
             {/* Actions */}

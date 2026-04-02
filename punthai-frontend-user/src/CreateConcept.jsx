@@ -512,12 +512,13 @@ export const CreateConcept = () => {
   const projectId  = location.state?.projectId;
   const userData   = JSON.parse(localStorage.getItem('user') || '{}');
   const userId     = userData.user_id || 0;
-
+  const initialTab = location.state?.activeTab || 'name'; 
+  const [activeTab, setActiveTab] = useState(initialTab);
   // ─────────────────────────────────────────────────────────
   // ORIGINAL STATE (unchanged)
   // ─────────────────────────────────────────────────────────
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab]   = useState('name');
+  
   const [loading, setLoading]       = useState({ show: false, text: '' });
   const [activeDropdown, setActiveDropdown] = useState(null);
 
