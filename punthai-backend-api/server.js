@@ -302,7 +302,12 @@ app.post('/api/brand_product', upload.single('image_product'), async (req, res) 
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
+//************************************************************************* */
+//************************************************************************* */
 //  API สำหรับวิเคราะห์ Brand DNA ด้วย Gemini (อัปเดตดึงสินค้าทั้งหมด)
+//************************************************************************* */
+//************************************************************************* */
+
 app.post('/api/generate-brand-dna', async (req, res) => {
     //  ไม่ต้องรับ name_product, type_product จาก req.body  เพราะเราจะดึงจาก DB 
     const { project_id, user_id, business_type, archetype, audience_data } = req.body;
@@ -333,7 +338,7 @@ app.post('/api/generate-brand-dna', async (req, res) => {
 
         // Prompt 
         const prompt = `
-        คุณเป็นผู้เชี่ยวชาญด้านการสร้างแบรนด์ (Brand Strategist) ระดับโลก
+        คุณเป็นผู้เชี่ยวชาญด้านการสร้างแบรนด์ (Brand Strategist) มืออาชีพ
         ข้อมูลเบื้องต้นของแบรนด์นี้:
         - รูปแบบธุรกิจ: ${business_type}
         - ตัวตนของแบรนด์ (Archetype): ${archetype}
@@ -534,7 +539,7 @@ app.post('/api/generate-brand-names', async (req, res) => {
         - สินค้า: ${product}
         - ประเภท: ${category}
         - ประโยชน์/จุดเด่น: ${benefit || 'ไม่ระบุ'}
-        - กลุ่มเป้าหมาย: ${finalTarget}
+        - กลุ่มเป้าหมาย: ${finalTarget,target}
         - สไตล์ชื่อที่ต้องการ: ${tags.join(', ')}
         - ความต้องการพิเศษ: ${special || 'ไม่ระบุ'}
 
@@ -1066,8 +1071,8 @@ const downloadImage = async (url, filepath) => {
 };
 
 // ================= API สำหรับสร้างโลโก้ (OpenAI DALL·E 3) =================
-// ================= API สำหรับ Generate โลโก้ด้วย DALL-E 3 =================
-// ================= API สำหรับ Generate โลโก้ด้วย DALL-E 3 =================
+
+// ==================================
 app.post('/api/generate-logo', async (req, res) => {
     const { 
         project_id, user_id, brand_name, brand_value, 
@@ -1077,10 +1082,10 @@ app.post('/api/generate-logo', async (req, res) => {
 
     if (!project_id) return res.status(400).json({ status: 'error', message: 'Project ID is required' });
 
-    // 👇 1. ดักจับ user_id ถ้าเป็น 0 หรือไม่มีค่า ให้เปลี่ยนเป็น null เพื่อไม่ให้ติด Foreign Key
+    //  1. ดักจับ user_id ถ้าเป็น 0 หรือไม่มีค่า ให้เปลี่ยนเป็น null เพื่อไม่ให้ติด Foreign Key
     const finalUserId = (!user_id || user_id === 0) ? null : user_id;
 
-    // 👇 2. ดักจับ products ให้ชัวร์ว่าเป็นข้อความแน่ๆ ป้องกันการเกิด [object Object]
+    //  2. ดักจับ products ให้ชัวร์ว่าเป็นข้อความแน่ๆ ป้องกันการเกิด [object Object]
     let productsText = "";
     if (Array.isArray(products)) {
         productsText = products.map(p => p.name_product || p).join(', ');
@@ -1124,7 +1129,8 @@ app.post('/api/generate-logo', async (req, res) => {
         let prompt = `I need a pure, flat, 2D vector logo graphic. YOU MUST STRICTLY FOLLOW THESE RULES:
 1. ABSOLUTELY NO MOCKUPS: Do not place the logo on paper, business cards, wood, or walls. Do not draw pens, pencils, clips, or hands.
 2. BACKGROUND MUST BE  ONLY WHITE (#FFFFFF) : NO shadows, NO gradients, NO scenes, NO textures.
-3. The image must contain ONLY the logo icon and the brand name, placed directly in the center of the white canvas.\n\n`;
+3. The image must contain ONLY the logo icon and the brand name, placed directly in the center of the white canvas.
+BACKGROUND MUST BE  ONLY WHITE (#FFFFFF) \n\n`;
         
        
 
@@ -1160,7 +1166,7 @@ app.post('/api/generate-logo', async (req, res) => {
 
         const conn2 = await pool.getConnection();
         await conn2.query(
-            // 👇 3. บันทึก prompt และใช้ finalUserId ที่เราเคลียร์ค่าแล้ว 👇
+            //  3. บันทึก prompt และใช้ finalUserId ที่เราเคลียร์ค่าแล้ว 
             "INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)",
             [project_id, finalUserId, 'LOGO', imageUrl, prompt]
         );
@@ -1341,6 +1347,94 @@ app.post('/api/package-catalog', async (req, res) => {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
+
+
+
+
+
+
+
+
+// =====================================================================
+// ================= API สำหรับ ADMIN DASHBOARD =========================
+// =====================================================================
+
+// 1. Admin Login
+app.post('/api/admin/login', async (req, res) => {
+    const { name_admin, password, key_password } = req.body;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(
+            "SELECT * FROM admin WHERE name_admin = ? AND password = ? AND key_password = ?",
+            [name_admin, password, key_password]
+        );
+        connection.release();
+
+        if (rows.length > 0) {
+            // ไม่ส่งรหัสผ่านกลับไปเพื่อความปลอดภัย
+            const adminData = { admin_id: rows[0].admin_id, name_admin: rows[0].name_admin };
+            res.json({ status: 'success', message: 'เข้าสู่ระบบ Admin สำเร็จ', admin: adminData });
+        } else {
+            res.status(401).json({ status: 'error', message: 'ข้อมูลเข้าสู่ระบบไม่ถูกต้อง' });
+        }
+    } catch (err) {
+        console.error("Admin Login Error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// 2. ดึงจำนวน User ทั้งหมด
+app.get('/api/admin/users/count', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query("SELECT COUNT(*) as totalUsers FROM user_profile");
+        connection.release();
+        res.json({ status: 'success', total: rows[0].totalUsers });
+    } catch (err) {
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// 3. ดึงสถิติการใช้งาน API (Gemini & DALL-E) ย้อนหลัง X วัน
+app.get('/api/admin/stats/api-usage', async (req, res) => {
+    const days = parseInt(req.query.days) || 7; // ค่าเริ่มต้น 7 วัน
+    try {
+        const connection = await pool.getConnection();
+        
+        // สถิติ Gemini (จากตาราง api_logs)
+        const [geminiStats] = await connection.query(`
+            SELECT DATE(created_at) as date, COUNT(*) as count 
+            FROM api_logs 
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at) ORDER BY date ASC
+        `, [days]);
+
+        // สถิติ DALL-E 3 (จากตาราง generated_history)
+        const [dalleStats] = await connection.query(`
+            SELECT DATE(created_at) as date, COUNT(*) as count 
+            FROM generated_history 
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at) ORDER BY date ASC
+        `, [days]);
+
+        connection.release();
+
+        // รวมข้อมูลเพื่อส่งให้ Frontend กราฟ
+        res.json({ 
+            status: 'success', 
+            gemini: geminiStats,
+            dalle: dalleStats
+        });
+    } catch (err) {
+        console.error("API Stats Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+
+
+
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

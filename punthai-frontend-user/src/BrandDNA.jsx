@@ -10,7 +10,7 @@ export const BrandDNA = () => {
   const location = useLocation();
   const projectId = location.state?.projectId;
   
-  // 👇 ดึง user_id จาก LocalStorage (สมมติว่าคุณเก็บข้อมูล user ไว้ตอน Login)
+  //  ดึง user_id จาก LocalStorage (สมมติว่าคุณเก็บข้อมูล user ไว้ตอน Login)
   const userData = JSON.parse(localStorage.getItem('user') || '{}');
   const userId = userData.user_id || 0;
 
@@ -20,7 +20,7 @@ export const BrandDNA = () => {
   const [recommendedColor, setRecommendedColor] = useState(null);
   const [recommendedFont, setRecommendedFont] = useState(null);
 
-  // 👇 State สำหรับควบคุมหน้าจอต่างๆ 👇
+  //  State สำหรับควบคุมหน้าจอต่างๆ 
   const [showWelcome, setShowWelcome] = useState(true); // หน้าต่างต้อนรับ
   const [currentStep, setCurrentStep] = useState(1);
   const [showResult, setShowResult] = useState(false);
@@ -61,7 +61,7 @@ export const BrandDNA = () => {
     fetchExistingDNA(); // เช็คว่าเคยทำ DNA หรือยัง
   }, [projectId, navigate]);
 
-  // 👇 ฟังก์ชันเช็คผลลัพธ์เก่าจาก Database 👇
+  //  ฟังก์ชันเช็คผลลัพธ์เก่าจาก Database 
   const fetchExistingDNA = async () => {
     try {
       const res = await fetch(`http://localhost:3000/api/brand_dna/${projectId}`);
@@ -165,7 +165,7 @@ export const BrandDNA = () => {
     return finalArchetype;
   };
 
-  // 👇 นี่คือฟังก์ชันหลักที่ประมวลผล DNA ของเดิมของคุณ 👇
+  //  นี่คือฟังก์ชันหลักที่ประมวลผล DNA ของเดิมของคุณ 
   const handleSubmitDNA = async (currentArchetype) => {
     setIsLoading(true);
     try {
@@ -224,7 +224,7 @@ export const BrandDNA = () => {
     }
   };
 
-  // 👇 ฟังก์ชันทำแบบทดสอบใหม่
+  //  ฟังก์ชันทำแบบทดสอบใหม่
   const handleRetakeQuiz = () => {
     setShowResult(false);
     setShowWelcome(false);
@@ -252,7 +252,7 @@ export const BrandDNA = () => {
       }
   };
 
-  // 👇 หัวใจสำคัญ: เมื่อหน้าจอ Result เปิดขึ้นมา และมีผลลัพธ์ DNA ให้สั่งดึงสีและฟอนต์ทันที 👇
+  //  หัวใจสำคัญ: เมื่อหน้าจอ Result เปิดขึ้นมา และมีผลลัพธ์ DNA ให้สั่งดึงสีและฟอนต์ทันที 👇
   useEffect(() => {
       if (showResult && dnaResult) {
           fetchAiRecommendations();

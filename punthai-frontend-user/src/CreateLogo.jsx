@@ -37,6 +37,7 @@ export const CreateLogo = () => {
 
   const [useImportedColor, setUseImportedColor] = useState(false);
   const [useImportedFont, setUseImportedFont] = useState(false);
+  
   // ================= 🚨 เพิ่มฟังก์ชันตรวจสอบรูปภาพอัตโนมัติ =================
   useEffect(() => {
       // ถ้าไม่มี projectId หรือ ผู้ใช้จงใจกดปุ่มเจนใหม่ (forceCreate) ให้อยู่หน้านี้ต่อ
