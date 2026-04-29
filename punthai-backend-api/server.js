@@ -1093,6 +1093,7 @@ app.post('/api/generate-logo', async (req, res) => {
         productsText = products || "";
     }
 
+    
     try {
         const connection = await pool.getConnection();
         
@@ -1130,7 +1131,7 @@ app.post('/api/generate-logo', async (req, res) => {
 1. ABSOLUTELY NO MOCKUPS: Do not place the logo on paper, business cards, wood, or walls. Do not draw pens, pencils, clips, or hands.
 2. BACKGROUND MUST BE  ONLY WHITE (#FFFFFF) : NO shadows, NO gradients, NO scenes, NO textures.
 3. The image must contain ONLY the logo icon and the brand name, placed directly in the center of the white canvas.
-BACKGROUND MUST BE  ONLY WHITE (#FFFFFF) \n\n`;
+"BACKGROUND MUST BE  ONLY WHITE (#FFFFFF)!!!" \n\n`;
         
        
 

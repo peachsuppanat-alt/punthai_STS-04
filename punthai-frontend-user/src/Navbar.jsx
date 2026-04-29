@@ -34,7 +34,7 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                         <span style={{ fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             Hi, {user.user_name}
-                            {/* 👇 ป้ายโชว์สถานะ PRO / STANDARD ใน Navbar 👇 */}
+                            {/*  PRO / STANDARD  */}
                             <span style={{ 
                                 background: user.subscription_status === 'PRO' ? 'linear-gradient(45deg, #FFD700, #FFA500)' : '#ffe6de', 
                                 color: user.subscription_status === 'PRO' ? '#000' : '#d75a2a', 
@@ -75,7 +75,7 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                     <iconify-icon icon="material-symbols-light:language"></iconify-icon>
                 </button>
 
-                {/* 👇 2. ปุ่มอัปเกรดระดับ Pro ให้อยู่ขวาสุด 👇 */}
+                
                 <button 
                     className="btn-primary" 
                     style={{ marginLeft: '10px', background: 'linear-gradient(45deg, #d3542b, #f09060)', border: 'none' }} 

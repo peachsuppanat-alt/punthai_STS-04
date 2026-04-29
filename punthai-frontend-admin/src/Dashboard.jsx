@@ -49,7 +49,7 @@ export default function Dashboard({ setIsAdmin }) {
           <BarChart2 /> Punthai Admin
         </h2>
         <nav style={{ flex: 1, marginTop: '20px' }}>
-          <div style={{ padding: '12px 15px', background: '#fff3ee', color: '#d3542b', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+          <div style={{ padding: '12px 15px', background: '#d3542b', color: '#ffffff', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
             Dashboard Overview
           </div>
         </nav>
@@ -60,7 +60,7 @@ export default function Dashboard({ setIsAdmin }) {
 
       {/* Main Content */}
       <main style={{ flex: 1, padding: '30px' }}>
-        <h1>Dashboard Overview</h1>
+        <h1 style={{color : '#000'}}>Dashboard Overview</h1>
         
         {/* Card แสดง User (ข้อ 2.1) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginTop: '20px' }}>
