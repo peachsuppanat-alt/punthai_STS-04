@@ -16,11 +16,17 @@ dotenv.config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static('uploads'));
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+const googleImagen = new OpenAI({
+    apiKey: process.env.GEMINI_API_KEY,
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
 });
 
 // สร้าง Connection Pool Database
@@ -36,13 +42,22 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
-// Setup การอัปโหลดรูป (Profile)
-if (!fs.existsSync('./uploads')){
-    fs.mkdirSync('./uploads');
+// Setup โฟลเดอร์สำหรับเก็บรูปภาพ
+const uploadDir = path.join(process.cwd(), 'uploads');
+const generatedDir = path.join(uploadDir, 'generated');
+
+// สร้างโฟลเดอร์อัตโนมัติถ้ายังไม่มี
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
 }
+if (!fs.existsSync(generatedDir)) {
+    fs.mkdirSync(generatedDir, { recursive: true });
+}
+
+// ตั้งค่า Multer สำหรับรูปภาพที่ User อัปโหลดมาเอง
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/')
+    cb(null, 'uploads/') // 👈 เก็บในโฟลเดอร์ uploads/
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + path.extname(file.originalname))
@@ -50,60 +65,37 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// 2. Setup Replicate (AI)
-//const replicate = new Replicate({
-  //auth: process.env.REPLICATE_API_TOKEN,
-//});
-
-
 // ================= API LOGIN & REGISTER =================
-
-
-// ================= API REGISTER =================
 app.post('/api/register', upload.single('img_profile'), async (req, res) => {
   const { user_name, password, email } = req.body; 
   const image_profile = req.file ? req.file.filename : null; 
   const subscription_status = 'STANDARD';
 
-  // 1. ดักจับปัญหากรณีส่งข้อมูลมาไม่ครบ
   if (!user_name || !password || !email) {
-      return res.status(400).json({ 
-          status: 'error', 
-          message: 'ข้อมูลไม่ครบถ้วน!' 
-      });
+      return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน!' });
   }
 
-  // 2. ต้องมี try { เพื่อครอบการทำงานของ Database
   try {
     const connection = await pool.getConnection();
-
-    // 3. เช็กว่าชื่อผู้ใช้ซ้ำไหม
     const [checkUser] = await connection.query('SELECT * FROM user_profile WHERE user_name = ?', [user_name]);
     if (checkUser.length > 0) {
       connection.release();
       return res.status(400).json({ status: 'error', message: 'ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว' });
     }
-
-    // 4. บันทึกข้อมูลลง Database
     const [result] = await connection.query(
       `INSERT INTO user_profile (user_name, password, email, image_profile, subscription_status) 
        VALUES (?, ?, ?, ?, ?)`,
       [user_name, password, email, image_profile, subscription_status]
     );
-
-    // 5. ดึงข้อมูล User ที่เพิ่งสร้างเสร็จหมาดๆ จาก Database
     const [newUser] = await connection.query('SELECT * FROM user_profile WHERE user_id = ?', [result.insertId]);
-
     connection.release();
-
-    // 6. ส่งข้อมูล user: newUser[0] กลับไปให้หน้า Auth.jsx ทำ Auto-Login
     res.json({ status: 'success', message: 'สมัครสมาชิกสำเร็จ!', user: newUser[0] });
-
   } catch (error) {
     console.error("❌ Register Error แบบละเอียด:", error); 
     res.status(500).json({ status: 'error', message: 'Database Error', error: error.message });
   }
 });
+
 app.post('/api/login', async (req, res) => {
   const { user_name, password } = req.body;
   try {
@@ -113,7 +105,6 @@ app.post('/api/login', async (req, res) => {
       [user_name, password]
     );
     connection.release();
-
     if (rows.length > 0) {
       res.json({ status: 'success', message: 'เข้าสู่ระบบสำเร็จ!', user: rows[0] });
     } else {
@@ -124,19 +115,12 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-
 // ================= 4. API จัดการโปรเจกต์ (Projects) =================
-
-// 4.1 สร้างโปรเจกต์ใหม่ (สร้างทันทีโดยไม่ต้องใส่ชื่อ)
 app.post('/api/projects', async (req, res) => {
   const { user_id } = req.body;
-  if (!user_id) {
-    return res.status(400).json({ status: 'error', message: 'ไม่พบ user_id' });
-  }
-
+  if (!user_id) return res.status(400).json({ status: 'error', message: 'ไม่พบ user_id' });
   try {
     const connection = await pool.getConnection();
-    // สร้างโปรเจกต์เปล่าๆ ทิ้งไว้ (project_name เป็น null อัตโนมัติ)
     const [result] = await connection.query(
       'INSERT INTO project (user_id, status) VALUES (?, ?)',
       [user_id, 'ยังไม่ได้เริ่ม']
@@ -149,7 +133,6 @@ app.post('/api/projects', async (req, res) => {
   }
 });
 
-// 4.2 ดึงรายการโปรเจกต์ของ User
 app.get('/api/projects/:user_id', async (req, res) => {
   const { user_id } = req.params;
   try {
@@ -165,22 +148,17 @@ app.get('/api/projects/:user_id', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'ดึงข้อมูลโปรเจกต์ไม่สำเร็จ' });
   }
 });
-// ดึงข้อมูลโปรเจกต์ตาม ID
+
 app.get('/api/projects/detail/:id', async (req, res) => {
     const projectId = req.params.id;
-    
-    // ตรวจสอบว่ามี id ส่งมาหรือไม่
     if (!projectId || projectId === 'undefined') {
         return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
     }
-
     try {
         const connection = await pool.getConnection();
         const [result] = await connection.query("SELECT * FROM project WHERE project_id = ?", [projectId]);
         connection.release();
-
         if (result.length > 0) {
-            // ส่งข้อมูลกลับไปให้ React
             return res.json({ status: 'success', project: result[0] });
         } else {
             return res.status(404).json({ status: 'error', message: 'ไม่พบโปรเจกต์นี้' });
@@ -191,21 +169,16 @@ app.get('/api/projects/detail/:id', async (req, res) => {
     }
 });
 
-// 4.3 อัปเดตชื่อโปรเจกต์ 
 app.put('/api/projects/:id', async (req, res) => {
     const projectId = req.params.id;
-    const { project_name } = req.body; // 👈 เปลี่ยนมารับตัวแปร project_name
-
+    const { project_name } = req.body;
     if (!project_name) {
         return res.status(400).json({ status: 'error', message: 'กรุณาส่งชื่อโปรเจกต์มาด้วย' });
     }
-
     try {
         const connection = await pool.getConnection();
-        // 👈 อัปเดตลงคอลัมน์ project_name ให้ตรงกับ DB ของคุณ
         await connection.query("UPDATE project SET project_name = ? WHERE project_id = ?", [project_name, projectId]);
         connection.release();
-        
         return res.json({ status: 'success', message: 'อัปเดตชื่อสำเร็จ' });
     } catch (err) {
         console.error("Database Error (Update Name):", err);
@@ -213,30 +186,23 @@ app.put('/api/projects/:id', async (req, res) => {
     }
 });
 
-// ================= API สำหรับดึงสีและฟอนต์ที่ "ถูกเลือก (is_selected=1)" ไปโชว์หน้า MyProject =================
 app.get('/api/projects/:projectId/selected-assets', async (req, res) => {
     const { projectId } = req.params;
     try {
         const connection = await pool.getConnection();
-        
-        // ดึงชุดสีที่ถูกเลือก (JOIN ตาราง color_concept กับ color)
         const [colorRows] = await connection.query(`
             SELECT c.* FROM color_concept cc
             JOIN color c ON cc.color_id = c.color_id
             WHERE cc.project_id = ? AND cc.is_selected = 1
             LIMIT 1
         `, [projectId]);
-
-        // ดึงฟอนต์ที่ถูกเลือก (JOIN ตาราง font_concept กับ font)
         const [fontRows] = await connection.query(`
             SELECT f.* FROM font_concept fc
             JOIN font f ON fc.font_id = f.font_id
             WHERE fc.project_id = ? AND fc.is_selected = 1
             LIMIT 1
         `, [projectId]);
-
         connection.release();
-
         res.json({
             status: 'success',
             color: colorRows.length > 0 ? colorRows[0] : null,
@@ -248,16 +214,12 @@ app.get('/api/projects/:projectId/selected-assets', async (req, res) => {
     }
 });
 
-// 4.4 ลบโปรเจกต์
 app.delete('/api/projects/:id', async (req, res) => {
     const projectId = req.params.id;
-
     try {
         const connection = await pool.getConnection();
-        // ⚠️ หมายเหตุ: หากขึ้น Error ลบไม่ได้ แสดงว่าต้องไปตั้งค่า Foreign Key เป็น ON DELETE CASCADE ใน DBeaver ครับ
         await connection.query("DELETE FROM project WHERE project_id = ?", [projectId]);
         connection.release();
-        
         return res.json({ status: 'success', message: 'ลบโปรเจกต์สำเร็จ' });
     } catch (err) {
         console.error("Delete Project Error:", err);
@@ -265,8 +227,6 @@ app.delete('/api/projects/:id', async (req, res) => {
     }
 });
 
-
-// ดึงรายการสินค้าทั้งหมดของ Project นั้นๆ
 app.get('/api/brand_product/:projectId', async (req, res) => {
     const { projectId } = req.params;
     try {
@@ -280,122 +240,147 @@ app.get('/api/brand_product/:projectId', async (req, res) => {
     }
 });
 
-// บันทึกสินค้าใหม่ พร้อมรูปภาพ
-// สังเกตว่าเราใช้ upload.single('image_product') เพราะส่งมาจาก formData ฝั่ง React
 app.post('/api/brand_product', upload.single('image_product'), async (req, res) => {
     const { project_id, name_product, type_product } = req.body;
-    const image_product = req.file ? req.file.filename : null; // ชื่อไฟล์รูป
-
+    const image_product = req.file ? req.file.filename : null;
     if (!project_id || !name_product || !type_product) {
         return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
     }
-
     try {
         const connection = await pool.getConnection();
         const sql = `INSERT INTO brand_product (project_id, name_product, type_product, image_product) VALUES (?, ?, ?, ?)`;
         await connection.query(sql, [project_id, name_product, type_product, image_product]);
         connection.release();
-
         res.json({ status: 'success', message: 'เพิ่มสินค้าสำเร็จ' });
     } catch (err) {
         console.error("Insert product error:", err);
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
-//************************************************************************* */
-//************************************************************************* */
-//  API สำหรับวิเคราะห์ Brand DNA ด้วย Gemini (อัปเดตดึงสินค้าทั้งหมด)
-//************************************************************************* */
-//************************************************************************* */
 
+// ================= API วิเคราะห์ Brand DNA ด้วย Gemini =================
+// 🎯 รวม DNA + Colors + Fonts ใน Gemini call เดียว → ประหยัด 50%
 app.post('/api/generate-brand-dna', async (req, res) => {
-    //  ไม่ต้องรับ name_product, type_product จาก req.body  เพราะเราจะดึงจาก DB 
     const { project_id, user_id, business_type, archetype, audience_data } = req.body;
-
-    if (!project_id) {
-        return res.status(400).json({ status: 'error', message: 'Missing project_id' });
-    }
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'Missing project_id' });
 
     try {
         const connection = await pool.getConnection();
 
-        //  ดึงข้อมูลสินค้าทั้งหมดของโปรเจกต์นี้จากฐานข้อมูล
         const [products] = await connection.query(
             "SELECT name_product, type_product FROM brand_product WHERE project_id = ?",
             [project_id]
         );
-        
-        // จัดรูปแบบข้อความรายการสินค้าเพื่อส่งให้ AI
         let productsText = "ยังไม่มีข้อมูลสินค้า";
         if (products.length > 0) {
-            productsText = products.map((p, index) => 
-                `        ${index + 1}. ชื่อสินค้า: ${p.name_product} (ประเภท: ${p.type_product})`
-            ).join('\n');
+            productsText = products.map((p, i) => `        ${i + 1}. ${p.name_product} (${p.type_product})`).join('\n');
         }
 
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        // Prompt 
         const prompt = `
-        คุณเป็นผู้เชี่ยวชาญด้านการสร้างแบรนด์ (Brand Strategist) มืออาชีพ
-        ข้อมูลเบื้องต้นของแบรนด์นี้:
+        คุณเป็น Brand Strategist และ Designer มืออาชีพ
+        ข้อมูลแบรนด์:
         - รูปแบบธุรกิจ: ${business_type}
-        - ตัวตนของแบรนด์ (Archetype): ${archetype}
-        - ข้อมูลลูกค้าเป้าหมายเบื้องต้นที่เจ้าของแบรนด์คิดไว้: ${audience_data}
-        - รายการสินค้าทั้งหมดของแบรนด์ที่จะขาย:
+        - Archetype: ${archetype}
+        - กลุ่มเป้าหมายเบื้องต้น: ${audience_data}
+        - สินค้า:
 ${productsText}
 
-        ต้องการให้วิเคราะห์และส่งผลลัพธ์กลับมาเป็นรูปแบบ JSON เท่านั้น ห้ามมีข้อความอธิบายอื่นๆ นอกเหนือจาก JSON โดยให้มีโครงสร้าง Key ดังนี้:
+        วิเคราะห์และตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่นๆ โครงสร้าง:
         {
-            "target_audience": "วิเคราะห์และเจาะลึกกลุ่มเป้าหมายให้ชัดเจนยิ่งขึ้น",
-            "brand_value": "สรุปคุณค่าหลักของแบรนด์ (Brand Value) สั้นๆ กระชับๆ",
-            "customer_perception": "เมื่อลูกค้าใช้สินค้าที่ระบุไว้ เขาจะรู้สึกหรือมองเห็นแบรนด์นี้เป็นแบบไหน",
-            "design_suggestions": ["คำแนะนำการออกแบบข้อ 1", "คำแนะนำการออกแบบข้อ 2", "คำแนะนำการออกแบบข้อ 3"]
+            "target_audience": "วิเคราะห์เจาะลึกกลุ่มเป้าหมาย",
+            "brand_value": "คุณค่าหลักของแบรนด์ สั้น กระชับ",
+            "customer_perception": "ลูกค้ารู้สึก/มองเห็นแบรนด์ยังไง",
+            "design_suggestions": ["คำแนะนำการออกแบบ 1", "คำแนะนำ 2", "คำแนะนำ 3"],
+            "color": {
+                "name_palette": "ชื่อชุดสี เช่น Earth Tone, Ocean Breeze",
+                "hex1": "#...", "hex2": "#...", "hex3": "#...", "hex4": "#...", "hex5": "#..."
+            },
+            "font": {
+                "font_name": "ชื่อ Google Font ที่รองรับภาษาไทย เช่น Prompt, Kanit, Sarabun, Noto Sans Thai, Mali, Mitr"
+            }
         }
         `;
 
         const result = await model.generateContent(prompt);
-        const responseText = result.response.text();
-
-        const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const cleanedText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
         const aiData = JSON.parse(cleanedText);
 
-        const sqlDNA = `
+        // Save brand_dna
+        await connection.query(`
             INSERT INTO brand_dna (project_id, business_type, archetype_name, target_audience, brand_value, customer_perception, design_suggestions)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-            business_type = VALUES(business_type), archetype_name = VALUES(archetype_name),
-            target_audience = VALUES(target_audience), brand_value = VALUES(brand_value),
-            customer_perception = VALUES(customer_perception), design_suggestions = VALUES(design_suggestions)
-        `;
-        await connection.query(sqlDNA, [
-            project_id, business_type, archetype, aiData.target_audience, 
-            aiData.brand_value, aiData.customer_perception, JSON.stringify(aiData.design_suggestions)
-        ]);
+            business_type=VALUES(business_type), archetype_name=VALUES(archetype_name),
+            target_audience=VALUES(target_audience), brand_value=VALUES(brand_value),
+            customer_perception=VALUES(customer_perception), design_suggestions=VALUES(design_suggestions)
+        `, [project_id, business_type, archetype, aiData.target_audience, aiData.brand_value, aiData.customer_perception, JSON.stringify(aiData.design_suggestions)]);
 
-        const sqlLog = `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`;
-        await connection.query(sqlLog, [user_id || 0, project_id, 'GENERATE_BRAND_DNA', prompt, cleanedText]);
+        // Save color (upsert)
+        const c = aiData.color;
+        let color_id, color_concept_id;
+        const [exColor] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [c.name_palette]);
+        if (exColor.length > 0) {
+            color_id = exColor[0].color_id;
+            await connection.query('UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
+                [c.hex1, c.hex2, c.hex3, c.hex4, c.hex5, color_id]);
+        } else {
+            const [r] = await connection.query('INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
+                [c.name_palette, c.hex1, c.hex2, c.hex3, c.hex4, c.hex5]);
+            color_id = r.insertId;
+        }
+        const [exCC] = await connection.query('SELECT id FROM color_concept WHERE project_id=? AND color_id=?', [project_id, color_id]);
+        if (exCC.length > 0) color_concept_id = exCC[0].id;
+        else {
+            const [r] = await connection.query('INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [color_id, project_id]);
+            color_concept_id = r.insertId;
+        }
+
+        // Save font (upsert)
+        const f = aiData.font;
+        let font_id, font_concept_id;
+        const [exFont] = await connection.query('SELECT font_id FROM font WHERE font_name=?', [f.font_name]);
+        if (exFont.length > 0) font_id = exFont[0].font_id;
+        else {
+            const [r] = await connection.query('INSERT INTO font (font_name) VALUES (?)', [f.font_name]);
+            font_id = r.insertId;
+        }
+        const [exFC] = await connection.query('SELECT id FROM font_concept WHERE project_id=? AND font_id=?', [project_id, font_id]);
+        if (exFC.length > 0) font_concept_id = exFC[0].id;
+        else {
+            const [r] = await connection.query('INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [font_id, project_id]);
+            font_concept_id = r.insertId;
+        }
+
+        await connection.query('INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)',
+            [user_id || 0, project_id, 'GENERATE_BRAND_DNA_FULL', prompt, cleanedText]);
 
         connection.release();
 
-        res.json({ status: 'success', data: { archetype, ...aiData } });
-
+        res.json({
+            status: 'success',
+            data: {
+                archetype, ...aiData,
+                color: { id: color_concept_id, color_id, ...c },
+                font: { id: font_concept_id, font_id, ...f }
+            }
+        });
     } catch (err) {
-        console.error("Gemini/DB Error:", err);
-        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการประมวลผล AI' });
+        console.error("Brand DNA Full Error:", err);
+        res.status(500).json({ status: 'error', message: 'AI processing error' });
     }
 });
+
 app.get('/api/brand_dna/:projectId', async (req, res) => {
     const { projectId } = req.params;
     try {
         const connection = await pool.getConnection();
         const [rows] = await connection.query("SELECT * FROM brand_dna WHERE project_id = ?", [projectId]);
         connection.release();
-
         if (rows.length > 0) {
             let dna = rows[0];
-            // แปลง string JSON กลับเป็น Array เพื่อให้ React ใช้งานได้
             try { dna.design_suggestions = JSON.parse(dna.design_suggestions); } catch (e) {}
             res.json({ status: 'success', data: dna });
         } else {
@@ -406,133 +391,178 @@ app.get('/api/brand_dna/:projectId', async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
-// ================= API สำหรับให้ AI แนะนำสีและฟอนต์ (จากข้อมูล Brand DNA) =================
+
+// ================= API แนะนำสีและฟอนต์ =================
+// 🛡 Cache-first: คืนของเก่าจาก DB ทันที ไม่เผา token
+// ?force=1 = บังคับเรียก Gemini ใหม่ (เฉพาะกรณีผู้ใช้กดปุ่ม "ขอใหม่")
 app.get('/api/recommend-assets/:projectId', async (req, res) => {
     const { projectId } = req.params;
+    const { force } = req.query;
+
     try {
         const connection = await pool.getConnection();
 
-        // 1. ดึงข้อมูล DNA และ สินค้า
-        const [dnaRows] = await connection.query("SELECT * FROM brand_dna WHERE project_id = ?", [projectId]);
-        const [prodRows] = await connection.query("SELECT name_product, type_product FROM brand_product WHERE project_id = ?", [projectId]);
+        if (!force) {
+            const [colorRows] = await connection.query(`
+                SELECT c.*, cc.id AS concept_id 
+                FROM color_concept cc JOIN color c ON cc.color_id = c.color_id 
+                WHERE cc.project_id = ? ORDER BY cc.id DESC LIMIT 1
+            `, [projectId]);
+            const [fontRows] = await connection.query(`
+                SELECT f.*, fc.id AS concept_id 
+                FROM font_concept fc JOIN font f ON fc.font_id = f.font_id 
+                WHERE fc.project_id = ? ORDER BY fc.id DESC LIMIT 1
+            `, [projectId]);
 
-        if (dnaRows.length === 0) {
             connection.release();
-            return res.status(400).json({ status: 'error', message: 'ไม่พบข้อมูล Brand DNA กรุณาวิเคราะห์ก่อน' });
+            console.log(`[CACHE] recommend-assets project=${projectId} (skip Gemini)`);
+            return res.json({
+                status: 'success', cached: true,
+                color: colorRows[0] ? {
+                    id: colorRows[0].concept_id, color_id: colorRows[0].color_id,
+                    name_palette: colorRows[0].name_palette,
+                    hex1: colorRows[0].color_code_1, hex2: colorRows[0].color_code_2,
+                    hex3: colorRows[0].color_code_3, hex4: colorRows[0].color_code_4,
+                    hex5: colorRows[0].color_code_5
+                } : null,
+                font: fontRows[0] ? {
+                    id: fontRows[0].concept_id, font_id: fontRows[0].font_id,
+                    font_name: fontRows[0].font_name
+                } : null
+            });
         }
 
+        // ===== Force regenerate (call Gemini) — โค้ดเดิมที่เคยมี =====
+        const [dnaRows] = await connection.query("SELECT * FROM brand_dna WHERE project_id = ?", [projectId]);
+        const [prodRows] = await connection.query("SELECT name_product, type_product FROM brand_product WHERE project_id = ?", [projectId]);
+        if (dnaRows.length === 0) {
+            connection.release();
+            return res.status(400).json({ status: 'error', message: 'ไม่พบข้อมูล Brand DNA' });
+        }
         const dna = dnaRows[0];
-        let productsText = prodRows.map(p => `${p.name_product} (${p.type_product})`).join(', ') || 'ไม่มีข้อมูลสินค้า';
+        const productsText = prodRows.map(p => `${p.name_product} (${p.type_product})`).join(', ') || 'ไม่มี';
 
-        // 2. ส่ง Prompt ให้ Gemini แนะนำสีและฟอนต์
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
         const prompt = `
         คุณเป็นนักออกแบบแบรนด์มืออาชีพ
-        ข้อมูลแบรนด์:
         - รูปแบบธุรกิจ: ${dna.business_type}
-        - ตัวตนแบรนด์ (Archetype): ${dna.archetype_name}
+        - Archetype: ${dna.archetype_name}
         - กลุ่มเป้าหมาย: ${dna.target_audience}
         - สินค้า: ${productsText}
 
-        กรุณาแนะนำ "1 ชุดสี" (ประกอบด้วย 5 สี) และ "1 ฟอนต์" (ขอเป็น Google Fonts ที่รองรับภาษาไทย เช่น Prompt, Kanit, Sarabun, Noto Sans Thai, Mali, Mitr)
-        ตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่น โครงสร้างดังนี้:
-        {
-            "color": {
-                "name_palette": "ชื่อเรียกชุดสี (เช่น Earth Tone)",
-                "hex1": "#...", "hex2": "#...", "hex3": "#...", "hex4": "#...", "hex5": "#..."
-            },
-            "font": {
-                "font_name": "ชื่อฟอนต์"
-            }
-        }
-        `;
-
+        แนะนำชุดสีใหม่ (5 สี) และฟอนต์ใหม่ (Google Fonts รองรับไทย) ที่ "ต่างจากของเดิม"
+        ตอบ JSON: {"color":{"name_palette":"...","hex1":"#...","hex2":"#...","hex3":"#...","hex4":"#...","hex5":"#..."},"font":{"font_name":"..."}}`;
         const result = await model.generateContent(prompt);
         const cleanedText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
         const aiData = JSON.parse(cleanedText);
 
-        // 3. บันทึกชุดสีลง Database อัตโนมัติ (เพื่อให้พร้อมกด Like / Select)
         const c = aiData.color;
         let color_id, color_concept_id;
         const [exColor] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [c.name_palette]);
         if (exColor.length > 0) {
             color_id = exColor[0].color_id;
-            await connection.query('UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?', 
+            await connection.query('UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
                 [c.hex1, c.hex2, c.hex3, c.hex4, c.hex5, color_id]);
         } else {
-            const [rColor] = await connection.query('INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)', 
+            const [r] = await connection.query('INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
                 [c.name_palette, c.hex1, c.hex2, c.hex3, c.hex4, c.hex5]);
-            color_id = rColor.insertId;
+            color_id = r.insertId;
         }
-        const [exCConcept] = await connection.query('SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?', [projectId, color_id]);
-        if (exCConcept.length > 0) {
-            color_concept_id = exCConcept[0].id;
-        } else {
-            const [rCConcept] = await connection.query('INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [color_id, projectId]);
-            color_concept_id = rCConcept.insertId;
+        const [exCC] = await connection.query('SELECT id FROM color_concept WHERE project_id=? AND color_id=?', [projectId, color_id]);
+        if (exCC.length > 0) color_concept_id = exCC[0].id;
+        else {
+            const [r] = await connection.query('INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [color_id, projectId]);
+            color_concept_id = r.insertId;
         }
 
-        // 4. บันทึกฟอนต์ลง Database อัตโนมัติ
         const f = aiData.font;
         let font_id, font_concept_id;
         const [exFont] = await connection.query('SELECT font_id FROM font WHERE font_name = ?', [f.font_name]);
-        if (exFont.length > 0) {
-            font_id = exFont[0].font_id;
-        } else {
-            const [rFont] = await connection.query('INSERT INTO font (font_name) VALUES (?)', [f.font_name]);
-            font_id = rFont.insertId;
+        if (exFont.length > 0) font_id = exFont[0].font_id;
+        else {
+            const [r] = await connection.query('INSERT INTO font (font_name) VALUES (?)', [f.font_name]);
+            font_id = r.insertId;
         }
-        const [exFConcept] = await connection.query('SELECT id FROM font_concept WHERE project_id = ? AND font_id = ?', [projectId, font_id]);
-        if (exFConcept.length > 0) {
-            font_concept_id = exFConcept[0].id;
-        } else {
-            const [rFConcept] = await connection.query('INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [font_id, projectId]);
-            font_concept_id = rFConcept.insertId;
+        const [exFC] = await connection.query('SELECT id FROM font_concept WHERE project_id=? AND font_id=?', [projectId, font_id]);
+        if (exFC.length > 0) font_concept_id = exFC[0].id;
+        else {
+            const [r] = await connection.query('INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [font_id, projectId]);
+            font_concept_id = r.insertId;
         }
 
         connection.release();
+        res.json({
+            status: 'success', cached: false,
+            color: { id: color_concept_id, color_id, ...c },
+            font: { id: font_concept_id, font_id, ...f }
+        });
+    } catch (err) {
+        console.error("Recommend assets error:", err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
 
-        // 5. ส่งผลลัพธ์กลับไปให้หน้าเว็บ พร้อม id สำหรับกดถูกใจ
+// 📦 อ่าน DNA + Color + Font ของ project จาก DB ครบในครั้งเดียว (0 Gemini)
+app.get('/api/brand-dna-full/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+
+        const [dnaRows] = await connection.query("SELECT * FROM brand_dna WHERE project_id = ?", [projectId]);
+        let dna = null;
+        if (dnaRows.length > 0) {
+            dna = dnaRows[0];
+            try { dna.design_suggestions = JSON.parse(dna.design_suggestions); } catch (e) {}
+        }
+
+        const [colorRows] = await connection.query(`
+            SELECT c.*, cc.id AS concept_id 
+            FROM color_concept cc JOIN color c ON cc.color_id = c.color_id 
+            WHERE cc.project_id = ? ORDER BY cc.id DESC LIMIT 1
+        `, [projectId]);
+        const [fontRows] = await connection.query(`
+            SELECT f.*, fc.id AS concept_id 
+            FROM font_concept fc JOIN font f ON fc.font_id = f.font_id 
+            WHERE fc.project_id = ? ORDER BY fc.id DESC LIMIT 1
+        `, [projectId]);
+
+        connection.release();
         res.json({
             status: 'success',
-            color: { id: color_concept_id, color_id: color_id, ...c },
-            font: { id: font_concept_id, font_id: font_id, ...f }
+            dna,
+            color: colorRows[0] ? {
+                id: colorRows[0].concept_id, color_id: colorRows[0].color_id,
+                name_palette: colorRows[0].name_palette,
+                hex1: colorRows[0].color_code_1, hex2: colorRows[0].color_code_2,
+                hex3: colorRows[0].color_code_3, hex4: colorRows[0].color_code_4,
+                hex5: colorRows[0].color_code_5
+            } : null,
+            font: fontRows[0] ? {
+                id: fontRows[0].concept_id, font_id: fontRows[0].font_id,
+                font_name: fontRows[0].font_name
+            } : null
         });
-
     } catch (err) {
-        console.error("Recommend Assets Error:", err);
-        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดจาก AI' });
+        res.status(500).json({ status: 'error', message: err.message });
     }
 });
 
 
-
-
-
-
-// ================= API สำหรับฟีเจอร์ Create Concept (Brand Name) =================
-
-// 1. API ให้ Gemini สร้างชื่อแบรนด์ 10 ชื่อ
+// ================= API Create Concept (Brand Name) =================
 app.post('/api/generate-brand-names', async (req, res) => {
     const { project_id, user_id, product, category, benefit, target, tags, special, use_dna } = req.body;
-
     try {
         const connection = await pool.getConnection();
         let finalTarget = target;
-
-        // ถ้า User ติ๊กเลือกใช้ข้อมูลจาก Brand DNA
         if (use_dna) {
             const [dnaRows] = await connection.query("SELECT target_audience FROM brand_dna WHERE project_id = ?", [project_id]);
             if (dnaRows.length > 0 && dnaRows[0].target_audience) {
-                finalTarget = dnaRows[0].target_audience; // ดึงกลุ่มเป้าหมายจากที่ AI เคยวิเคราะห์ไว้มาใช้
+                finalTarget = dnaRows[0].target_audience;
             }
         }
-
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
         const prompt = `
         คุณเป็นผู้เชี่ยวชาญด้านการตั้งชื่อแบรนด์ (Brand Naming Expert)
         ข้อมูลสินค้า:
@@ -547,41 +577,28 @@ app.post('/api/generate-brand-names', async (req, res) => {
         ส่งผลลัพธ์กลับมาเป็น JSON Array ที่มีแต่ String เท่านั้น ห้ามมีข้อความอื่น เช่น:
         ["ชื่อที่1", "ชื่อที่2", "ชื่อที่3", ...]
         `;
-
-        // เรียก Gemini
         const result = await model.generateContent(prompt);
         const responseText = result.response.text();
         const cleanedText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const generatedNames = JSON.parse(cleanedText); // จะได้ Array ของชื่อ 10 อัน
-
-        // บันทึกชื่อทั้ง 10 ลงตาราง name_concept
+        const generatedNames = JSON.parse(cleanedText);
         for (const name of generatedNames) {
-            await connection.query(
-                "INSERT INTO name_concept (project_id, brand_name) VALUES (?, ?)",
-                [project_id, name]
-            );
+            await connection.query("INSERT INTO name_concept (project_id, brand_name) VALUES (?, ?)", [project_id, name]);
         }
-
-        // บันทึกประวัติลง generated_text_history
         await connection.query(
             "INSERT INTO generated_text_history (project_id, generation_type, prompt, text_result, model_name) VALUES (?, ?, ?, ?, ?)",
             [project_id, 'BRAND_NAME', prompt, cleanedText, 'gemini-2.5-flash']
         );
-
         connection.release();
         res.json({ status: 'success', message: 'สร้างชื่อสำเร็จ' });
-
     } catch (err) {
         console.error("Generate Name Error:", err);
         res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการสร้างชื่อ' });
     }
 });
 
-// 2. API ดึงรายชื่อแบรนด์ทั้งหมดของโปรเจกต์นี้
 app.get('/api/brand-names/:projectId', async (req, res) => {
     try {
         const connection = await pool.getConnection();
-        // เรียงลำดับ: ตัวที่ถูกเลือกขึ้นก่อน -> ตามด้วยกดใจ -> ตามด้วยไอดีล่าสุด
         const [rows] = await connection.query(
             "SELECT * FROM name_concept WHERE project_id = ? ORDER BY is_selected DESC, is_liked DESC, concept_id DESC",
             [req.params.projectId]
@@ -593,7 +610,6 @@ app.get('/api/brand-names/:projectId', async (req, res) => {
     }
 });
 
-// 3. API สำหรับกด Like ชื่อ
 app.put('/api/brand-names/like/:conceptId', async (req, res) => {
     const { is_liked } = req.body;
     try {
@@ -606,17 +622,13 @@ app.put('/api/brand-names/like/:conceptId', async (req, res) => {
     }
 });
 
-// 4. API สำหรับเลือกชื่อนี้ไปใช้ (Select)
 app.put('/api/brand-names/select/:conceptId', async (req, res) => {
     const { project_id } = req.body;
     const concept_id = req.params.conceptId;
     try {
         const connection = await pool.getConnection();
-        // 4.1 เคลียร์ให้ชื่ออื่นๆ ในโปรเจกต์นี้กลายเป็น ไม่ถูกเลือก (0)
         await connection.query("UPDATE name_concept SET is_selected = FALSE WHERE project_id = ?", [project_id]);
-        // 4.2 ตั้งค่าให้ชื่อนี้ถูกเลือก (1)
         await connection.query("UPDATE name_concept SET is_selected = TRUE WHERE concept_id = ?", [concept_id]);
-        // 4.3 อัปเดต ID กลับไปที่ตาราง project
         await connection.query("UPDATE project SET name_concept_id = ? WHERE project_id = ?", [concept_id, project_id]);
         connection.release();
         res.json({ status: 'success' });
@@ -624,23 +636,14 @@ app.put('/api/brand-names/select/:conceptId', async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
-// *******************************************//
-// ================= API Color Palette (color_concept) =================
 
-// 0. บันทึก palette เดียวลง DB (upsert) — ใช้เมื่อกดหัวใจหรือกดเลือก
+// ================= API Color Palette =================
 app.post('/api/color-palettes/save-one', async (req, res) => {
   const { project_id, name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5 } = req.body;
-  if (!project_id || !name_palette) {
-    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  }
+  if (!project_id || !name_palette) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
   try {
     const connection = await pool.getConnection();
-
-    // upsert ลง table color
-    const [existing] = await connection.query(
-      'SELECT color_id FROM color WHERE name_palette = ?',
-      [name_palette]
-    );
+    const [existing] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [name_palette]);
     let color_id;
     if (existing.length > 0) {
       color_id = existing[0].color_id;
@@ -655,23 +658,17 @@ app.post('/api/color-palettes/save-one', async (req, res) => {
       );
       color_id = result.insertId;
     }
-
-    // upsert ลง table color_concept
     const [existingConcept] = await connection.query(
-      'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?',
-      [project_id, color_id]
-    );
+      'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?', [project_id, color_id]);
     let concept_id;
     if (existingConcept.length > 0) {
       concept_id = existingConcept[0].id;
     } else {
       const [result] = await connection.query(
         'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)',
-        [color_id, project_id]
-      );
+        [color_id, project_id]);
       concept_id = result.insertId;
     }
-
     connection.release();
     res.json({ status: 'success', color_id, concept_id });
   } catch (err) {
@@ -680,54 +677,34 @@ app.post('/api/color-palettes/save-one', async (req, res) => {
   }
 });
 
-// 1. บันทึก palettes ทั้งหมดลง DB (upsert: ถ้ามีแล้วข้ามไป)
 app.post('/api/color-palettes/save', async (req, res) => {
   const { project_id, palettes } = req.body;
   if (!project_id || !Array.isArray(palettes) || palettes.length === 0) {
     return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
   }
-
   try {
     const connection = await pool.getConnection();
-
     for (const p of palettes) {
-      // 1.1 upsert ลง table color (ถ้า name_palette ซ้ำกันให้ update color_code แทน)
-      const [existing] = await connection.query(
-        'SELECT color_id FROM color WHERE name_palette = ?',
-        [p.name_palette]
-      );
-
+      const [existing] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [p.name_palette]);
       let color_id;
       if (existing.length > 0) {
         color_id = existing[0].color_id;
-        // อัปเดต color_code ให้เป็นปัจจุบัน (กรณีมีการ re-generate)
         await connection.query(
           'UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
-          [p.color_code_1||'', p.color_code_2||'', p.color_code_3||'', p.color_code_4||'', p.color_code_5||'', color_id]
-        );
+          [p.color_code_1||'', p.color_code_2||'', p.color_code_3||'', p.color_code_4||'', p.color_code_5||'', color_id]);
       } else {
-        // insert ใหม่
         const [result] = await connection.query(
           'INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
-          [p.name_palette, p.color_code_1||'', p.color_code_2||'', p.color_code_3||'', p.color_code_4||'', p.color_code_5||'']
-        );
+          [p.name_palette, p.color_code_1||'', p.color_code_2||'', p.color_code_3||'', p.color_code_4||'', p.color_code_5||'']);
         color_id = result.insertId;
       }
-
-      // 1.2 upsert ลง table color_concept (project_id + color_id เป็น unique pair)
       const [existingConcept] = await connection.query(
-        'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?',
-        [project_id, color_id]
-      );
-
+        'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?', [project_id, color_id]);
       if (existingConcept.length === 0) {
         await connection.query(
-          'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)',
-          [color_id, project_id]
-        );
+          'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [color_id, project_id]);
       }
     }
-
     connection.release();
     res.json({ status: 'success', message: 'บันทึก palettes สำเร็จ' });
   } catch (err) {
@@ -736,33 +713,17 @@ app.post('/api/color-palettes/save', async (req, res) => {
   }
 });
 
-// 2. ดึง palettes ทั้งหมดของโปรเจกต์นี้ (join color + color_concept)
 app.get('/api/color-palettes/:projectId', async (req, res) => {
   const { projectId } = req.params;
-  if (!projectId || projectId === 'undefined') {
-    return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
-  }
+  if (!projectId || projectId === 'undefined') return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
   try {
     const connection = await pool.getConnection();
     const [rows] = await connection.query(
-      `SELECT 
-         cc.id        AS concept_id,
-         cc.color_id,
-         cc.is_liked,
-         cc.is_selected,
-         cc.created_at,
-         c.name_palette,
-         c.color_code_1,
-         c.color_code_2,
-         c.color_code_3,
-         c.color_code_4,
-         c.color_code_5
-       FROM color_concept cc
-       JOIN color c ON cc.color_id = c.color_id
+      `SELECT cc.id AS concept_id, cc.color_id, cc.is_liked, cc.is_selected, cc.created_at,
+         c.name_palette, c.color_code_1, c.color_code_2, c.color_code_3, c.color_code_4, c.color_code_5
+       FROM color_concept cc JOIN color c ON cc.color_id = c.color_id
        WHERE cc.project_id = ?
-       ORDER BY cc.is_selected DESC, cc.is_liked DESC, cc.id DESC`,
-      [projectId]
-    );
+       ORDER BY cc.is_selected DESC, cc.is_liked DESC, cc.id DESC`, [projectId]);
     connection.release();
     res.json({ status: 'success', palettes: rows });
   } catch (err) {
@@ -771,19 +732,15 @@ app.get('/api/color-palettes/:projectId', async (req, res) => {
   }
 });
 
-// 3. กด Like / Unlike palette (อัปเดต is_liked ใน color_concept ตาม project_id + color_id)
 app.put('/api/color-palettes/like/:colorId', async (req, res) => {
   const { colorId } = req.params;
   const { is_liked, project_id } = req.body;
-  if (!project_id) {
-    return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
-  }
+  if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
   try {
     const connection = await pool.getConnection();
     await connection.query(
       'UPDATE color_concept SET is_liked = ? WHERE color_id = ? AND project_id = ?',
-      [is_liked ? 1 : 0, colorId, project_id]
-    );
+      [is_liked ? 1 : 0, colorId, project_id]);
     connection.release();
     res.json({ status: 'success' });
   } catch (err) {
@@ -792,48 +749,21 @@ app.put('/api/color-palettes/like/:colorId', async (req, res) => {
   }
 });
 
-// 4. เลือก palette (is_selected) + อัปเดต color_id ใน project
 app.put('/api/color-palettes/select/:conceptId', async (req, res) => {
   const { conceptId } = req.params;
   const { project_id } = req.body;
-  if (!project_id) {
-    return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
-  }
+  if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
   try {
     const connection = await pool.getConnection();
-
-    // 4.1 ดึง color_id จาก DB โดยตรง (ไม่พึ่ง body เพราะอาจ undefined/stale)
-    const [conceptRows] = await connection.query(
-      'SELECT color_id FROM color_concept WHERE id = ?',
-      [conceptId]
-    );
+    const [conceptRows] = await connection.query('SELECT color_id FROM color_concept WHERE id = ?', [conceptId]);
     if (conceptRows.length === 0) {
       connection.release();
-      console.error(`❌ ไม่พบ color_concept id = ${conceptId}`);
       return res.status(404).json({ status: 'error', message: 'ไม่พบ concept นี้' });
     }
     const finalColorId = conceptRows[0].color_id;
-    console.log(`🔍 concept_id=${conceptId} → color_id=${finalColorId}`);
-
-    // 4.2 เคลียร์ is_selected ทุก palette ของโปรเจกต์นี้ก่อน
-    await connection.query(
-      'UPDATE color_concept SET is_selected = 0 WHERE project_id = ?',
-      [project_id]
-    );
-
-    // 4.3 ตั้งค่า is_selected = 1 ให้กับ palette ที่เลือก
-    await connection.query(
-      'UPDATE color_concept SET is_selected = 1 WHERE id = ?',
-      [conceptId]
-    );
-
-    // 4.4 อัปเดต project.color_id
-    await connection.query(
-      'UPDATE project SET color_id = ? WHERE project_id = ?',
-      [finalColorId, project_id]
-    );
-    console.log(`✅ อัปเดต project.color_id = ${finalColorId} สำหรับ project_id = ${project_id}`);
-
+    await connection.query('UPDATE color_concept SET is_selected = 0 WHERE project_id = ?', [project_id]);
+    await connection.query('UPDATE color_concept SET is_selected = 1 WHERE id = ?', [conceptId]);
+    await connection.query('UPDATE project SET color_id = ? WHERE project_id = ?', [finalColorId, project_id]);
     connection.release();
     res.json({ status: 'success', color_id: finalColorId });
   } catch (err) {
@@ -842,29 +772,21 @@ app.put('/api/color-palettes/select/:conceptId', async (req, res) => {
   }
 });
 
-// sync Google Fonts ลง table font (เรียกจาก frontend ตอนโหลด Google Fonts API)
+// ================= API Font =================
 app.post('/api/fonts/sync-google', async (req, res) => {
-  const { fonts } = req.body; // array ของ { font_name }
-  if (!Array.isArray(fonts) || fonts.length === 0) {
-    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  }
+  const { fonts } = req.body;
+  if (!Array.isArray(fonts) || fonts.length === 0) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
   try {
     const connection = await pool.getConnection();
     let inserted = 0;
     for (const f of fonts) {
-      const [existing] = await connection.query(
-        'SELECT font_id FROM font WHERE font_name = ?', [f.font_name]
-      );
+      const [existing] = await connection.query('SELECT font_id FROM font WHERE font_name = ?', [f.font_name]);
       if (existing.length === 0) {
-        await connection.query(
-          'INSERT INTO font (font_name, file_font) VALUES (?, NULL)',
-          [f.font_name]
-        );
+        await connection.query('INSERT INTO font (font_name, file_font) VALUES (?, NULL)', [f.font_name]);
         inserted++;
       }
     }
     connection.release();
-    console.log(`✅ Synced ${inserted} new Google Fonts to DB`);
     res.json({ status: 'success', inserted });
   } catch (err) {
     console.error('❌ Sync Google Fonts Error:', err);
@@ -872,24 +794,16 @@ app.post('/api/fonts/sync-google', async (req, res) => {
   }
 });
 
-// ดึง font ทั้งหมดจาก table font พร้อม concept info ของ project นี้
 app.get('/api/fonts/all/:projectId', async (req, res) => {
   const { projectId } = req.params;
   try {
     const connection = await pool.getConnection();
     const [rows] = await connection.query(
-      `SELECT
-         f.font_id,
-         f.font_name,
-         f.file_font,
-         fc.id         AS concept_id,
-         fc.is_liked,
-         fc.is_selected
+      `SELECT f.font_id, f.font_name, f.file_font,
+         fc.id AS concept_id, fc.is_liked, fc.is_selected
        FROM font f
        LEFT JOIN font_concept fc ON f.font_id = fc.font_id AND fc.project_id = ?
-       ORDER BY f.font_id ASC`,
-      [projectId]
-    );
+       ORDER BY f.font_id ASC`, [projectId]);
     connection.release();
     res.json({ status: 'success', fonts: rows });
   } catch (err) {
@@ -898,50 +812,29 @@ app.get('/api/fonts/all/:projectId', async (req, res) => {
   }
 });
 
-
-// ================= API Font (font_concept) =================
-
-// 0. บันทึก font เดียวลง DB (upsert) — ใช้เมื่อกดหัวใจหรือกดเลือก
 app.post('/api/fonts/save-one', async (req, res) => {
   const { project_id, font_name, file_font } = req.body;
-  if (!project_id || !font_name) {
-    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  }
+  if (!project_id || !font_name) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
   try {
     const connection = await pool.getConnection();
-
-    // upsert ลง table font
-    const [existing] = await connection.query(
-      'SELECT font_id FROM font WHERE font_name = ?',
-      [font_name]
-    );
+    const [existing] = await connection.query('SELECT font_id FROM font WHERE font_name = ?', [font_name]);
     let font_id;
     if (existing.length > 0) {
       font_id = existing[0].font_id;
     } else {
-      const [result] = await connection.query(
-        'INSERT INTO font (font_name, file_font) VALUES (?, ?)',
-        [font_name, file_font || null]
-      );
+      const [result] = await connection.query('INSERT INTO font (font_name, file_font) VALUES (?, ?)', [font_name, file_font || null]);
       font_id = result.insertId;
     }
-
-    // upsert ลง table font_concept
     const [existingConcept] = await connection.query(
-      'SELECT id FROM font_concept WHERE project_id = ? AND font_id = ?',
-      [project_id, font_id]
-    );
+      'SELECT id FROM font_concept WHERE project_id = ? AND font_id = ?', [project_id, font_id]);
     let concept_id;
     if (existingConcept.length > 0) {
       concept_id = existingConcept[0].id;
     } else {
       const [result] = await connection.query(
-        'INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)',
-        [font_id, project_id]
-      );
+        'INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [font_id, project_id]);
       concept_id = result.insertId;
     }
-
     connection.release();
     res.json({ status: 'success', font_id, concept_id });
   } catch (err) {
@@ -950,29 +843,17 @@ app.post('/api/fonts/save-one', async (req, res) => {
   }
 });
 
-// 1. ดึง fonts ทั้งหมดของโปรเจกต์นี้ (join font + font_concept)
 app.get('/api/fonts/:projectId', async (req, res) => {
   const { projectId } = req.params;
-  if (!projectId || projectId === 'undefined') {
-    return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
-  }
+  if (!projectId || projectId === 'undefined') return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
   try {
     const connection = await pool.getConnection();
     const [rows] = await connection.query(
-      `SELECT
-         fc.id         AS concept_id,
-         fc.font_id,
-         fc.is_liked,
-         fc.is_selected,
-         fc.created_at,
-         f.font_name,
-         f.file_font
-       FROM font_concept fc
-       JOIN font f ON fc.font_id = f.font_id
+      `SELECT fc.id AS concept_id, fc.font_id, fc.is_liked, fc.is_selected, fc.created_at,
+         f.font_name, f.file_font
+       FROM font_concept fc JOIN font f ON fc.font_id = f.font_id
        WHERE fc.project_id = ?
-       ORDER BY fc.is_selected DESC, fc.is_liked DESC, fc.id DESC`,
-      [projectId]
-    );
+       ORDER BY fc.is_selected DESC, fc.is_liked DESC, fc.id DESC`, [projectId]);
     connection.release();
     res.json({ status: 'success', fonts: rows });
   } catch (err) {
@@ -981,19 +862,15 @@ app.get('/api/fonts/:projectId', async (req, res) => {
   }
 });
 
-// 2. กด Like / Unlike font
 app.put('/api/fonts/like/:fontId', async (req, res) => {
   const { fontId } = req.params;
   const { is_liked, project_id } = req.body;
-  if (!project_id) {
-    return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
-  }
+  if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
   try {
     const connection = await pool.getConnection();
     await connection.query(
       'UPDATE font_concept SET is_liked = ? WHERE font_id = ? AND project_id = ?',
-      [is_liked ? 1 : 0, fontId, project_id]
-    );
+      [is_liked ? 1 : 0, fontId, project_id]);
     connection.release();
     res.json({ status: 'success' });
   } catch (err) {
@@ -1002,48 +879,21 @@ app.put('/api/fonts/like/:fontId', async (req, res) => {
   }
 });
 
-// 3. เลือก font (is_selected) + อัปเดต font_id ใน project
 app.put('/api/fonts/select/:conceptId', async (req, res) => {
   const { conceptId } = req.params;
   const { project_id } = req.body;
-  if (!project_id) {
-    return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
-  }
+  if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
   try {
     const connection = await pool.getConnection();
-
-    // ดึง font_id จาก DB โดยตรง
-    const [conceptRows] = await connection.query(
-      'SELECT font_id FROM font_concept WHERE id = ?',
-      [conceptId]
-    );
+    const [conceptRows] = await connection.query('SELECT font_id FROM font_concept WHERE id = ?', [conceptId]);
     if (conceptRows.length === 0) {
       connection.release();
-      console.error(`❌ ไม่พบ font_concept id = ${conceptId}`);
       return res.status(404).json({ status: 'error', message: 'ไม่พบ concept นี้' });
     }
     const finalFontId = conceptRows[0].font_id;
-    console.log(`🔍 font concept_id=${conceptId} → font_id=${finalFontId}`);
-
-    // เคลียร์ is_selected ทุก font ของโปรเจกต์นี้
-    await connection.query(
-      'UPDATE font_concept SET is_selected = 0 WHERE project_id = ?',
-      [project_id]
-    );
-
-    // ตั้งค่า is_selected = 1
-    await connection.query(
-      'UPDATE font_concept SET is_selected = 1 WHERE id = ?',
-      [conceptId]
-    );
-
-    // อัปเดต project.font_id
-    await connection.query(
-      'UPDATE project SET font_id = ? WHERE project_id = ?',
-      [finalFontId, project_id]
-    );
-    console.log(`✅ อัปเดต project.font_id = ${finalFontId} สำหรับ project_id = ${project_id}`);
-
+    await connection.query('UPDATE font_concept SET is_selected = 0 WHERE project_id = ?', [project_id]);
+    await connection.query('UPDATE font_concept SET is_selected = 1 WHERE id = ?', [conceptId]);
+    await connection.query('UPDATE project SET font_id = ? WHERE project_id = ?', [finalFontId, project_id]);
     connection.release();
     res.json({ status: 'success', font_id: finalFontId });
   } catch (err) {
@@ -1051,159 +901,110 @@ app.put('/api/fonts/select/:conceptId', async (req, res) => {
     res.status(500).json({ status: 'error', message: 'Database error' });
   }
 });
-// *******************************************//
 
-
-
-// ================= ฟังก์ชันช่วยเหลือ: ดาวน์โหลดรูปภาพจาก AI URL มาเซฟในเครื่อง =================
-// (ฟังก์ชัน downloadImage ยังคงใช้ตัวเดิมของคุณได้เลย)
+// ================= Helper: ดาวน์โหลดรูปภาพ =================
 const downloadImage = async (url, filepath) => {
-    const response = await axios({
-        url,
-        method: 'GET',
-        responseType: 'stream'
-    });
+    const response = await axios({ url, method: 'GET', responseType: 'stream' });
     return new Promise((resolve, reject) => {
         response.data.pipe(fs.createWriteStream(filepath))
             .on('error', reject)
             .on('finish', () => resolve(filepath));
     });
 };
+// 🟢 สร้าง Client สำหรับยิงเข้า Google API โดยเฉพาะ! (วางไว้บนสุดของไฟล์ หรือก่อนเข้า route ก็ได้ครับ)
 
-// ================= API สำหรับสร้างโลโก้ (OpenAI DALL·E 3) =================
-
-// ==================================
 app.post('/api/generate-logo', async (req, res) => {
-    const { 
-        project_id, user_id, brand_name, brand_value, 
-        products, styles, details, negative_prompt,
-        use_imported_color, use_imported_font 
-    } = req.body;
-
+    const { project_id, user_id, brand_name, brand_value, products, styles, details, negative_prompt, use_imported_color, use_imported_font } = req.body;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'Project ID is required' });
-
-    //  1. ดักจับ user_id ถ้าเป็น 0 หรือไม่มีค่า ให้เปลี่ยนเป็น null เพื่อไม่ให้ติด Foreign Key
     const finalUserId = (!user_id || user_id === 0) ? null : user_id;
 
-    //  2. ดักจับ products ให้ชัวร์ว่าเป็นข้อความแน่ๆ ป้องกันการเกิด [object Object]
-    let productsText = "";
-    if (Array.isArray(products)) {
-        productsText = products.map(p => p.name_product || p).join(', ');
-    } else {
-        productsText = products || "";
-    }
-
-    
     try {
         const connection = await pool.getConnection();
-        
         let colorText = "";
         let fontText = "";
-
         if (use_imported_color) {
             const [colorRows] = await connection.query(`
                 SELECT c.* FROM color_concept cc
                 JOIN color c ON cc.color_id = c.color_id
                 WHERE cc.project_id = ? AND cc.is_selected = 1 LIMIT 1
             `, [project_id]);
-            
             if (colorRows.length > 0) {
                 const c = colorRows[0];
                 const hexColors = [c.color_code_1, c.color_code_2, c.color_code_3, c.color_code_4, c.color_code_5].filter(Boolean).join(', ');
-                colorText = `STRICT COLOR PALETTE: You MUST strictly use ONLY these exact color hex codes (or visually identical tones): ${hexColors}.`;
+                colorText = `STRICT COLOR PALETTE: You MUST strictly use ONLY these exact color hex codes: ${hexColors}.`;
             }
         }
-
         if (use_imported_font) {
             const [fontRows] = await connection.query(`
                 SELECT f.* FROM font_concept fc
                 JOIN font f ON fc.font_id = f.font_id
                 WHERE fc.project_id = ? AND fc.is_selected = 1 LIMIT 1
             `, [project_id]);
-            
             if (fontRows.length > 0) {
-                fontText = `TYPOGRAPHY STYLE: The text should be styled specifically to look like the font "${fontRows[0].font_name}". Make it clean and highly legible.`;
+                fontText = `TYPOGRAPHY STYLE: The text should be styled specifically to look like the font "${fontRows[0].font_name}".`;
             }
         }
         connection.release();
 
-        let prompt = `I need a pure, flat, 2D vector logo graphic. YOU MUST STRICTLY FOLLOW THESE RULES:
-1. ABSOLUTELY NO MOCKUPS: Do not place the logo on paper, business cards, wood, or walls. Do not draw pens, pencils, clips, or hands.
-2. BACKGROUND MUST BE  ONLY WHITE (#FFFFFF) : NO shadows, NO gradients, NO scenes, NO textures.
-3. The image must contain ONLY the logo icon and the brand name, placed directly in the center of the white canvas.
-"BACKGROUND MUST BE  ONLY WHITE (#FFFFFF)!!!" \n\n`;
-        
-       
-
-        prompt += `BRAND NAME: EXACTLY "${brand_name}". \n`;
-        prompt += `Draw the typography cleanly below or next to the icon. Treat the text as a simple graphic element.\n\n`;
-        
-        if (brand_value) prompt += `CORE VALUE: ${brand_value}\n`;
-        if (styles) prompt += `DESIGN STYLE: ${styles} (Remember: FLAT 2D VECTOR ONLY)\n`;
+        let prompt = `ฉันต้องการให้คุณสร้างโลโก้แบบมืออาชีพ โดยบังคับให้รูปที่ออกมามีเพียงภาพโลโก้ vector 2D แบบแบนราบเท่านั้น ห้ามมีองค์ประกอบอื่นๆที่ไม่เกี่ยวกับตัวโลโก้ และต้องการให้มีพื้นหลังส่วนที่ไม่ใช่โลโก้เป็นสีขาว #FFFFFF แบบ Solid Color \n`;
+        prompt += ` โดยโลโก้ที่จะทำเป็นแบรนด์ที่มีชื่อว่า "${brand_name}" ให้ใส่คำว่า""${brand_name}""ลงไปในโลโก้ ต้องสะกดให้ถูกต้องทุกตัวอักษรจากคำว่า "${brand_name}" . \n`;
+        if (brand_value) prompt += `โดยแบรนด์นี้มีคุณค่าของ brand value คือ${brand_value}\n`;
+        if (styles) prompt += `DESIGN STYLE: ${styles} (FLAT 2D VECTOR ONLY)\n`;
         if (details) prompt += `SPECIFIC DETAILS: ${details}\n`;
-        
         if (colorText) prompt += `\n${colorText}\n`;
         if (fontText) prompt += `\n${fontText}\n`;
+        
+        prompt += negative_prompt ? `\nNEGATIVE PROMPT: ${negative_prompt}, ` : `\nNEGATIVE PROMPT: ในรูปภาพห้ามมีองค์ประกอบที่เกี่ยวข้องกับการออกแบบโลโก้ไม่ว่าจะเป็นรหัสสี,ตัวอย่างสี,เครื่องมือในการออกแบบ ห้ามใส่มาเด็ดขาด, 3D, แสงเงาสมจริง`;
 
-        // ย้ำ Negative Prompt ดักทาง DALL-E 3 ขั้นสูงสุด
-        prompt += `\nCRITICAL NEGATIVE PROMPT (DO NOT INCLUDE): `;
-        prompt += negative_prompt ? `${negative_prompt}, ` : ``;
-        prompt += ` mockups, presentation slides, stationery, realistic photography, 3D rendering, drop shadows, lighting effects, messy backgrounds, human hands, coffee shop backgrounds. ONLY THE LOGO ON WHITE.`;
-
-        const response = await openai.images.generate({
-            model: "dall-e-3",
-            prompt: prompt,
-            n: 1,
-            size: "1024x1024",
+        // 🟢 ใช้ OpenAI Compatibility ยิงเข้า Imagen 4 Fast โดยตรง! (จากหน้า Dashboard ของคุณ)
+        const response = await googleImagen.images.generate({
+            model: "gemini-2.5-flash-image", // 👈 ชี้เป้าไปที่โมเดลตัวจริงที่มีโควต้า
+            prompt: prompt, 
+            n: 1, 
+            size: "1024x1024", 
             response_format: "b64_json",
         });
 
+        // แงะไฟล์รูปออกมาชิลๆ แบบไร้ปัญหา
         const base64Data = response.data[0].b64_json;
+        
+        // 🟢 เซฟรูปลงโฟลเดอร์ uploads/generated/
         const fileName = `logo_${Date.now()}.png`;
-        const filePath = path.join('uploads', fileName);
-
+        const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
         fs.writeFileSync(filePath, base64Data, 'base64');
-        const imageUrl = `/uploads/${fileName}`;
+        const imageUrl = `/uploads/generated/${fileName}`;
 
         const conn2 = await pool.getConnection();
         await conn2.query(
-            //  3. บันทึก prompt และใช้ finalUserId ที่เราเคลียร์ค่าแล้ว 
             "INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)",
             [project_id, finalUserId, 'LOGO', imageUrl, prompt]
         );
         conn2.release();
-
+        
         res.json({ status: 'success', image_url: imageUrl, prompt: prompt });
-
     } catch (err) {
-        console.error("Generate Logo Error:", err);
-        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการ Generate รูปภาพ' });
+        // ดัก Error ให้ชัดๆ ว่าถ้าติดจะติดที่อะไร
+        console.error("Generate Logo Error (Google Imagen 4):", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการ Generate รูปภาพด้วย Google Imagen' });
     }
 });
-
-// ================= API สำหรับกด Like/Unlike รูปที่เจน =================
-// (ใช้ตัวเดิมของคุณได้เลย)
 app.put('/api/like-generated-item/:historyId', async (req, res) => {
     const { historyId } = req.params;
     const { is_liked } = req.body;
     try {
         const connection = await pool.getConnection();
-        await connection.query(
-            "UPDATE generated_history SET is_liked = ? WHERE history_id = ?", 
-            [is_liked, historyId]
-        );
+        await connection.query("UPDATE generated_history SET is_liked = ? WHERE history_id = ?", [is_liked, historyId]);
         connection.release();
         res.json({ status: 'success' });
     } catch (err) {
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
 });
-// ================= API สำหรับดึงรูปภาพโลโก้ที่สร้างแล้ว =================
+
 app.get('/api/generated-logos/:projectId', async (req, res) => {
     const { projectId } = req.params;
     try {
         const connection = await pool.getConnection();
-        // เรียงรูปที่ถูกเลือกไว้บนสุด -> ตามด้วยกดใจ -> ตามด้วยเจนล่าสุด
         const [rows] = await connection.query(
             "SELECT * FROM generated_history WHERE project_id = ? AND generation_type = 'LOGO' ORDER BY is_selected DESC, is_liked DESC, history_id DESC", 
             [projectId]
@@ -1216,28 +1017,19 @@ app.get('/api/generated-logos/:projectId', async (req, res) => {
     }
 });
 
-// ================= API สำหรับเลือกโลโก้ไปใช้งานจริง (ใหม่!) =================
-// ================= API สำหรับเลือก/ยกเลิกเลือกโลโก้ (อัปเดตใหม่ รองรับการกดซ้ำเพื่อยกเลิก) =================
 app.put('/api/generated-logos/select/:historyId', async (req, res) => {
-    const { project_id, image_url, action } = req.body; // 👈 เพิ่มตัวแปร action เพื่อบอกว่า เลือก หรือ ยกเลิก
+    const { project_id, image_url, action } = req.body;
     const history_id = req.params.historyId;
     try {
         const connection = await pool.getConnection();
-
         if (action === 'deselect') {
-            // ถ้ายกเลิกการเลือก
             await connection.query("UPDATE generated_history SET is_selected = 0 WHERE history_id = ?", [history_id]);
-            await connection.query("UPDATE project SET image_logo = NULL WHERE project_id = ?", [project_id]); // 👈 ลบรูปออกจากหน้า Project
+            await connection.query("UPDATE project SET image_logo = NULL WHERE project_id = ?", [project_id]);
         } else {
-            // ถ้าเป็นการเลือกรูปใหม่
-            // 1. เคลียร์โลโก้อื่นๆ ในโปรเจกต์นี้ให้กลายเป็นไม่ได้เลือก (0)
             await connection.query("UPDATE generated_history SET is_selected = 0 WHERE project_id = ? AND generation_type = 'LOGO'", [project_id]);
-            // 2. ตั้งค่าโลโก้นี้เป็นถูกเลือก (1)
             await connection.query("UPDATE generated_history SET is_selected = 1 WHERE history_id = ?", [history_id]);
-            // 3. อัปเดต Path รูปภาพลงในตาราง project
             await connection.query("UPDATE project SET image_logo = ? WHERE project_id = ?", [image_url, project_id]);
         }
-        
         connection.release();
         res.json({ status: 'success' });
     } catch (err) {
@@ -1246,47 +1038,35 @@ app.put('/api/generated-logos/select/:historyId', async (req, res) => {
     }
 });
 
-// ================= API สำหรับจัดการ Package Catalog (brand_product + package_catalog) =================
-// paaaaaaaaaaaaaaaaaaaaaaaaccccccccccccckkkkkkkkkagggggeeeeeeeeeeeeeeeeeeeee ตรงนี้เป็นต้นไปปปปปปปปปปปปปปปปปปปปปปปปปปปปปปปป
-// 1. บันทึก package_id ลง brand_product (เมื่อเลือกแพ็กเกจในหน้า Catalog)
+// ================= API Package Catalog =================
 app.patch('/api/brand_product/:id/package', async (req, res) => {
   const { id } = req.params;
   const { package_id } = req.body;
-
   try {
     const connection = await pool.getConnection();
-    await connection.query(
-      'UPDATE brand_product SET package_id = ? WHERE product_id = ?',
-      [package_id, id]
-    );
+    await connection.query('UPDATE brand_product SET package_id = ? WHERE product_id = ?', [package_id, id]);
     connection.release();
     res.json({ status: 'success', message: 'บันทึก package เรียบร้อยแล้ว' });
   } catch (err) {
     res.status(500).json({ status: 'error', message: err.message });
   }
 });
-// บันทึก is_liked ลง package_catalog (จาก heart picker บนการ์ด)
+
 app.post('/api/package-catalog/like', async (req, res) => {
   const { product_id, package_id, is_liked } = req.body;
-  if (!product_id || !package_id) {
-    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  }
+  if (!product_id || !package_id) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
   try {
     const connection = await pool.getConnection();
     const [existing] = await connection.query(
-      'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?',
-      [product_id, package_id]
-    );
+      'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
     if (existing.length > 0) {
       await connection.query(
         'UPDATE package_catalog SET is_liked = ? WHERE product_id = ? AND package_id = ?',
-        [is_liked ? 1 : 0, product_id, package_id]
-      );
+        [is_liked ? 1 : 0, product_id, package_id]);
     } else {
       await connection.query(
         'INSERT INTO package_catalog (package_id, product_id, is_liked, is_selected) VALUES (?, ?, ?, 0)',
-        [package_id, product_id, is_liked ? 1 : 0]
-      );
+        [package_id, product_id, is_liked ? 1 : 0]);
     }
     connection.release();
     res.json({ status: 'success' });
@@ -1296,51 +1076,29 @@ app.post('/api/package-catalog/like', async (req, res) => {
   }
 });
 
-// บันทึก package_catalog (liked หรือ selected)
 app.post('/api/package-catalog', async (req, res) => {
   const { product_id, package_id, action } = req.body;
-
-  if (!product_id || !package_id || !action) {
-    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  }
-
+  if (!product_id || !package_id || !action) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
   try {
     const connection = await pool.getConnection();
-
-    // ถ้าเป็น select → clear is_selected ของ product นี้ก่อน (1 product มีได้ 1 อัน)
     if (action === 'select') {
-      await connection.query(
-        'UPDATE package_catalog SET is_selected = 0 WHERE product_id = ?',
-        [product_id]
-      );
+      await connection.query('UPDATE package_catalog SET is_selected = 0 WHERE product_id = ?', [product_id]);
     }
-
-    // เช็คว่ามีแถวนี้อยู่แล้วไหม
     const [existing] = await connection.query(
-      'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?',
-      [product_id, package_id]
-    );
-
+      'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
     if (existing.length > 0) {
       if (action === 'select') {
         await connection.query(
-          'UPDATE package_catalog SET is_selected = 1 WHERE product_id = ? AND package_id = ?',
-          [product_id, package_id]
-        );
+          'UPDATE package_catalog SET is_selected = 1 WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
       } else {
-        // toggle like
         await connection.query(
-          'UPDATE package_catalog SET is_liked = NOT is_liked WHERE product_id = ? AND package_id = ?',
-          [product_id, package_id]
-        );
+          'UPDATE package_catalog SET is_liked = NOT is_liked WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
       }
     } else {
       await connection.query(
         'INSERT INTO package_catalog (package_id, product_id, is_liked, is_selected) VALUES (?, ?, ?, ?)',
-        [package_id, product_id, action === 'like' ? 1 : 0, action === 'select' ? 1 : 0]
-      );
+        [package_id, product_id, action === 'like' ? 1 : 0, action === 'select' ? 1 : 0]);
     }
-
     connection.release();
     res.json({ status: 'success' });
   } catch (err) {
@@ -1349,18 +1107,7 @@ app.post('/api/package-catalog', async (req, res) => {
   }
 });
 
-
-
-
-
-
-
-
-// =====================================================================
-// ================= API สำหรับ ADMIN DASHBOARD =========================
-// =====================================================================
-
-// 1. Admin Login
+// ================= API ADMIN DASHBOARD =================
 app.post('/api/admin/login', async (req, res) => {
     const { name_admin, password, key_password } = req.body;
     try {
@@ -1370,9 +1117,7 @@ app.post('/api/admin/login', async (req, res) => {
             [name_admin, password, key_password]
         );
         connection.release();
-
         if (rows.length > 0) {
-            // ไม่ส่งรหัสผ่านกลับไปเพื่อความปลอดภัย
             const adminData = { admin_id: rows[0].admin_id, name_admin: rows[0].name_admin };
             res.json({ status: 'success', message: 'เข้าสู่ระบบ Admin สำเร็จ', admin: adminData });
         } else {
@@ -1384,7 +1129,6 @@ app.post('/api/admin/login', async (req, res) => {
     }
 });
 
-// 2. ดึงจำนวน User ทั้งหมด
 app.get('/api/admin/users/count', async (req, res) => {
     try {
         const connection = await pool.getConnection();
@@ -1396,46 +1140,840 @@ app.get('/api/admin/users/count', async (req, res) => {
     }
 });
 
-// 3. ดึงสถิติการใช้งาน API (Gemini & DALL-E) ย้อนหลัง X วัน
 app.get('/api/admin/stats/api-usage', async (req, res) => {
-    const days = parseInt(req.query.days) || 7; // ค่าเริ่มต้น 7 วัน
+    const days = parseInt(req.query.days) || 7;
     try {
         const connection = await pool.getConnection();
-        
-        // สถิติ Gemini (จากตาราง api_logs)
         const [geminiStats] = await connection.query(`
             SELECT DATE(created_at) as date, COUNT(*) as count 
             FROM api_logs 
             WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
             GROUP BY DATE(created_at) ORDER BY date ASC
         `, [days]);
-
-        // สถิติ DALL-E 3 (จากตาราง generated_history)
-        const [dalleStats] = await connection.query(`
+        const [imageStats] = await connection.query(`
             SELECT DATE(created_at) as date, COUNT(*) as count 
             FROM generated_history 
             WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
             GROUP BY DATE(created_at) ORDER BY date ASC
         `, [days]);
-
         connection.release();
-
-        // รวมข้อมูลเพื่อส่งให้ Frontend กราฟ
+        // ส่งทั้ง 2 keys: image (ใหม่) + dalle (เก่า เพื่อ backward compat กับ frontend เดิม)
         res.json({ 
             status: 'success', 
-            gemini: geminiStats,
-            dalle: dalleStats
+            gemini: geminiStats, 
+            image: imageStats,
+            dalle: imageStats  // 👈 alias เก่า ถ้า frontend ยังใช้ key 'dalle' อยู่
         });
+        connection.release();
+        res.json({ status: 'success', gemini: geminiStats, dalle: dalleStats });
     } catch (err) {
         console.error("API Stats Error:", err);
         res.status(500).json({ status: 'error' });
     }
 });
 
+// =====================================================================
+// ================= API LABEL DESIGN v2 ================================
+// =====================================================================
+
+// 1. ให้ Gemini ช่วยคิดคำโปรย
+app.post('/api/generate-label-content', async (req, res) => {
+    const { product_name, raw_details } = req.body;
+    if (!product_name) return res.status(400).json({ status: 'error', message: 'กรุณาระบุชื่อสินค้า' });
+    try {
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-8b" });
+        const prompt = `
+        คุณเป็น Copywriter และนักออกแบบฉลากสินค้าระดับมืออาชีพ
+        ชื่อสินค้า: ${product_name}
+        ข้อมูลดิบ/ส่วนผสม/จุดเด่น: ${raw_details || 'ไม่ระบุ'}
+
+        กรุณาสร้างเนื้อหาสำหรับนำไปวางบนฉลากสินค้า โดยส่งผลลัพธ์เป็น JSON เท่านั้น โครงสร้างดังนี้:
+        {
+            "tagline": "คำโปรยสั้นๆ ดึงดูดใจ (ไม่เกิน 2 บรรทัด)",
+            "ingredients": "เรียบเรียงส่วนผสม วิธีใช้ หรือคำเตือน ให้อ่านง่าย เป็นทางการแบบกระชับ"
+        }
+        `;
+        const result = await model.generateContent(prompt);
+        const cleanedText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+        const aiData = JSON.parse(cleanedText);
+        res.json({ status: 'success', data: aiData });
+    } catch (err) {
+        console.error("Gemini Label Error:", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการประมวลผลข้อความ' });
+    }
+});
+
+// 2. ดึง bg presets ทั้งหมด
+app.get('/api/bg-presets', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(
+            `SELECT bg_preset_id, name, style, image_url, thumbnail_url
+             FROM bg_preset WHERE is_active = 1 ORDER BY bg_preset_id ASC`);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Get BG Presets Error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// 3. Generate label background ด้วย DALL-E 3
+app.post('/api/generate-label-background', async (req, res) => {
+    const { project_id, user_id, style = 'minimal', tone = 'auto', density = 'medium' } = req.body;
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'project_id is required' });
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+
+        // ดึงสีที่ select ไว้
+        const [colorRows] = await connection.query(
+            `SELECT c.color_code_1, c.color_code_2, c.color_code_3, c.color_code_4, c.color_code_5
+             FROM color_concept cc
+             JOIN color c ON cc.color_id = c.color_id
+             WHERE cc.project_id = ? AND cc.is_selected = 1 LIMIT 1`,
+            [project_id]
+        );
+        const palette = colorRows[0]
+            ? [colorRows[0].color_code_1, colorRows[0].color_code_2, colorRows[0].color_code_3,
+               colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
+            : '#F5E6D3, #C9A678, #8B6F47';
+
+        connection.release();
+        connection = null;
+
+        const styleMap = {
+            minimal: 'minimal, lots of empty white space, very subtle small accents on edges only',
+            thai_traditional: 'subtle traditional Thai pattern (lai kanok / lotus), elegant, sparse',
+            nature: 'soft botanical leaves and small flowers along edges',
+            watercolor: 'soft watercolor wash, blurred organic shapes, light',
+            geometric: 'simple geometric lines and dots, modern, sparse',
+            vintage: 'aged paper texture, faded ornamental corners'
+        };
+        const toneMap = {
+            auto: '', bright: 'bright and airy lighting',
+            dark: 'rich deep tones', pastel: 'soft pastel tones'
+        };
+        const densityMap = {
+            low: 'very sparse pattern, only edges decorated',
+            medium: 'balanced sparse pattern, leaving large empty area in center',
+            high: 'denser decorative pattern but still leaves clear empty zone in middle'
+        };
+
+        const prompt = `
+Create a flat 2D vector decorative background pattern for a product label.
+
+DESIGN STYLE: ${styleMap[style] || styleMap.minimal}
+COLOR PALETTE: ONLY use these exact hex colors: ${palette}
+PATTERN DENSITY: ${densityMap[density] || densityMap.medium}
+${toneMap[tone] ? 'TONE: ' + toneMap[tone] : ''}
 
 
+        `.trim();
 
+        // 🟢 เรียก Nano Banana (Gemini 2.5 Flash Image)
+        const response = await googleImagen.images.generate({
+            model: "gemini-2.5-flash-image",
+            prompt: prompt,
+            n: 1,
+            size: "1024x1024",
+            response_format: "b64_json",
+        });
 
+        const base64Data = response.data[0].b64_json;
+        const fileName = `labelbg_${Date.now()}.png`;
+        // ✅ เปลี่ยนให้เซฟลงโฟลเดอร์ uploads/generated/
+        const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName); 
+        fs.writeFileSync(filePath, base64Data, 'base64');
+        
+        // เวลาส่ง URL กลับไปให้ Frontend ต้องมี /generated/ ด้วย
+        const imageUrl = `/uploads/generated/${fileName}`;
+
+        // log ลง api_logs และ generated_history
+        try {
+            const finalUserId = (!user_id || user_id === 0) ? null : user_id;
+            const logConn = await pool.getConnection();
+            await logConn.query(
+                `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
+                [finalUserId, project_id, 'GENERATE_LABEL_BG', prompt, imageUrl]
+            );
+            await logConn.query(
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
+                [project_id, finalUserId, 'LABEL_BG', imageUrl, prompt]
+            );
+            logConn.release();
+        } catch (logErr) {
+            console.warn("Log warning (label-bg):", logErr.message);
+        }
+
+        res.json({ status: 'success', data: { image_url: imageUrl, prompt_used: prompt } });
+    } catch (err) {
+        if (connection) connection.release();
+        console.error("Generate Label BG Error:", err);
+        res.status(500).json({ status: 'error', message: err.message || 'DALL-E error' });
+    }
+});
+
+// 4. ดึง label ของ สินค้า (Product)
+app.get('/api/labels/product/:productId', async (req, res) => {
+    const { productId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`SELECT * FROM label_design WHERE product_id = ? ORDER BY updated_at DESC LIMIT 1`, [productId]);
+        connection.release();
+        if (rows.length === 0) return res.json({ status: 'success', data: null });
+        const row = rows[0];
+        try {
+            if (row.text_colors && typeof row.text_colors === 'string') row.text_colors = JSON.parse(row.text_colors);
+        } catch (e) {}
+        res.json({ status: 'success', data: row });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// 5. บันทึก/อัปเดต label (Auto-Save)
+app.post('/api/labels', async (req, res) => {
+    const {
+        project_id, product_id, product_name, tagline, net_weight,
+        ingredients, usage_instruction, storage_instruction, warnings,
+        manufacturer_info,
+        fda_number, mfg_date, exp_date, lot_number,
+        certifications,
+        qr_code_value, barcode_value, show_qr, show_barcode,
+        layout_type, label_width, label_height, text_colors,
+        bg_mode, bg_color, bg_preset_id, bg_image_url, bg_opacity
+    } = req.body;
+
+    if (!product_id || !product_name) {
+        return res.status(400).json({ status: 'error', message: 'product_id and product_name are required' });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+        const [existing] = await connection.query('SELECT label_id FROM label_design WHERE product_id = ?', [product_id]);
+
+        const manufacturerJson = manufacturer_info ? JSON.stringify(manufacturer_info) : null;
+        const certificationsJson = (certifications && certifications.length > 0) ? JSON.stringify(certifications) : null;
+        const colorsJson = text_colors ? JSON.stringify(text_colors) : null;
+
+        const formattedMfgDate = mfg_date ? mfg_date.split('T')[0] : null;
+        const formattedExpDate = exp_date ? exp_date.split('T')[0] : null;
+
+        const fields = [
+            project_id, product_name, tagline || null, net_weight || null,
+            ingredients || null, usage_instruction || null, storage_instruction || null, warnings || null,
+            manufacturerJson, fda_number || null, formattedMfgDate, formattedExpDate, lot_number || null,
+            certificationsJson, qr_code_value || null, barcode_value || null,
+            show_qr ? 1 : 0, show_barcode ? 1 : 0,
+            layout_type || 'centered_classic', label_width || 380, label_height || 500, colorsJson,
+            bg_mode || 'solid', bg_color || '#FFFFFF', bg_preset_id || null, bg_image_url || null,
+            (bg_opacity !== undefined && bg_opacity !== null) ? bg_opacity : 1.00
+        ];
+
+        if (existing.length > 0) {
+            await connection.query(
+                `UPDATE label_design SET
+                    project_id=?, product_name=?, tagline=?, net_weight=?,
+                    ingredients=?, usage_instruction=?, storage_instruction=?, warnings=?,
+                    manufacturer_info=?, fda_number=?, mfg_date=?, exp_date=?, lot_number=?,
+                    certifications=?, qr_code_value=?, barcode_value=?, show_qr=?, show_barcode=?,
+                    layout_type=?, label_width=?, label_height=?, text_colors=?,
+                    bg_mode=?, bg_color=?, bg_preset_id=?, bg_image_url=?, bg_opacity=?
+                 WHERE product_id=?`,
+                [...fields, product_id]
+            );
+        } else {
+            await connection.query(
+                `INSERT INTO label_design (
+                    project_id, product_name, tagline, net_weight, ingredients, usage_instruction, storage_instruction, warnings,
+                    manufacturer_info, fda_number, mfg_date, exp_date, lot_number, certifications,
+                    qr_code_value, barcode_value, show_qr, show_barcode, layout_type, label_width, label_height, text_colors,
+                    bg_mode, bg_color, bg_preset_id, bg_image_url, bg_opacity, product_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [...fields, product_id]
+            );
+        }
+
+        // 🟢 อัปเดตชื่อสินค้ากลับไปยังตาราง brand_product ด้วย!
+        await connection.query('UPDATE brand_product SET name_product = ? WHERE product_id = ?', [product_name, product_id]);
+
+        connection.release();
+        return res.json({ status: 'success', message: 'Auto-saved' });
+    } catch (err) {
+        console.error("Save Label Error:", err);
+        res.status(500).json({ status: 'error', message: err.message || 'Database error' });
+    }
+});
+// =====================================================================
+// END LABEL v2
+// =====================================================================
+// =====================================================================
+// ============ MOCKUP FEATURE — Phase 1, 2, 4 =========================
+// =====================================================================
+
+// ----- Multer สำหรับ admin upload pattern -----
+if (!fs.existsSync('./uploads/patterns')) fs.mkdirSync('./uploads/patterns', { recursive: true });
+const patternStorage = multer.diskStorage({
+    destination: 'uploads/patterns/',
+    filename: (req, file, cb) => cb(null, `pat_${Date.now()}${path.extname(file.originalname)}`)
+});
+const patternUpload = multer({ storage: patternStorage });
+
+// ----- 1) GET selected packages ของ project -----
+app.get('/api/mockup/selected-packages/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT bp.product_id, bp.name_product, bp.image_product,
+                    p.id AS package_id, p.name,
+                    pm.id AS material_id, pm.name AS material_name, pm.package_type,
+                    pm.dieline_width_mm, pm.dieline_height_mm, pm.panels_json,
+                    pm.bleed_mm, pm.safe_zone_mm
+             FROM brand_product bp
+             JOIN package_catalog pc ON pc.product_id = bp.product_id
+             JOIN packages p ON p.id = pc.package_id
+             LEFT JOIN package_materials pm ON pm.package_id = p.id
+             WHERE bp.project_id = ? AND pc.is_selected = 1
+             ORDER BY pm.sort_order ASC`,
+            [projectId]
+        );
+        // get image refs for each material
+        const materialIds = [...new Set(rows.map(r => r.material_id).filter(Boolean))];
+        let imgs = [];
+        if (materialIds.length > 0) {
+            const [rs] = await conn.query(
+                `SELECT material_id, image_path, sort_order FROM package_material_images
+                 WHERE material_id IN (?) ORDER BY material_id, sort_order ASC`,
+                [materialIds]
+            );
+            imgs = rs;
+        }
+        conn.release();
+        rows.forEach(r => {
+            r.images = imgs.filter(i => i.material_id === r.material_id);
+            if (r.panels_json && typeof r.panels_json === 'string') {
+                try { r.panels_json = JSON.parse(r.panels_json); } catch(e){}
+            }
+        });
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error('selected-packages error', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 2) GET die-line ของ material -----
+app.get('/api/mockup/material/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT id, name, package_type, dieline_svg, dieline_width_mm, dieline_height_mm,
+                    panels_json, bleed_mm, safe_zone_mm
+             FROM package_materials WHERE id = ?`, [id]);
+        const [imgs] = await conn.query(
+            `SELECT image_path, sort_order FROM package_material_images
+             WHERE material_id = ? ORDER BY sort_order ASC`, [id]);
+        conn.release();
+        if (rows.length === 0) return res.status(404).json({ status: 'error', message: 'not found' });
+        const r = rows[0];
+        if (r.panels_json && typeof r.panels_json === 'string') {
+            try { r.panels_json = JSON.parse(r.panels_json); } catch(e){}
+        }
+        r.images = imgs;
+        res.json({ status: 'success', data: r });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 3) GET pattern library -----
+app.get('/api/pattern-library', async (req, res) => {
+    const { category, source } = req.query;
+    try {
+        const conn = await pool.getConnection();
+        let q = 'SELECT * FROM pattern_library WHERE is_active = 1';
+        const params = [];
+        if (category && category !== 'all') { q += ' AND category = ?'; params.push(category); }
+        if (source) { q += ' AND source = ?'; params.push(source); }
+        q += ' ORDER BY pattern_id DESC';
+        const [rows] = await conn.query(q, params);
+        conn.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 4) POST admin upload pattern -----
+app.post('/api/admin/upload-pattern', patternUpload.single('pattern_image'), async (req, res) => {
+    const { name, category } = req.body;
+    if (!req.file) return res.status(400).json({ status: 'error', message: 'no file uploaded' });
+    const url = `/uploads/patterns/${req.file.filename}`;
+    try {
+        const conn = await pool.getConnection();
+        const [r] = await conn.query(
+            `INSERT INTO pattern_library (name, category, source, image_url, thumbnail_url, is_seamless)
+             VALUES (?, ?, 'admin', ?, ?, 1)`,
+            [name || 'Untitled', category || 'abstract', url, url]
+        );
+        conn.release();
+        res.json({ status: 'success', pattern_id: r.insertId, image_url: url });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 5) POST DALL-E generate pattern -----
+app.post('/api/generate-mockup-pattern', async (req, res) => {
+    const { project_id, user_id, style = 'thai_traditional' } = req.body;
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'project_id required' });
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const [colorRows] = await conn.query(
+            `SELECT c.color_code_1, c.color_code_2, c.color_code_3, c.color_code_4, c.color_code_5
+             FROM color_concept cc JOIN color c ON cc.color_id = c.color_id
+             WHERE cc.project_id = ? AND cc.is_selected = 1 LIMIT 1`, [project_id]);
+        const palette = colorRows[0]
+            ? [colorRows[0].color_code_1, colorRows[0].color_code_2, colorRows[0].color_code_3,
+               colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
+            : '#F5E6D3, #C9A678, #8B6F47';
+        conn.release(); conn = null;
+
+        const styleMap = {
+            thai_traditional: 'subtle traditional Thai pattern lai kanok lotus motif elegant sparse',
+            geometric: 'simple geometric repeating pattern lines dots modern',
+            floral: 'soft botanical flowers leaves repeating delicate',
+            texture: 'paper texture wash subtle organic',
+            abstract: 'abstract organic shapes sparse minimal'
+        };
+        const prompt = `Create a SEAMLESS REPEATING tile pattern for product packaging background.
+Style: ${styleMap[style] || styleMap.thai_traditional}
+Colors: ONLY use these hex colors: ${palette}
+STRICT RULES:
+- Pattern must be seamless (tileable, edges continue)
+- 2D flat illustration only
+- NO text, NO numbers, NO letters, NO logos, NO photo, NO 3D
+- Subtle decorative pattern with consistent density
+- Light/neutral base color`;
+
+        // 🟢 เรียก Imagen 3 Fast
+        const response = await googleImagen.images.generate({
+            model: 'imagen-3.0-fast-generate-001', prompt, n: 1, size: '1024x1024', response_format: 'b64_json'
+        });
+        const fname = `mockup_pat_${Date.now()}.png`;
+        fs.writeFileSync(path.join('uploads', fname), response.data[0].b64_json, 'base64');
+        const imageUrl = `/uploads/${fname}`;
+
+        const c2 = await pool.getConnection();
+        const [r] = await c2.query(
+            `INSERT INTO pattern_library (name, category, source, image_url, thumbnail_url, uploaded_by_user_id)
+             VALUES (?, ?, 'user', ?, ?, ?)`,
+            [`AI ${style}`, style, imageUrl, imageUrl, user_id || null]);
+        await c2.query(
+            `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
+            [user_id || null, project_id, 'GENERATE_MOCKUP_PATTERN', prompt, imageUrl]);
+        await c2.query(
+            `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
+            [project_id, user_id || null, 'MOCKUP_PATTERN', imageUrl, prompt]);
+        c2.release();
+        res.json({ status: 'success', data: { image_url: imageUrl, pattern_id: r.insertId } });
+    } catch (err) {
+        if (conn) conn.release();
+        console.error('Pattern Gen Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 6) POST user upload pattern (custom จากผู้ใช้) -----
+app.post('/api/mockup/upload-pattern', patternUpload.single('pattern_image'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ status: 'error', message: 'no file' });
+    const { user_id } = req.body;
+    const url = `/uploads/patterns/${req.file.filename}`;
+    try {
+        const conn = await pool.getConnection();
+        const [r] = await conn.query(
+            `INSERT INTO pattern_library (name, category, source, image_url, thumbnail_url, uploaded_by_user_id, is_seamless)
+             VALUES (?, ?, 'user', ?, ?, ?, 0)`,
+            ['Custom Upload', 'abstract', url, url, user_id || null]);
+        conn.release();
+        res.json({ status: 'success', pattern_id: r.insertId, image_url: url });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 7) GET mockup ของ project -----
+app.get('/api/mockups/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    const { product_id } = req.query;
+    try {
+        const conn = await pool.getConnection();
+        let q = `SELECT * FROM mockup_design WHERE project_id = ?`;
+        const params = [projectId];
+        if (product_id) { q += ` AND product_id = ?`; params.push(product_id); }
+        q += ` ORDER BY updated_at DESC LIMIT 1`;
+        const [rows] = await conn.query(q, params);
+        if (rows.length === 0) { conn.release(); return res.json({ status: 'success', data: null }); }
+        const m = rows[0];
+        const [panels] = await conn.query(`SELECT * FROM mockup_panel WHERE mockup_id = ?`, [m.mockup_id]);
+        conn.release();
+        panels.forEach(p => {
+            if (p.elements_json && typeof p.elements_json === 'string') {
+                try { p.elements_json = JSON.parse(p.elements_json); } catch(e){}
+            }
+        });
+        m.panels = panels;
+        res.json({ status: 'success', data: m });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 8) POST save/update mockup + panels -----
+app.post('/api/mockups', async (req, res) => {
+    const {
+        project_id, product_id, package_material_id, size_id, label_id,
+        bleed_mm, resolution_dpi, panels = []
+    } = req.body;
+    if (!project_id || !package_material_id) {
+        return res.status(400).json({ status: 'error', message: 'project_id and package_material_id required' });
+    }
+    try {
+        const conn = await pool.getConnection();
+        let existing;
+        if (product_id) {
+            [existing] = await conn.query(
+                'SELECT mockup_id FROM mockup_design WHERE project_id = ? AND product_id = ?',
+                [project_id, product_id]);
+        } else {
+            [existing] = await conn.query(
+                'SELECT mockup_id FROM mockup_design WHERE project_id = ? AND product_id IS NULL',
+                [project_id]);
+        }
+        let mockupId;
+        if (existing.length > 0) {
+            mockupId = existing[0].mockup_id;
+            await conn.query(
+                `UPDATE mockup_design SET package_material_id=?, size_id=?, label_id=?,
+                   bleed_mm=?, resolution_dpi=?, status='saved' WHERE mockup_id=?`,
+                [package_material_id, size_id || null, label_id || null,
+                 bleed_mm || 3.0, resolution_dpi || 300, mockupId]);
+        } else {
+            const [r] = await conn.query(
+                `INSERT INTO mockup_design (project_id, product_id, package_material_id, size_id, label_id, bleed_mm, resolution_dpi, status)
+                 VALUES (?,?,?,?,?,?,?,'saved')`,
+                [project_id, product_id || null, package_material_id, size_id || null, label_id || null,
+                 bleed_mm || 3.0, resolution_dpi || 300]);
+            mockupId = r.insertId;
+        }
+        for (const p of panels) {
+            const elJson = p.elements_json ? JSON.stringify(p.elements_json) : (p.elements ? JSON.stringify(p.elements) : null);
+            const [exP] = await conn.query(
+                `SELECT panel_id FROM mockup_panel WHERE mockup_id=? AND panel_key=?`, [mockupId, p.panel_key]);
+            if (exP.length > 0) {
+                await conn.query(
+                    `UPDATE mockup_panel SET bg_mode=?, bg_color=?, bg_pattern_id=?, bg_image_url=?, bg_opacity=?, elements_json=?
+                     WHERE panel_id=?`,
+                    [p.bg_mode||'solid', p.bg_color||'#FFFFFF', p.bg_pattern_id||null,
+                     p.bg_image_url||null, p.bg_opacity||1.00, elJson, exP[0].panel_id]);
+            } else {
+                await conn.query(
+                    `INSERT INTO mockup_panel (mockup_id, panel_key, bg_mode, bg_color, bg_pattern_id, bg_image_url, bg_opacity, elements_json)
+                     VALUES (?,?,?,?,?,?,?,?)`,
+                    [mockupId, p.panel_key, p.bg_mode||'solid', p.bg_color||'#FFFFFF',
+                     p.bg_pattern_id||null, p.bg_image_url||null, p.bg_opacity||1.00, elJson]);
+            }
+        }
+        conn.release();
+        res.json({ status: 'success', mockup_id: mockupId });
+    } catch (err) {
+        console.error('Save Mockup Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 9) POST export PDF (Phase 4) -----
+// body: { panel_images: [{panel_key, image_data: 'data:image/png;base64,...'}], spec_data: {...} }
+app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
+    const { mockupId } = req.params;
+    const { panel_images = [], spec_data = {} } = req.body;
+    try {
+        const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+        const pdfDoc = await PDFDocument.create();
+
+        const conn = await pool.getConnection();
+        const [mr] = await conn.query(
+            `SELECT m.*, pm.dieline_width_mm, pm.dieline_height_mm, pm.bleed_mm AS mat_bleed,
+                    pm.panels_json, pm.name AS material_name, pm.package_type
+             FROM mockup_design m JOIN package_materials pm ON m.package_material_id = pm.id
+             WHERE m.mockup_id = ?`, [mockupId]);
+        if (mr.length === 0) { conn.release(); return res.status(404).json({status:'error',message:'mockup not found'}); }
+        const m = mr[0];
+        const panels = m.panels_json ? JSON.parse(m.panels_json) : [];
+        conn.release();
+
+        const MM_TO_PT = 2.83465;
+        const bleed = parseFloat(m.bleed_mm || m.mat_bleed) || 3.0;
+        const widthMm  = parseFloat(m.dieline_width_mm)  + bleed * 2;
+        const heightMm = parseFloat(m.dieline_height_mm) + bleed * 2;
+        const pageW = widthMm * MM_TO_PT;
+        const pageH = heightMm * MM_TO_PT;
+
+        // ---- หน้า 1: die-line print-ready ----
+        const page = pdfDoc.addPage([pageW, pageH]);
+        page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(1,1,1) });
+
+        for (const panel of panels) {
+            const imgEntry = panel_images.find(pi => pi.panel_key === panel.id);
+            if (!imgEntry) continue;
+            const b64 = imgEntry.image_data.replace(/^data:image\/\w+;base64,/, '');
+            const bytes = Buffer.from(b64, 'base64');
+            const img = await pdfDoc.embedPng(bytes);
+            page.drawImage(img, {
+                x: (panel.x_mm + bleed) * MM_TO_PT,
+                y: (heightMm - panel.y_mm - panel.h_mm - bleed) * MM_TO_PT,
+                width: panel.w_mm * MM_TO_PT,
+                height: panel.h_mm * MM_TO_PT
+            });
+        }
+
+        // ---- crop marks 4 มุม ----
+        const cropLen = 5 * MM_TO_PT;
+        const cropOff = bleed * MM_TO_PT;
+        const cropColor = rgb(0,0,0);
+        const drawCrop = (x, y, dx, dy) => {
+            page.drawLine({ start: { x, y }, end: { x: x + dx, y: y + dy }, thickness: 0.25, color: cropColor });
+        };
+        // bottom-left
+        drawCrop(0, cropOff, cropLen, 0);
+        drawCrop(cropOff, 0, 0, cropLen);
+        // bottom-right
+        drawCrop(pageW - cropLen, cropOff, cropLen, 0);
+        drawCrop(pageW - cropOff, 0, 0, cropLen);
+        // top-left
+        drawCrop(0, pageH - cropOff, cropLen, 0);
+        drawCrop(cropOff, pageH - cropLen, 0, cropLen);
+        // top-right
+        drawCrop(pageW - cropLen, pageH - cropOff, cropLen, 0);
+        drawCrop(pageW - cropOff, pageH - cropLen, 0, cropLen);
+
+        // ---- fold lines (เส้นประระหว่าง panel) ----
+        for (let i = 0; i < panels.length; i++) {
+            for (let j = i + 1; j < panels.length; j++) {
+                const a = panels[i], b = panels[j];
+                // ถ้า panel ติดกัน (ขอบขวา a = ขอบซ้าย b) → วาดเส้นพับ
+                if (Math.abs((a.x_mm + a.w_mm) - b.x_mm) < 0.5 &&
+                    Math.max(a.y_mm, b.y_mm) < Math.min(a.y_mm + a.h_mm, b.y_mm + b.h_mm)) {
+                    const xMm = a.x_mm + a.w_mm + bleed;
+                    const y1Mm = Math.max(a.y_mm, b.y_mm) + bleed;
+                    const y2Mm = Math.min(a.y_mm + a.h_mm, b.y_mm + b.h_mm) + bleed;
+                    page.drawLine({
+                        start: { x: xMm * MM_TO_PT, y: (heightMm - y2Mm) * MM_TO_PT },
+                        end:   { x: xMm * MM_TO_PT, y: (heightMm - y1Mm) * MM_TO_PT },
+                        thickness: 0.5, color: rgb(1, 0, 0), dashArray: [4, 3]
+                    });
+                }
+                // ขอบล่าง a = ขอบบน b
+                if (Math.abs((a.y_mm + a.h_mm) - b.y_mm) < 0.5 &&
+                    Math.max(a.x_mm, b.x_mm) < Math.min(a.x_mm + a.w_mm, b.x_mm + b.w_mm)) {
+                    const yMm = a.y_mm + a.h_mm + bleed;
+                    const x1Mm = Math.max(a.x_mm, b.x_mm) + bleed;
+                    const x2Mm = Math.min(a.x_mm + a.w_mm, b.x_mm + b.w_mm) + bleed;
+                    page.drawLine({
+                        start: { x: x1Mm * MM_TO_PT, y: (heightMm - yMm) * MM_TO_PT },
+                        end:   { x: x2Mm * MM_TO_PT, y: (heightMm - yMm) * MM_TO_PT },
+                        thickness: 0.5, color: rgb(1, 0, 0), dashArray: [4, 3]
+                    });
+                }
+            }
+        }
+
+        // ---- หน้า 2: spec sheet (A4) ----
+        const specPage = pdfDoc.addPage([595, 842]);
+        const helv = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const helvR = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        let yy = 800;
+        specPage.drawText('PRINT SPECIFICATION SHEET', { x: 50, y: yy, size: 18, font: helv }); yy -= 30;
+        specPage.drawText(`Project: ${spec_data.project_name || '-'}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
+        specPage.drawText(`Material: ${m.material_name}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
+        specPage.drawText(`Package Type: ${m.package_type}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
+        specPage.drawText(`Die-line size: ${m.dieline_width_mm} x ${m.dieline_height_mm} mm`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
+        specPage.drawText(`Bleed: ${bleed} mm | Resolution: ${m.resolution_dpi} DPI`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 25;
+        specPage.drawText('PRINTING NOTES (for printer)', { x: 50, y: yy, size: 13, font: helv }); yy -= 20;
+        const notes = [
+            '1. Color space: sRGB (please convert to CMYK before printing)',
+            '2. Crop marks at 4 corners — trim along marks',
+            '3. Red dashed lines = fold lines (do not print, score only)',
+            '4. Black solid lines/area = print artwork',
+            `5. Die-line outer size with bleed: ${widthMm} x ${heightMm} mm`,
+            '6. Recommended paper: 250-300 gsm coated for boxes',
+            '7. Recommended finish: Matte or glossy lamination',
+            '8. Embedded fonts: outlined as raster (no font issues)'
+        ];
+        notes.forEach(n => { specPage.drawText(n, { x: 50, y: yy, size: 10, font: helvR }); yy -= 16; });
+        if (spec_data.colors_used && spec_data.colors_used.length > 0) {
+            yy -= 10;
+            specPage.drawText('COLORS USED', { x: 50, y: yy, size: 13, font: helv }); yy -= 18;
+            spec_data.colors_used.forEach(hex => {
+                const r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
+                specPage.drawRectangle({ x: 50, y: yy - 10, width: 18, height: 12, color: rgb(r,g,b) });
+                specPage.drawText(`${hex.toUpperCase()}  →  CMYK approx (convert at printer)`, { x: 75, y: yy - 8, size: 10, font: helvR });
+                yy -= 18;
+            });
+        }
+
+        const pdfBytes = await pdfDoc.save();
+        const fname = `mockup_${mockupId}_${Date.now()}.pdf`;
+        const fpath = path.join('uploads', fname);
+        fs.writeFileSync(fpath, pdfBytes);
+        const url = `/uploads/${fname}`;
+
+        const c2 = await pool.getConnection();
+        await c2.query(`UPDATE mockup_design SET print_pdf_url=?, status='exported' WHERE mockup_id=?`, [url, mockupId]);
+        c2.release();
+        res.json({ status: 'success', pdf_url: url });
+    } catch (err) {
+        console.error('Export PDF Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// =====================================================================
+// END MOCKUP FEATURE
+// =====================================================================
+// ----- NEW: GET products with package status (สำหรับหน้า Mockup Picker) -----
+app.get('/api/mockup/products-status/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [products] = await conn.query(
+            `SELECT product_id, name_product, type_product, image_product
+             FROM brand_product WHERE project_id = ?`, [projectId]);
+
+        if (products.length === 0) {
+            conn.release();
+            return res.json({ status: 'success', data: [] });
+        }
+
+        const productIds = products.map(p => p.product_id);
+        const [selected] = await conn.query(
+    `SELECT pc.product_id, pc.package_id, p.name AS name_package
+     FROM package_catalog pc 
+     JOIN packages p ON p.id = pc.package_id
+     WHERE pc.is_selected = 1 AND pc.product_id IN (?)`,
+    [productIds]);
+
+        let materials = [];
+        if (selected.length > 0) {
+            const packageIds = [...new Set(selected.map(s => s.package_id))];
+            const [mats] = await conn.query(
+                `SELECT id, package_id, name AS material_name, package_type,
+                        dieline_width_mm, dieline_height_mm
+                 FROM package_materials WHERE package_id IN (?) ORDER BY sort_order ASC`,
+                [packageIds]);
+            materials = mats;
+        }
+
+        const [mockups] = await conn.query(
+            `SELECT product_id, mockup_id, status FROM mockup_design 
+             WHERE project_id = ? AND product_id IN (?)`,
+            [projectId, productIds]);
+
+        conn.release();
+
+        const result = products.map(p => {
+            const sel = selected.find(s => s.product_id === p.product_id);
+            const mats = sel ? materials.filter(m => m.package_id === sel.package_id) : [];
+            const mockup = mockups.find(m => m.product_id === p.product_id);
+            return {
+                ...p,
+                has_package: !!sel,
+                package_id: sel?.package_id || null,
+                name: sel?.name || null,
+                materials: mats,
+                has_mockup: !!mockup,
+                mockup_id: mockup?.mockup_id || null,
+                mockup_status: mockup?.status || null
+            };
+        });
+
+        res.json({ status: 'success', data: result });
+    } catch (err) {
+        console.error('products-status error', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+// ===== POST: AI สร้างภาพ mockup ผลิตภัณฑ์จริง (DALL-E) =====
+app.post('/api/mockup/generate-ai-image', async (req, res) => {
+    const { project_id, user_id, product_id, package_name, package_material, label_data = {}, project_name } = req.body;
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'project_id required' });
+
+    try {
+        const ld = label_data;
+        let conn = await pool.getConnection();
+        // ดึง brand name ที่ select
+        const [nameRows] = await conn.query(
+            `SELECT brand_name FROM name_concept WHERE project_id = ? AND is_selected = 1 LIMIT 1`, [project_id]);
+        const brandName = nameRows[0]?.brand_name || '';
+        conn.release();
+
+        const prompt = `Professional studio product photography of a ${package_name || 'product package'} (${package_material || 'standard material'}).
+
+The package has a custom designed label sticker on the front with these visual characteristics:
+- Brand identity colors: ${ld.colors || 'natural earthy tones'}
+${brandName ? `- Brand name visible on label: "${brandName}"` : ''}
+${ld.product_name ? `- Product name on label: "${ld.product_name}"` : ''}
+${ld.tagline ? `- Tagline visible: "${ld.tagline}"` : ''}
+
+STRICT VISUAL RULES:
+- Photorealistic professional product photography style
+- Soft diffused studio lighting from upper left
+- Clean white or very subtle light gray seamless background
+- Single product centered in frame, hero shot
+- Sharp focus on the package label
+- Commercial e-commerce product shot quality
+- The label/sticker is clean, well-applied, readable
+- Natural shadows beneath product
+- High resolution, clean modern aesthetic
+- NO people, NO hands holding it, NO extra props or food/decoration around it
+- NO text on background, only on the label area`;
+
+        // 🟢 เรียก Nano Banana (Gemini 2.5 Flash Image)
+        const response = await googleImagen.images.generate({
+            model: 'gemini-2.5-flash-image',
+            prompt,
+            n: 1,
+            size: '1024x1024',
+            response_format: 'b64_json'
+        });
+        const fname = `mockup_ai_${Date.now()}.png`;
+        fs.writeFileSync(path.join('uploads', fname), response.data[0].b64_json, 'base64');
+        const imageUrl = `/uploads/${fname}`;
+
+        try {
+            const finalUserId = (!user_id || user_id === 0) ? null : user_id;
+            const c2 = await pool.getConnection();
+            await c2.query(
+                `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
+                [finalUserId, project_id, 'GENERATE_MOCKUP_AI', prompt, imageUrl]);
+            await c2.query(
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
+                [project_id, finalUserId, 'MOCKUP_AI', imageUrl, prompt]);
+            c2.release();
+        } catch (e) { console.warn('log warning', e.message); }
+
+        res.json({ status: 'success', image_url: imageUrl });
+    } catch (err) {
+        console.error('AI Mockup Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

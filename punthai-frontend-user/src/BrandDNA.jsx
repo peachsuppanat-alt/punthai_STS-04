@@ -9,13 +9,13 @@ export const BrandDNA = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const projectId = location.state?.projectId;
-  
+
   //  ดึง user_id จาก LocalStorage (สมมติว่าคุณเก็บข้อมูล user ไว้ตอน Login)
   const userData = JSON.parse(localStorage.getItem('user') || '{}');
   const userId = userData.user_id || 0;
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
+
   //สีและฟอนต์  
   const [recommendedColor, setRecommendedColor] = useState(null);
   const [recommendedFont, setRecommendedFont] = useState(null);
@@ -64,12 +64,16 @@ export const BrandDNA = () => {
   //  ฟังก์ชันเช็คผลลัพธ์เก่าจาก Database 
   const fetchExistingDNA = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/brand_dna/${projectId}`);
+      // ใช้ endpoint ใหม่ที่คืน DNA + color + font ใน 1 call (0 Gemini)
+      const res = await fetch(`http://localhost:3000/api/brand-dna-full/${projectId}`);
       const data = await res.json();
-      if (data.status === 'success' && data.data) {
-        setDnaResult(data.data);
-        setShowResult(true);    // ข้ามไปหน้า Result ทันที
-        setShowWelcome(false);  // ปิดหน้า Welcome
+      if (data.status === 'success' && data.dna) {
+        setDnaResult(data.dna);
+        if (data.color) setRecommendedColor(data.color);
+        if (data.font) setRecommendedFont(data.font);
+        setShowResult(true);
+        setShowWelcome(false);
+        console.log('[BrandDNA] Loaded from cache (0 Gemini calls)');
       }
     } catch (err) {
       console.error("Fetch existing DNA error:", err);
@@ -170,10 +174,8 @@ export const BrandDNA = () => {
     setIsLoading(true);
     try {
       const payload = {
-        project_id: projectId,
-        user_id: userId,
-        business_type: q1Form,
-        archetype: currentArchetype,
+        project_id: projectId, user_id: userId,
+        business_type: q1Form, archetype: currentArchetype,
         audience_data: q4Form.noAudience
           ? "ไม่รู้ / ยังไม่ได้เริ่มขาย"
           : `ลักษณะ: ${q4Form.type}, กลุ่ม: ${q4Form.tags.join(', ')}, รายละเอียดเพิ่มเติม: ${q4Form.desc}`
@@ -188,8 +190,11 @@ export const BrandDNA = () => {
 
       if (data.status === 'success') {
         setDnaResult(data.data);
+        // 👇 ใหม่: รับ color + font จาก response เลย ไม่ต้องเรียก Gemini อีก
+        if (data.data.color) setRecommendedColor(data.data.color);
+        if (data.data.font) setRecommendedFont(data.data.font);
         setShowResult(true);
-        // * ไม่ต้องเรียก fetchAiRecommendations() ตรงนี้แล้ว เพราะเราให้ useEffect ด้านล่างจัดการให้แล้ว *
+        console.log('[BrandDNA] Generated all (1 Gemini call total)');
       } else {
         alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + data.message);
       }
@@ -240,73 +245,73 @@ export const BrandDNA = () => {
   const [isFontLiked, setIsFontLiked] = useState(false);
 
   const fetchAiRecommendations = async () => {
-      try {
-          const res = await fetch(`http://localhost:3000/api/recommend-assets/${projectId}`);
-          const data = await res.json();
-          if (data.status === 'success') {
-              setRecommendedColor(data.color); 
-              setRecommendedFont(data.font);   
-          }
-      } catch (err) {
-          console.error("AI Recommend Error:", err);
+    try {
+      const res = await fetch(`http://localhost:3000/api/recommend-assets/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success') {
+        setRecommendedColor(data.color);
+        setRecommendedFont(data.font);
       }
+    } catch (err) {
+      console.error("AI Recommend Error:", err);
+    }
   };
 
-  //  หัวใจสำคัญ: เมื่อหน้าจอ Result เปิดขึ้นมา และมีผลลัพธ์ DNA ให้สั่งดึงสีและฟอนต์ทันที 👇
-  useEffect(() => {
-      if (showResult && dnaResult) {
-          fetchAiRecommendations();
-      }
-  }, [showResult, dnaResult]);
+  // ❌ ลบ useEffect นี้ทิ้ง — auto-fire ทำให้สิ้นเปลือง token
+  // useEffect(() => {
+  //     if (showResult && dnaResult) {
+  //         fetchAiRecommendations();
+  //     }
+  // }, [showResult, dnaResult]);
 
   const handleLikeColor = async () => {
-      if (!recommendedColor) return;
-      const newState = !isColorLiked;
-      setIsColorLiked(newState);
-      try {
-          await fetch(`http://localhost:3000/api/color-palettes/like/${recommendedColor.color_id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
-          });
-      } catch (err) { console.error(err); }
+    if (!recommendedColor) return;
+    const newState = !isColorLiked;
+    setIsColorLiked(newState);
+    try {
+      await fetch(`http://localhost:3000/api/color-palettes/like/${recommendedColor.color_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
+      });
+    } catch (err) { console.error(err); }
   };
 
   const handleSelectColor = async () => {
-      if (!recommendedColor) return;
-      try {
-          const res = await fetch(`http://localhost:3000/api/color-palettes/select/${recommendedColor.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ project_id: projectId })
-          });
-          if (res.ok) alert("✅ เลือกชุดสีนี้เรียบร้อยแล้ว! สามารถไปดูได้ที่หน้า Projects");
-      } catch (err) { console.error(err); }
+    if (!recommendedColor) return;
+    try {
+      const res = await fetch(`http://localhost:3000/api/color-palettes/select/${recommendedColor.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId })
+      });
+      if (res.ok) alert("✅ เลือกชุดสีนี้เรียบร้อยแล้ว! สามารถไปดูได้ที่หน้า Projects");
+    } catch (err) { console.error(err); }
   };
 
   const handleLikeFont = async () => {
-      if (!recommendedFont) return;
-      const newState = !isFontLiked;
-      setIsFontLiked(newState);
-      try {
-          await fetch(`http://localhost:3000/api/fonts/like/${recommendedFont.font_id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
-          });
-      } catch (err) { console.error(err); }
+    if (!recommendedFont) return;
+    const newState = !isFontLiked;
+    setIsFontLiked(newState);
+    try {
+      await fetch(`http://localhost:3000/api/fonts/like/${recommendedFont.font_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
+      });
+    } catch (err) { console.error(err); }
   };
 
   const handleSelectFont = async () => {
-      if (!recommendedFont) return;
-      try {
-          const res = await fetch(`http://localhost:3000/api/fonts/select/${recommendedFont.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ project_id: projectId })
-          });
-          if (res.ok) alert("✅ เลือกฟอนต์นี้เรียบร้อยแล้ว! สามารถไปดูได้ที่หน้า Projects");
-      } catch (err) { console.error(err); }
+    if (!recommendedFont) return;
+    try {
+      const res = await fetch(`http://localhost:3000/api/fonts/select/${recommendedFont.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId })
+      });
+      if (res.ok) alert("✅ เลือกฟอนต์นี้เรียบร้อยแล้ว! สามารถไปดูได้ที่หน้า Projects");
+    } catch (err) { console.error(err); }
   };
 
   return (
@@ -519,37 +524,37 @@ export const BrandDNA = () => {
                 <div className="bdna-result-card bdna-result-card--design">
                   <h2 className="bdna-result-section-title">คำแนะนำสำหรับการออกแบบ (โดย AI)</h2>
                   <div className="bdna-result-design-cols">
-                    
+
                     {/* ฝั่งซ้าย: ชุดสี */}
                     <div className="bdna-result-design-left">
                       <h3 className="bdna-result-col-title">ชุดสี</h3>
-                      
+
                       {recommendedColor ? (
                         <>
-                            <div style={{ display: 'flex', gap: '8px', margin: '15px 0' }}>
-                                {[recommendedColor.hex1, recommendedColor.hex2, recommendedColor.hex3, recommendedColor.hex4, recommendedColor.hex5].filter(Boolean).map((hex, i) => (
-                                    <div key={i} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: hex, border: '1px solid #ddd', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}></div>
-                                ))}
-                            </div>
-                            <p className="bdna-result-palette-desc">ใช้โทนสีที่สอดคล้องกับคุณค่าและสายแบรนด์ของคุณ</p>
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                                <button 
-                                    className="bdna-action-btn" 
-                                    title="ถูกใจ" 
-                                    onClick={handleLikeColor} 
-                                    style={{ background: '#f5f5f5', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer' }}
-                                >
-                                    <iconify-icon icon={isColorLiked ? "solar:heart-bold" : "solar:heart-linear"} style={{ color: '#d75a2a', fontSize: '20px' }}></iconify-icon>
-                                </button>
-                                <button 
-                                    className="bdna-result-palette-btn" 
-                                    title="เลือกใช้" 
-                                    onClick={handleSelectColor} 
-                                    style={{ border: '1px solid #d75a2a', background: '#fff3ee', color: '#d75a2a', display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer' }}
-                                >
-                                    <iconify-icon icon="mdi:check-circle-outline"></iconify-icon> เลือกใช้พาเลทนี้
-                                </button>
-                            </div>
+                          <div style={{ display: 'flex', gap: '8px', margin: '15px 0' }}>
+                            {[recommendedColor.hex1, recommendedColor.hex2, recommendedColor.hex3, recommendedColor.hex4, recommendedColor.hex5].filter(Boolean).map((hex, i) => (
+                              <div key={i} style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: hex, border: '1px solid #ddd', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}></div>
+                            ))}
+                          </div>
+                          <p className="bdna-result-palette-desc">ใช้โทนสีที่สอดคล้องกับคุณค่าและสายแบรนด์ของคุณ</p>
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                            <button
+                              className="bdna-action-btn"
+                              title="ถูกใจ"
+                              onClick={handleLikeColor}
+                              style={{ background: '#f5f5f5', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                              <iconify-icon icon={isColorLiked ? "solar:heart-bold" : "solar:heart-linear"} style={{ color: '#d75a2a', fontSize: '20px' }}></iconify-icon>
+                            </button>
+                            <button
+                              className="bdna-result-palette-btn"
+                              title="เลือกใช้"
+                              onClick={handleSelectColor}
+                              style={{ border: '1px solid #d75a2a', background: '#fff3ee', color: '#d75a2a', display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                              <iconify-icon icon="mdi:check-circle-outline"></iconify-icon> เลือกใช้พาเลทนี้
+                            </button>
+                          </div>
                         </>
                       ) : (
                         <p style={{ color: '#888', marginTop: '15px' }}>กำลังประมวลผลพาเลทสีที่เหมาะสม...</p>
@@ -558,42 +563,42 @@ export const BrandDNA = () => {
 
                     {/* ฝั่งขวา: ฟอนต์ และ กลุ่มเป้าหมาย */}
                     <div className="bdna-result-design-right">
-                      
+
                       <div className="bdna-result-design-block">
                         <h3 className="bdna-result-col-title">ตัวหนังสือ</h3>
                         {recommendedFont ? (
-                            <>
-                                <div style={{ fontSize: '24px', fontWeight: 'bold', margin: '10px 0', color: '#333', fontFamily: recommendedFont.font_name }}>
-                                    {recommendedFont.font_name}
-                                </div>
-                                <p className="bdna-result-col-body">ควรใช้ฟอนต์ที่อ่านง่ายและสื่อถึงความเป็นตัวคุณ</p>
-                                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                    <button 
-                                        className="bdna-action-btn" 
-                                        title="ถูกใจ" 
-                                        onClick={handleLikeFont} 
-                                        style={{ background: '#f5f5f5', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                        <iconify-icon icon={isFontLiked ? "solar:heart-bold" : "solar:heart-linear"} style={{ color: '#d75a2a', fontSize: '20px' }}></iconify-icon>
-                                    </button>
-                                    <button 
-                                        className="bdna-result-palette-btn" 
-                                        title="เลือกใช้" 
-                                        onClick={handleSelectFont} 
-                                        style={{ border: '1px solid #d75a2a', background: '#fff3ee', color: '#d75a2a', display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer' }}
-                                    >
-                                        <iconify-icon icon="mdi:check-circle-outline"></iconify-icon> เลือกใช้ฟอนต์นี้
-                                    </button>
-                                </div>
-                            </>
+                          <>
+                            <div style={{ fontSize: '24px', fontWeight: 'bold', margin: '10px 0', color: '#333', fontFamily: recommendedFont.font_name }}>
+                              {recommendedFont.font_name}
+                            </div>
+                            <p className="bdna-result-col-body">ควรใช้ฟอนต์ที่อ่านง่ายและสื่อถึงความเป็นตัวคุณ</p>
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                              <button
+                                className="bdna-action-btn"
+                                title="ถูกใจ"
+                                onClick={handleLikeFont}
+                                style={{ background: '#f5f5f5', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer' }}
+                              >
+                                <iconify-icon icon={isFontLiked ? "solar:heart-bold" : "solar:heart-linear"} style={{ color: '#d75a2a', fontSize: '20px' }}></iconify-icon>
+                              </button>
+                              <button
+                                className="bdna-result-palette-btn"
+                                title="เลือกใช้"
+                                onClick={handleSelectFont}
+                                style={{ border: '1px solid #d75a2a', background: '#fff3ee', color: '#d75a2a', display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer' }}
+                              >
+                                <iconify-icon icon="mdi:check-circle-outline"></iconify-icon> เลือกใช้ฟอนต์นี้
+                              </button>
+                            </div>
+                          </>
                         ) : (
-                            <p style={{ color: '#888', marginTop: '10px' }}>กำลังประมวลผลฟอนต์ที่เหมาะสม...</p>
+                          <p style={{ color: '#888', marginTop: '10px' }}>กำลังประมวลผลฟอนต์ที่เหมาะสม...</p>
                         )}
                       </div>
 
                       <div className="bdna-result-design-block" style={{ marginTop: '20px' }}>
-                          <h3 className="bdna-result-col-title">กลุ่มเป้าหมาย (วิเคราะห์โดย AI)</h3>
-                          <p className="bdna-result-col-body" style={{ color: '#d75a2a', fontWeight: '500' }}>{dnaResult.target_audience}</p>
+                        <h3 className="bdna-result-col-title">กลุ่มเป้าหมาย (วิเคราะห์โดย AI)</h3>
+                        <p className="bdna-result-col-body" style={{ color: '#d75a2a', fontWeight: '500' }}>{dnaResult.target_audience}</p>
                       </div>
 
                     </div>
@@ -666,6 +671,22 @@ export const BrandDNA = () => {
                   </>
                 )}
               </div>
+            </div>
+            <div style={{ textAlign: 'center', marginTop: '20px' }}>
+              <button onClick={async () => {
+                if (!window.confirm('ขอคำแนะนำสี+ฟอนต์ใหม่จาก AI? (จะใช้ Gemini token)')) return;
+                try {
+                  const res = await fetch(`http://localhost:3000/api/recommend-assets/${projectId}?force=1`);
+                  const data = await res.json();
+                  if (data.status === 'success') {
+                    if (data.color) setRecommendedColor(data.color);
+                    if (data.font) setRecommendedFont(data.font);
+                  }
+                } catch (e) { alert('Error: ' + e.message); }
+              }} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #d75a2a', color: '#d75a2a', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                <iconify-icon icon="mdi:refresh" style={{ marginRight: 6 }}></iconify-icon>
+                ขอ AI สร้างคำแนะนำสี/ฟอนต์ใหม่
+              </button>
             </div>
             <div className="bdna-modal-actions">
               <button className="bdna-cancel" onClick={handleCloseModal}>ยกเลิก</button>
