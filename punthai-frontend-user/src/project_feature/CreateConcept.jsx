@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './CreateConcept.css';
 
-import logoImg from './assets/logo.png';
-import helpImg from './assets/help.png';
+import logoImg from '../assets/logo.png';
+import helpImg from '../assets/help.png';
 
 /* ============================================================
    COLOR & FONT CONSTANTS  (ported from CreateConcept_News.jsx)

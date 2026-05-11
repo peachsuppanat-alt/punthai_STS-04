@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Stage, Layer, Image as KImg, Transformer } from 'react-konva';
 import html2canvas from 'html2canvas';
+import { loadLogoTransparent } from './logoUtils';
 
 const API = 'http://localhost:3000';
 
@@ -686,14 +687,14 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
             const projRes = await fetch(`${API}/api/projects/detail/${projectId}`);
             const proj = await projRes.json();
             const logo = proj.project?.image_logo ? `${API}${proj.project.image_logo}` : '';
-
+            const transparentLogo = await loadLogoTransparent(logo);
             const aRes = await fetch(`${API}/api/projects/${projectId}/selected-assets`);
             const a = await aRes.json();
             const colors = a.color
                 ? [a.color.color_code_1, a.color.color_code_2, a.color.color_code_3, a.color.color_code_4, a.color.color_code_5].filter(Boolean)
                 : ['#fff', '#222', '#d3542b', '#777', '#eee'];
             const font = a.font ? `'${a.font.font_name}', sans-serif` : "'Sarabun', sans-serif";
-            setBrandAssets({ logoUrl: logo, font, colors });
+            setBrandAssets({ logoUrl: transparentLogo || logo, font, colors });
         } catch (err) {
             console.error('[Mockup] Brand assets fetch error:', err);
         }

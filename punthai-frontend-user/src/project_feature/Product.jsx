@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import './YourProjects.css';
+import './product.css';
 
-import logoImg from './assets/logo.png';
-import helpImg from './assets/help.png';
+import logoImg from '../assets/logo.png';
+import helpImg from '../assets/help.png';
 
-export const YourProjects = () => {
+export const Product = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const projectId = location.state?.projectId;

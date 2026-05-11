@@ -3,9 +3,9 @@ import './MyProject.css';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 // ดึงรูปภาพกลับมาใช้งาน
-import logoImg from './assets/logo.png';
-import helpImg from './assets/help.png';
-import createImg from './assets/create.png';
+import logoImg from '../assets/logo.png';
+import helpImg from '../assets/help.png';
+import createImg from '../assets/create.png';
 
 export const MyProject = () => {
     // State สำหรับจัดการ Sidebar
@@ -177,9 +177,9 @@ export const MyProject = () => {
                     </ul>
                     <hr className="mp-hr" />
                     <ul className="mp-menu">
-                        <li onClick={() => navigate('/your-projects', { state: { projectId } })} style={{ cursor: 'pointer' }}>
+                        <li onClick={() => navigate('/product', { state: { projectId } })} style={{ cursor: 'pointer' }}>
                             <span className="mp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-                            <span className="mp-text">Yours Projects</span>
+                            <span className="mp-text">Yours Product</span>
                         </li>
                     </ul>
                     <div className="mp-help">
@@ -253,7 +253,7 @@ export const MyProject = () => {
                                     <iconify-icon icon="mdi:chevron-right"></iconify-icon>
                                 </div>
                                 <div className="mp-action-item" onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><iconify-icon icon="mdi:image-outline"></iconify-icon><span>Generate Product Pictures</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
-                                <div className="mp-action-item" onClick={() => navigate('/your-projects', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><iconify-icon icon="mdi:folder-outline"></iconify-icon><span>Explore Other Projects</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
+                                <div className="mp-action-item" onClick={() => navigate('/product', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><iconify-icon icon="mdi:folder-outline"></iconify-icon><span>Explore Other Projects</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
                             </div>
                         </div>
 

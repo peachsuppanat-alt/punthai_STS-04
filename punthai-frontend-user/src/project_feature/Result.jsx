@@ -7,8 +7,8 @@ import './Result.css';
 import './PackageCatalog.css';
 import PackageCatalog from './PackageCatalog';
 import MockupEditor from './MockupEditor';
-import logoImg from './assets/logo.png';
-
+import logoImg from '../assets/logo.png';
+import { loadLogoTransparent } from './logoUtils';
 // ============= CONSTANTS =============
 const TEMPLATE_TYPES = [
     { id: 'centered_classic', name: 'Centered Classic', desc: 'โลโก้กลาง ทุกอย่างจัดกึ่งกลาง' },
@@ -180,7 +180,8 @@ export const Result = () => {
             const projRes = await fetch(`http://localhost:3000/api/projects/detail/${projectId}`);
             const projData = await projRes.json();
             const logo = projData.project?.image_logo ? `http://localhost:3000${projData.project.image_logo}` : '';
-
+            // ลบพื้นหลังขาวออกจากโลโก้ก่อนใช้
+            const transparentLogo = await loadLogoTransparent(logo);
             const assetRes = await fetch(`http://localhost:3000/api/projects/${projectId}/selected-assets`);
             const assetData = await assetRes.json();
 
@@ -192,7 +193,7 @@ export const Result = () => {
             let font = "'Sarabun', sans-serif";
             if (assetData.font) font = `'${assetData.font.font_name}', sans-serif`;
 
-            setLabelAssets({ logoUrl: logo, colors, font });
+            setLabelAssets({ logoUrl: transparentLogo || logo, colors, font });
             setBgColor(prev => prev === '#FFFFFF' ? (colors[0] || '#FFFFFF') : prev);
 
             setSectionColors({ productName: colors[1] || '#222222', tagline: colors[2] || '#D3542B', details: colors[1] || '#555555' });

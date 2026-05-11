@@ -911,10 +911,10 @@ const downloadImage = async (url, filepath) => {
             .on('finish', () => resolve(filepath));
     });
 };
-// 🟢 สร้าง Client สำหรับยิงเข้า Google API โดยเฉพาะ! (วางไว้บนสุดของไฟล์ หรือก่อนเข้า route ก็ได้ครับ)
 
+/// create logo 
 app.post('/api/generate-logo', async (req, res) => {
-    const { project_id, user_id, brand_name, brand_value, products, styles, details, negative_prompt, use_imported_color, use_imported_font } = req.body;
+    const { project_id, user_id, brand_name, brand_value, products, styles, details, negative_prompt, use_imported_color, use_imported_font,target_audience } = req.body;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'Project ID is required' });
     const finalUserId = (!user_id || user_id === 0) ? null : user_id;
 
@@ -946,27 +946,76 @@ app.post('/api/generate-logo', async (req, res) => {
         }
         connection.release();
 
-        let prompt = `ฉันต้องการให้คุณสร้างโลโก้แบบมืออาชีพ โดยบังคับให้รูปที่ออกมามีเพียงภาพโลโก้ vector 2D แบบแบนราบเท่านั้น ห้ามมีองค์ประกอบอื่นๆที่ไม่เกี่ยวกับตัวโลโก้ และต้องการให้มีพื้นหลังส่วนที่ไม่ใช่โลโก้เป็นสีขาว #FFFFFF แบบ Solid Color \n`;
-        prompt += ` โดยโลโก้ที่จะทำเป็นแบรนด์ที่มีชื่อว่า "${brand_name}" ให้ใส่คำว่า""${brand_name}""ลงไปในโลโก้ ต้องสะกดให้ถูกต้องทุกตัวอักษรจากคำว่า "${brand_name}" . \n`;
-        if (brand_value) prompt += `โดยแบรนด์นี้มีคุณค่าของ brand value คือ${brand_value}\n`;
-        if (styles) prompt += `DESIGN STYLE: ${styles} (FLAT 2D VECTOR ONLY)\n`;
-        if (details) prompt += `SPECIFIC DETAILS: ${details}\n`;
-        if (colorText) prompt += `\n${colorText}\n`;
-        if (fontText) prompt += `\n${fontText}\n`;
+        // 💡 แปลง Prompt เป็นภาษาอังกฤษ และเน้นย้ำว่าเป็น "Flat 2D Vector Logo" 
+        // ============================================================================
+        // 💡 ADVANCED PROMPT ENGINEERING (ใส่บริบทและกระบวนการคิดให้ AI แบบจัดเต็ม)
+        // ============================================================================
         
-        prompt += negative_prompt ? `\nNEGATIVE PROMPT: ${negative_prompt}, ` : `\nNEGATIVE PROMPT: ในรูปภาพห้ามมีองค์ประกอบที่เกี่ยวข้องกับการออกแบบโลโก้ไม่ว่าจะเป็นรหัสสี,ตัวอย่างสี,เครื่องมือในการออกแบบ ห้ามใส่มาเด็ดขาด, 3D, แสงเงาสมจริง`;
+        let prompt = `You are a Master Brand Strategist and Expert Logo Designer. Your task is to deeply understand the brand's context and conceptualize a logo before executing the design.\n\n`;
 
-        // 🟢 ใช้ OpenAI Compatibility ยิงเข้า Imagen 4 Fast โดยตรง! (จากหน้า Dashboard ของคุณ)
-        const response = await googleImagen.images.generate({
-            model: "gemini-2.5-flash-image", // 👈 ชี้เป้าไปที่โมเดลตัวจริงที่มีโควต้า
-            prompt: prompt, 
-            n: 1, 
-            size: "1024x1024", 
-            response_format: "b64_json",
-        });
+        // 1. บริบทและตัวตนของแบรนด์ (Brand Context)
+        prompt += `[BRAND CONTEXT & CONCEPT]\n`;
+        prompt += `- Brand Name: EXACTLY "${brand_name}"\n`;
+        if (brand_value) {
+            prompt += `- Core Value / Mission: ${brand_value}. (Design the logo to emotionally reflect this value.)\n`;
+        }
+        if (details) {
+            prompt += `- Key Elements & Symbolism: ${details}. (Integrate these symbols subtly and elegantly into the brand name or icon.)\n`;
+        }
 
-        // แงะไฟล์รูปออกมาชิลๆ แบบไร้ปัญหา
-        const base64Data = response.data[0].b64_json;
+        // 2. กระบวนการคิดการออกแบบ (Design Thinking)
+        prompt += `\n[DESIGN THINKING PROCESS]\n`;
+        prompt += `Analyze the brand name "${brand_name}" and its core concept. Blend modern aesthetics with the requested cultural or symbolic elements. The logo must be visually coherent, representing the brand's purpose clearly without being overly complex.\n`;
+
+        // 3. กฎและรูปแบบของภาพ (Visual Execution Rules)
+        prompt += `\n[VISUAL EXECUTION]\n`;
+        prompt += `- Format: Professional flat 2D vector logo design ONLY.\n`;
+        prompt += `- Background: Pure solid white background #FFFFFF ONLY. No gradients or transparent backgrounds.\n`;
+        if (styles) {
+            prompt += `- Aesthetic Style: ${styles}. \n`;
+        }
+        if (colorText) {
+            prompt += `- ${colorText}\n`;
+        }
+        if (fontText) {
+            prompt += `- ${fontText}\n`;
+        }
+
+        // 4. การบังคับตัวอักษรอย่างเข้มงวด (Strict Typography Rules)
+        prompt += `\n[STRICT TYPOGRAPHY RULES]\n`;
+        prompt += `Typography is the main focus. The logo MUST clearly display the exact text: "${brand_name}". \n`;
+        prompt += `Understand the exact structure, anatomy, and spelling of the word "${brand_name}" and Understand the structure and correct Thai spelling of the word "${brand_name}" and render the characters perfectly. DO NOT add any other words, slogans, random letters, or gibberish. The typography must blend seamlessly with the logo mark.\n`;
+        
+        // 5. ข้อห้าม (Negative Prompt)
+        let defaultNegative = `complex graphics, abstract matrix, encrypted data, realistic photo, 3D render, drop shadows, gradients, color palettes, design tools, chaotic, messy, extra words, misspelled text, gibberish`;
+        prompt += negative_prompt 
+            ? `\n[NEGATIVE PROMPT - DO NOT DRAW]: ${negative_prompt}, ${defaultNegative}` 
+            : `\n[NEGATIVE PROMPT - DO NOT DRAW]: ${defaultNegative}`;
+            
+        // ============================================================================
+
+       
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+
+        // ใช้คำสั่ง generateContent วาดรูป
+        const result = await model.generateContent(prompt);
+        
+        // แงะไฟล์ Base64 ออกมาจาก Response 
+        let base64Data = "";
+        const parts = result.response.candidates?.[0]?.content?.parts;
+        if (parts) {
+            for (const part of parts) {
+                if (part.inlineData && part.inlineData.data) {
+                    base64Data = part.inlineData.data;
+                    break;
+                }
+            }
+        }
+
+        if (!base64Data) {
+            throw new Error("ระบบ AI ไม่ส่งรูปภาพกลับมา");
+        }
         
         // 🟢 เซฟรูปลงโฟลเดอร์ uploads/generated/
         const fileName = `logo_${Date.now()}.png`;
@@ -983,11 +1032,11 @@ app.post('/api/generate-logo', async (req, res) => {
         
         res.json({ status: 'success', image_url: imageUrl, prompt: prompt });
     } catch (err) {
-        // ดัก Error ให้ชัดๆ ว่าถ้าติดจะติดที่อะไร
-        console.error("Generate Logo Error (Google Imagen 4):", err);
-        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการ Generate รูปภาพด้วย Google Imagen' });
+        console.error("Generate Logo Error (Gemini 2.5 Flash Image):", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการ Generate รูปภาพด้วย Gemini' });
     }
 });
+
 app.put('/api/like-generated-item/:historyId', async (req, res) => {
     const { historyId } = req.params;
     const { is_liked } = req.body;

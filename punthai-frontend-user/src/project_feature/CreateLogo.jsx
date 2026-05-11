@@ -3,8 +3,8 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './CreateLogo.css';
 
 // นำเข้ารูปภาพ (ปรับ Path ให้ตรงกับโปรเจกต์ของคุณ)
-import logoImg from './assets/logo.png';
-import helpImg from './assets/help.png';
+import logoImg from '../assets/logo.png';
+import helpImg from '../assets/help.png';
 //import createLogoImg from './assets/create logo.png';
 
 export const CreateLogo = () => {
@@ -229,8 +229,8 @@ export const CreateLogo = () => {
           </ul>
           <hr className="clg-hr" />
           <ul className="clg-menu">
-            <li onClick={() => navigate('/your-projects', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="clg-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="clg-text">Yours Projects</span>
+            <li onClick={() => navigate('/product', { state: { projectId } })} style={{ cursor: 'pointer' }}>
+              <span className="clg-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="clg-text">Yours product</span>
             </li>
           </ul>
         </aside>

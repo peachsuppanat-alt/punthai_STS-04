@@ -5,13 +5,13 @@ import './App.css';
 import Navbar from './Navbar';
 import Home from './Home';
 import Auth from './Auth'; 
-import { MyProject } from './MyProject';
-import { YourProjects } from './YourProjects';
-import { BrandDNA } from './BrandDNA'; 
-import { CreateConcept } from './CreateConcept';
-import  { CreateLogo }  from './CreateLogo';
-import { ResultLogo } from './ResultLogo';
-import Result from './Result';
+import { MyProject } from './project_feature/MyProject';
+import { Product } from './project_feature/Product';
+import { BrandDNA } from './project_feature/BrandDNA'; 
+import { CreateConcept } from './project_feature/CreateConcept';
+import  { CreateLogo }  from './project_feature/CreateLogo';
+import { ResultLogo } from './project_feature/ResultLogo';
+import Result from './project_feature/Result';
 import { Profile } from './Profile';
 
 
@@ -60,7 +60,7 @@ function App() {
         <Route path="/create-logo" element={<CreateLogo />} />
         <Route path="/result-logo" element={<ResultLogo />} />
         <Route path="/result" element={<Result />} />
-        <Route path="/your-projects" element={<YourProjects />} /> 
+        <Route path="/product" element={<Product />} /> 
         <Route path="/profile" element={<Profile user={user} />} />
         
         {/* <Route path="/shopping" element={<Shopping />} />

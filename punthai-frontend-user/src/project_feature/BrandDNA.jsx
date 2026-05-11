@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './BrandDNA.css';
 
-import logoImg from './assets/logo.png';
-import helpImg from './assets/help.png';
+import logoImg from '../assets/logo.png';
+import helpImg from '../assets/help.png';
 
 export const BrandDNA = () => {
   const navigate = useNavigate();
@@ -355,7 +355,7 @@ export const BrandDNA = () => {
           </ul>
           <hr className="bdna-hr" />
           <ul className="bdna-menu">
-            <li onClick={() => navigate('/your-projects', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="bdna-text">Yours Projects</span></li>
+            <li onClick={() => navigate('/product', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="bdna-text">Yours Projects</span></li>
           </ul>
           <div className="bdna-help"><img src={helpImg} className="bdna-help-img" alt="help" /><p className="bdna-help-text">Having trouble?</p><a href="#" className="bdna-contact-link">Contact Us</a></div>
         </aside>

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-
+import { downloadLogo } from './logoUtils';
 import './MyProject.css'; 
 import './ResultLogo.css'; 
 
-import logoImg from './assets/logo.png';
-import helpImg from './assets/help.png';
+import logoImg from '../assets/logo.png';
+import helpImg from '../assets/help.png';
 
 export const ResultLogo = () => {
     const navigate = useNavigate();
@@ -28,6 +28,10 @@ export const ResultLogo = () => {
     
     const [useImportedColor, setUseImportedColor] = useState(false);
     const [useImportedFont, setUseImportedFont] = useState(false);
+
+    const [downloadMenuOpen, setDownloadMenuOpen] = useState(null);
+    const [downloading, setDownloading] = useState(null);
+    const [menuPos, setMenuPos] = useState(null);  
 
     const styleOptions = ['ทันสมัย', 'ความเป็นไทย', 'หรูหรา', 'เรียบง่าย', 'มินิมอล', 'เป็นกันเอง', 'การ์ตูน', 'ตัวหนังสือ', 'คลาสสิค'];
 
@@ -125,27 +129,28 @@ export const ResultLogo = () => {
         }
     };
 
-    const handleDownload = async (url, filename) => {
+    const handleDownload = async (imgUrl, imgId, format) => {
+        setDownloading(`${imgId}_${format}`);
         try {
-            const response = await fetch(`http://localhost:3000${url}`);
-            const blob = await response.blob();
-            const blobUrl = window.URL.createObjectURL(blob);
-            
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(blobUrl);
-            
-        } catch (error) {
-            console.error("Download error:", error);
-            alert("เกิดข้อผิดพลาด ไม่สามารถดาวน์โหลดรูปภาพได้");
+            const fullUrl = imgUrl.startsWith('http') ? imgUrl : `http://localhost:3000${imgUrl}`;
+            await downloadLogo(fullUrl, format, `logo_${imgId}`);
+            setDownloadMenuOpen(null);
+        } catch (err) {
+            console.error('Download error:', err);
+            alert(`ดาวน์โหลด ${format.toUpperCase()} ไม่สำเร็จ: ${err.message}`);
+        } finally {
+            setDownloading(null);
         }
     };
-
+    const openDownloadMenu = (e, imgId) => {
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        setMenuPos({
+            top: rect.bottom + 8,
+            right: window.innerWidth - rect.right
+        });
+        setDownloadMenuOpen(downloadMenuOpen === imgId ? null : imgId);
+    };
     const toggleStyle = (style) => {
         if (selectedStyles.includes(style)) {
             setSelectedStyles(selectedStyles.filter(s => s !== style));
@@ -270,7 +275,7 @@ export const ResultLogo = () => {
                     </ul>
                     <hr className="cncpt-hr" />
                     <ul className="cncpt-menu">
-                        <li onClick={() => navigate('/your-projects', { state: { projectId } })}><span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="cncpt-text">Yours Projects</span></li>
+                        <li onClick={() => navigate('/product', { state: { projectId } })}><span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="cncpt-text">Yours Projects</span></li>
                     </ul>
                 </aside>
 
@@ -289,7 +294,54 @@ export const ResultLogo = () => {
                                         <button className="rl-action-btn" onClick={() => setSelectedImage(`http://localhost:3000${img.url}`)}>
                                             <iconify-icon icon="wordpress:fullscreen"></iconify-icon>
                                         </button>
-                                        
+                                        <div style={{ position: 'relative' }}>
+                                            <button 
+                                                className="rl-action-btn" 
+                                                onClick={() => setDownloadMenuOpen(downloadMenuOpen === img.id ? null : img.id)}
+                                                title="ดาวน์โหลด"
+                                            >
+                                                <iconify-icon icon="mynaui:download"></iconify-icon>
+                                            </button>
+                                            {downloadMenuOpen === img.id && (
+                                                <div style={{
+                                                    position: 'absolute', top: '100%', right: 0, marginTop: 6,
+                                                    background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                                                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 6, zIndex: 100,
+                                                    minWidth: 180
+                                                }}>
+                                                    <div style={{ fontSize: 11, color: '#6b7280', padding: '6px 10px', borderBottom: '1px solid #f3f4f6', marginBottom: 4 }}>
+                                                        เลือกรูปแบบไฟล์ดาวน์โหลด
+                                                    </div>
+                                                    {[
+                                                        { ext: 'png', label: 'PNG', desc: 'สำหรับงานทั่วไป' },
+                                                        { ext: 'svg', label: 'SVG', desc: 'สำหรับโลโก้ (Vector)' },
+                                                        { ext: 'eps', label: 'EPS', desc: 'สำหรับงานพิมพ์(Print)' },
+                                                        { ext: 'jpg', label: 'JPG', desc: 'รูปภาพทั่วไป' },
+                                                        { ext: 'pdf', label: 'PDF', desc: 'สำหรับเอกสาร (ทั่วไป)' },
+                                                    ].map(opt => {
+                                                        const isLoading = downloading === `${img.id}_${opt.ext}`;
+                                                        return (
+                                                            <button key={opt.ext}
+                                                                onClick={(e) => { e.stopPropagation(); handleDownload(img.url, img.id, opt.ext); }}
+                                                                disabled={isLoading}
+                                                                style={{
+                                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                    width: '100%', padding: '8px 10px', background: 'transparent',
+                                                                    border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13,
+                                                                    color: '#374151', textAlign: 'left', gap: 8
+                                                                }}
+                                                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                                <span style={{ fontWeight: 600 }}>{opt.label}</span>
+                                                                <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                                                                    {isLoading ? 'กำลังโหลด...' : opt.desc}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
                                         <button 
                                             className={`rl-action-btn rl-favorite-btn ${img.isLiked ? 'active' : ''}`} 
                                             onClick={() => handleLike(img.id)}
@@ -307,10 +359,8 @@ export const ResultLogo = () => {
                                                 style={{ color: img.isSelected ? '#4CAF50' : '#666' }}
                                             ></iconify-icon>
                                         </button>
-
-                                        <button className="rl-action-btn" onClick={() => handleDownload(img.url, `logo_${img.id}.png`)}>
-                                            <iconify-icon icon="mynaui:download"></iconify-icon>
-                                        </button>
+                                        
+                                        
                                     </div>
                                     <div className="rl-logo-box" style={{ border: 'none', padding: 0 }}>
                                         <img 
