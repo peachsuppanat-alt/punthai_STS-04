@@ -13,8 +13,8 @@ import  { CreateLogo }  from './project_feature/CreateLogo';
 import { ResultLogo } from './project_feature/ResultLogo';
 import Result from './project_feature/Result';
 import { Profile } from './Profile';
-
-
+import { EditProfile } from './EditProfile';
+import MarketPlanning from './MarketPlanning';
 
 
 // หน้าชั่วคราว
@@ -62,7 +62,8 @@ function App() {
         <Route path="/result" element={<Result />} />
         <Route path="/product" element={<Product />} /> 
         <Route path="/profile" element={<Profile user={user} />} />
-        
+        <Route path="/edit_profile" element={<EditProfile user={user} setUser={setUser} />} />
+        <Route path="/market-planning" element={<MarketPlanning user={user} />} />
         {/* <Route path="/shopping" element={<Shopping />} />
         <Route path="/about" element={<About />} /> */}
       </Routes>

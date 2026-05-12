@@ -17,7 +17,7 @@
   padding: 30px;
   border-radius: 12px;
   width: 100%;
-  max-width: 400px;
+  max-width: 500px;
   position: relative;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
@@ -36,4 +36,8 @@
 
 .close-btn:hover {
   color: #ff4d4f;
+}
+.logo-login{
+  text-align: center;
+  margin: 10px 0;
 }

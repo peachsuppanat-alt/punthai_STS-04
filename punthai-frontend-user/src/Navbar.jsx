@@ -1,16 +1,16 @@
 import React from "react";
-import { NavLink, useNavigate } from "react-router-dom"; 
+import { NavLink, useNavigate } from "react-router-dom";
 import "./Navbar.css";
 import logo from "./assets/logo.png"
 
 const Navbar = ({ user, onOpenLogin, onLogout }) => {
-    const navigate = useNavigate(); 
+    const navigate = useNavigate();
 
     const handleProfileClick = () => {
         if (user) {
-            navigate('/profile'); 
+            navigate('/profile');
         } else {
-            if (onOpenLogin) onOpenLogin(); 
+            if (onOpenLogin) onOpenLogin();
         }
     };
 
@@ -22,7 +22,7 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
 
             <div className="menu">
                 <NavLink to="/">HOME</NavLink>
-                <NavLink to="/Shopping">FEATURES</NavLink>
+                <NavLink to="/market-planning">Market</NavLink>
                 <NavLink to="/About">CONTACT</NavLink>
             </div>
 
@@ -35,10 +35,10 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                         <span style={{ fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             Hi, {user.user_name}
                             {/*  PRO / STANDARD  */}
-                            <span style={{ 
-                                background: user.subscription_status === 'PRO' ? 'linear-gradient(45deg, #FFD700, #FFA500)' : '#ffe6de', 
-                                color: user.subscription_status === 'PRO' ? '#000' : '#d75a2a', 
-                                fontSize: '11px', padding: '3px 8px', borderRadius: '10px', 
+                            <span style={{
+                                background: user.subscription_status === 'PRO' ? 'linear-gradient(45deg, #FFD700, #FFA500)' : '#ffe6de',
+                                color: user.subscription_status === 'PRO' ? '#000' : '#d75a2a',
+                                fontSize: '11px', padding: '3px 8px', borderRadius: '10px',
                                 border: user.subscription_status === 'PRO' ? 'none' : '1px solid #f4c4aa',
                                 fontWeight: 'bold'
                             }}>
@@ -50,19 +50,20 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                 )}
 
                 <div className="nav-icons">
-                    <button 
-                        className="btn-users" 
-                        onClick={handleProfileClick} 
+                    <button
+                        className="btn-users"
+                        onClick={handleProfileClick}
                         style={{ overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'pointer', padding: 0 }}
                     >
                         {user && user.image_profile && user.image_profile !== 'null' ? (
                             <img
-                                src={`http://localhost:3000/uploads/${user.image_profile}`}
+                                // 🟢 เช็คว่าถ้าเป็นลิงก์ http (จาก Google) ให้ใช้เลย ถ้าไม่ใช่ให้ดึงจากโฟลเดอร์ uploads
+                                src={user.image_profile.startsWith('http') ? user.image_profile : `http://localhost:3000/uploads/${user.image_profile}`}
                                 alt="User"
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
                                 onError={(e) => {
-                                    e.target.onerror = null; 
-                                    e.target.src = "https://cdn-icons-png.flaticon.com/512/149/149071.png"; 
+                                    e.target.onerror = null;
+                                    e.target.src = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
                                 }}
                             />
                         ) : (
@@ -75,10 +76,10 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                     <iconify-icon icon="material-symbols-light:language"></iconify-icon>
                 </button>
 
-                
-                <button 
-                    className="btn-primary" 
-                    style={{ marginLeft: '10px', background: 'linear-gradient(45deg, #d3542b, #f09060)', border: 'none' }} 
+
+                <button
+                    className="btn-primary"
+                    style={{ marginLeft: '10px', background: 'linear-gradient(45deg, #d3542b, #f09060)', border: 'none' }}
                     onClick={() => alert('เตรียมพบกับหน้าระบบสมาชิกเร็วๆ นี้!')}
                 >
                     รับสิทธิระดับ Pro

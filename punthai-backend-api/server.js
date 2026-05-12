@@ -9,6 +9,12 @@ import fs from 'fs';
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
+import bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
+
+// สร้าง Client สำหรับตรวจสอบ Token จาก Google
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 
 import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
@@ -66,8 +72,9 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // ================= API LOGIN & REGISTER =================
+// ================= API LOGIN & REGISTER (อัปเดตใหม่) =================
 app.post('/api/register', upload.single('img_profile'), async (req, res) => {
-  const { user_name, password, email } = req.body; 
+  const { user_name, password, email, first_name, last_name } = req.body; 
   const image_profile = req.file ? req.file.filename : null; 
   const subscription_status = 'STANDARD';
 
@@ -77,21 +84,26 @@ app.post('/api/register', upload.single('img_profile'), async (req, res) => {
 
   try {
     const connection = await pool.getConnection();
-    const [checkUser] = await connection.query('SELECT * FROM user_profile WHERE user_name = ?', [user_name]);
+    const [checkUser] = await connection.query('SELECT * FROM user_profile WHERE user_name = ? OR email = ?', [user_name, email]);
     if (checkUser.length > 0) {
       connection.release();
-      return res.status(400).json({ status: 'error', message: 'ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว' });
+      return res.status(400).json({ status: 'error', message: 'ชื่อผู้ใช้หรืออีเมลนี้มีอยู่ในระบบแล้ว' });
     }
+
+    // 🔒 เข้ารหัสผ่านด้วย bcrypt ก่อนบันทึกลงฐานข้อมูล (เพิ่มความปลอดภัยสูงสุด)
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     const [result] = await connection.query(
-      `INSERT INTO user_profile (user_name, password, email, image_profile, subscription_status) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [user_name, password, email, image_profile, subscription_status]
+      `INSERT INTO user_profile (user_name, password, email, first_name, last_name, image_profile, subscription_status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [user_name, hashedPassword, email, first_name || null, last_name || null, image_profile, subscription_status]
     );
     const [newUser] = await connection.query('SELECT * FROM user_profile WHERE user_id = ?', [result.insertId]);
     connection.release();
     res.json({ status: 'success', message: 'สมัครสมาชิกสำเร็จ!', user: newUser[0] });
   } catch (error) {
-    console.error("❌ Register Error แบบละเอียด:", error); 
+    console.error("❌ Register Error:", error); 
     res.status(500).json({ status: 'error', message: 'Database Error', error: error.message });
   }
 });
@@ -100,20 +112,145 @@ app.post('/api/login', async (req, res) => {
   const { user_name, password } = req.body;
   try {
     const connection = await pool.getConnection();
-    const [rows] = await connection.query(
-      'SELECT * FROM user_profile WHERE user_name = ? AND password = ?', 
-      [user_name, password]
-    );
-    connection.release();
+    const [rows] = await connection.query('SELECT * FROM user_profile WHERE user_name = ?', [user_name]);
+
     if (rows.length > 0) {
-      res.json({ status: 'success', message: 'เข้าสู่ระบบสำเร็จ!', user: rows[0] });
+      const user = rows[0];
+      let validPassword = false;
+
+      // 🔍 เช็คว่ารหัสผ่านใน Database เป็น Hash หรือยัง?
+      // (ปกติ Hash ของ bcrypt จะขึ้นต้นด้วย $2a$, $2b$ หรือ $2y$)
+      const isHashed = user.password && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'));
+
+      if (isHashed) {
+        // 🔒 กรณีที่ 1: เป็นบัญชีใหม่ที่เข้ารหัสแล้ว
+        validPassword = await bcrypt.compare(password, user.password);
+      } else {
+        // 🔓 กรณีที่ 2: เป็นบัญชีเก่าที่ยังไม่ได้เข้ารหัส (Plain Text)
+        if (password === user.password) {
+          validPassword = true;
+
+          // 💡 [อัปเกรดอัตโนมัติ] เมื่อบัญชีเก่าล็อกอินสำเร็จ ให้ทำการ Hash รหัสผ่านเซฟกลับลง Database ทันที
+          try {
+            const salt = await bcrypt.genSalt(10);
+            const newHashedPassword = await bcrypt.hash(password, salt);
+            await connection.query('UPDATE user_profile SET password = ? WHERE user_id = ?', [newHashedPassword, user.user_id]);
+            console.log(`✅ อัปเกรดความปลอดภัยให้บัญชีเก่า: ${user_name} เรียบร้อยแล้ว!`);
+          } catch (hashErr) {
+            console.error("Auto-migrate password error:", hashErr);
+          }
+        }
+      }
+
+      connection.release();
+
+      if (validPassword) {
+        // เอา password ออกจาก object ก่อนส่งกลับไปให้ Frontend เพื่อความปลอดภัย
+        delete user.password; 
+        res.json({ status: 'success', message: 'เข้าสู่ระบบสำเร็จ!', user: user });
+      } else {
+        res.status(401).json({ status: 'error', message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+      }
     } else {
+      connection.release();
       res.status(401).json({ status: 'error', message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
     }
   } catch (error) {
+    console.error("Login Error:", error);
     res.status(500).json({ status: 'error', message: 'Error Server', error: error.message });
   }
 });
+
+// ================= API GOOGLE AUTH (เพิ่มใหม่) =================
+app.post('/api/auth/google', async (req, res) => {
+  const { token } = req.body;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, given_name, family_name, picture } = payload; // ดึง picture ออกมา
+
+    const connection = await pool.getConnection();
+    const [users] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
+    
+    if (users.length > 0) {
+      // 🟢 ถ้ามีบัญชีอยู่แล้ว ให้ อัปเดต รูปโปรไฟล์จาก Google เข้าไปใหม่
+      await connection.query('UPDATE user_profile SET google_id = ?, image_profile = ? WHERE email = ?', [googleId, picture, email]);
+      const [updatedUser] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
+      connection.release();
+      return res.json({ status: 'success', message: 'เข้าสู่ระบบด้วย Google สำเร็จ', user: updatedUser[0] });
+    } else {
+      // 🟢 ถ้ายังไม่มีบัญชี ให้เพิ่ม picture ลงในฐานข้อมูลด้วย
+      const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
+      const baseUserName = email.split('@')[0];
+      
+      const [result] = await connection.query(
+        `INSERT INTO user_profile (user_name, password, email, first_name, last_name, google_id, image_profile, subscription_status) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'STANDARD')`,
+        [baseUserName, randomPassword, email, given_name, family_name, googleId, picture]
+      );
+      const [newUser] = await connection.query('SELECT * FROM user_profile WHERE user_id = ?', [result.insertId]);
+      connection.release();
+      return res.json({ status: 'success', message: 'สมัครสมาชิกด้วย Google สำเร็จ', user: newUser[0] });
+    }
+  } catch (error) {
+    console.error("Google Auth Error:", error);
+    res.status(500).json({ status: 'error', message: 'Google Authentication Failed' });
+  }
+});
+
+// ================= API UPDATE PROFILE =================
+app.put('/api/users/profile/:userId', upload.single('image_profile'), async (req, res) => {
+    const { userId } = req.params;
+    const { first_name, last_name, user_name, password } = req.body;
+    const image_profile = req.file ? req.file.filename : null;
+
+    try {
+        const connection = await pool.getConnection();
+
+        // 1. สร้าง Query สำหรับอัปเดตข้อมูลพื้นฐาน
+        let query = "UPDATE user_profile SET first_name = ?, last_name = ?, user_name = ?";
+        let params = [first_name || null, last_name || null, user_name];
+
+        // 2. ถ้าผู้ใช้กรอกรหัสผ่านใหม่มา ให้เข้ารหัสและอัปเดตด้วย
+        if (password && password.trim() !== '') {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
+            query += ", password = ?";
+            params.push(hashedPassword);
+        }
+
+        // 3. ถ้าผู้ใช้อัปโหลดรูปใหม่มา ให้อัปเดตชื่อไฟล์รูปด้วย
+        if (image_profile) {
+            query += ", image_profile = ?";
+            params.push(image_profile);
+        }
+
+        query += " WHERE user_id = ?";
+        params.push(userId);
+
+        await connection.query(query, params);
+
+        // 4. ดึงข้อมูลผู้ใช้ที่อัปเดตแล้วส่งกลับไปให้ Frontend
+        const [updatedRows] = await connection.query("SELECT * FROM user_profile WHERE user_id = ?", [userId]);
+        connection.release();
+
+        if (updatedRows.length > 0) {
+            const updatedUser = updatedRows[0];
+            delete updatedUser.password; // ลบรหัสผ่านออกก่อนส่งกลับเพื่อความปลอดภัย
+            res.json({ status: 'success', message: 'อัปเดตข้อมูลโปรไฟล์เรียบร้อยแล้ว', user: updatedUser });
+        } else {
+            res.status(404).json({ status: 'error', message: 'ไม่พบผู้ใช้งานในระบบ' });
+        }
+
+    } catch (err) {
+        console.error("Update profile error:", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดที่ฐานข้อมูล' });
+    }
+});
+
 
 // ================= 4. API จัดการโปรเจกต์ (Projects) =================
 app.post('/api/projects', async (req, res) => {
@@ -946,62 +1083,83 @@ app.post('/api/generate-logo', async (req, res) => {
         }
         connection.release();
 
-        // 💡 แปลง Prompt เป็นภาษาอังกฤษ และเน้นย้ำว่าเป็น "Flat 2D Vector Logo" 
+        // รับค่า style แบบ String (ค่าเดียว) จาก Frontend
+        const selectedStyle = styles;
+
         // ============================================================================
-        // 💡 ADVANCED PROMPT ENGINEERING (ใส่บริบทและกระบวนการคิดให้ AI แบบจัดเต็ม)
+        // ADVANCED PROMPT ENGINEERING (Dynamic Style Injection)
         // ============================================================================
         
-        let prompt = `You are a Master Brand Strategist and Expert Logo Designer. Your task is to deeply understand the brand's context and conceptualize a logo before executing the design.\n\n`;
+        let styleDirective = "";
+        let typographyDirective = `The logo MUST clearly display the exact text: "${brand_name}". Understand the exact structure, anatomy, and spelling of the word "${brand_name}" and render the characters perfectly.`;
+        let specificNegative = "";
 
-        // 1. บริบทและตัวตนของแบรนด์ (Brand Context)
+        // กำหนดกฎการวาดภาพตามสไตล์ที่ผู้ใช้เลือก
+        switch (selectedStyle) {
+            case 'wordmark':
+                styleDirective = "Format: Wordmark / Logotype. The logo consists EXCLUSIVELY of typography. NO standalone icons, NO mascots, NO complex graphics. Focus entirely on custom, beautiful, readable font design representing the brand.";
+                specificNegative = "icons, mascots, characters, illustrations, emblems, complex graphics, geometric shapes outside text";
+                break;
+            case 'lettermark':
+                styleDirective = "Format: Lettermark / Monogram. Create a striking logo using ONLY the FIRST LETTER or initials of the brand name. The initial should be stylized and form the core logo mark.";
+                typographyDirective = `The logo MUST clearly display the INITIAL LETTER(S) of: "${brand_name}". Do not write the full word if it makes the design cluttered. Focus on monogram design.`;
+                specificNegative = "full words, long text, mascots, complex illustrations";
+                break;
+            case 'combination':
+                styleDirective = "Format: Combination Mark. The design must seamlessly integrate BOTH a clear, distinct icon/symbol AND the brand typography. The icon should reflect the brand's core value.";
+                break;
+            case 'emblem':
+                styleDirective = "Format: Emblem / Badge Logo. The text and icon must be contained WITHIN a unifying shape (like a badge, shield, seal, stamp, or circle). Classic, authoritative, and integrated.";
+                break;
+            case 'mascot':
+                styleDirective = "Format: Mascot Logo. Design an appealing, illustrated character (animal, person, or object) that acts as the brand's ambassador. The character should be vector-style, flat, and friendly. Place the brand typography nicely alongside or below the mascot.";
+                specificNegative = "realistic photo, 3D render, scary, overly complex shading";
+                break;
+            case 'minimal':
+                styleDirective = "Format: Extreme Minimalist Logo. Ultra-clean, modern, using very few lines or shapes. Maximum negative space. Avoid any unnecessary details.";
+                specificNegative = "complex patterns, detailed illustrations, many colors, cluttered layouts, realistic";
+                break;
+            default:
+                styleDirective = "Format: Professional flat 2D vector logo design.";
+        }
+
+        let prompt = `You are a Master Brand Strategist and Expert Logo Designer. Your task is to deeply understand the brand's context and conceptualize a logo.\n\n`;
+
         prompt += `[BRAND CONTEXT & CONCEPT]\n`;
         prompt += `- Brand Name: EXACTLY "${brand_name}"\n`;
-        if (brand_value) {
-            prompt += `- Core Value / Mission: ${brand_value}. (Design the logo to emotionally reflect this value.)\n`;
-        }
-        if (details) {
-            prompt += `- Key Elements & Symbolism: ${details}. (Integrate these symbols subtly and elegantly into the brand name or icon.)\n`;
-        }
+        if (brand_value) prompt += `- Core Value / Mission: ${brand_value}\n`;
+        if (products) prompt += `- Product Type: ${products}\n`;
+        if (details) prompt += `- Key Elements & Symbolism: ${details}\n`;
 
-        // 2. กระบวนการคิดการออกแบบ (Design Thinking)
-        prompt += `\n[DESIGN THINKING PROCESS]\n`;
-        prompt += `Analyze the brand name "${brand_name}" and its core concept. Blend modern aesthetics with the requested cultural or symbolic elements. The logo must be visually coherent, representing the brand's purpose clearly without being overly complex.\n`;
-
-        // 3. กฎและรูปแบบของภาพ (Visual Execution Rules)
-        prompt += `\n[VISUAL EXECUTION]\n`;
-        prompt += `- Format: Professional flat 2D vector logo design ONLY.\n`;
+        prompt += `\n[VISUAL EXECUTION RULES]\n`;
+        prompt += `- ${styleDirective}\n`;
         prompt += `- Background: Pure solid white background #FFFFFF ONLY. No gradients or transparent backgrounds.\n`;
-        if (styles) {
-            prompt += `- Aesthetic Style: ${styles}. \n`;
-        }
-        if (colorText) {
-            prompt += `- ${colorText}\n`;
-        }
-        if (fontText) {
-            prompt += `- ${fontText}\n`;
-        }
-
-        // 4. การบังคับตัวอักษรอย่างเข้มงวด (Strict Typography Rules)
-        prompt += `\n[STRICT TYPOGRAPHY RULES]\n`;
-        prompt += `Typography is the main focus. The logo MUST clearly display the exact text: "${brand_name}". \n`;
-        prompt += `Understand the exact structure, anatomy, and spelling of the word "${brand_name}" and Understand the structure and correct Thai spelling of the word "${brand_name}" and render the characters perfectly. DO NOT add any other words, slogans, random letters, or gibberish. The typography must blend seamlessly with the logo mark.\n`;
         
-        // 5. ข้อห้าม (Negative Prompt)
-        let defaultNegative = `complex graphics, abstract matrix, encrypted data, realistic photo, 3D render, drop shadows, gradients, color palettes, design tools, chaotic, messy, extra words, misspelled text, gibberish`;
-        prompt += negative_prompt 
-            ? `\n[NEGATIVE PROMPT - DO NOT DRAW]: ${negative_prompt}, ${defaultNegative}` 
-            : `\n[NEGATIVE PROMPT - DO NOT DRAW]: ${defaultNegative}`;
+        if (colorText) prompt += `- ${colorText}\n`;
+        if (fontText) prompt += `- ${fontText}\n`;
+
+        prompt += `\n[STRICT TYPOGRAPHY RULES]\n`;
+        prompt += `${typographyDirective} DO NOT add any other words, slogans, random letters, or gibberish. The typography must blend seamlessly with the logo mark.\n`;
+        
+        let defaultNegative = `realistic photo, 3D render, drop shadows, gradients, color palettes, design tools, chaotic, messy, extra words, misspelled text, gibberish`;
+        
+        let finalNegative = negative_prompt 
+            ? `${negative_prompt}, ${defaultNegative}, ${specificNegative}` 
+            : `${defaultNegative}, ${specificNegative}`;
             
+        prompt += `\n[NEGATIVE PROMPT - DO NOT DRAW]: ${finalNegative}`;
+        // ============================================================================
         // ============================================================================
 
        
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        // 🟢 เปลี่ยนชื่อโมเดลโดยเติม -preview ต่อท้ายครับ
+        const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image-preview" });
 
-        // ใช้คำสั่ง generateContent วาดรูป
+        // ใช้คำสั่ง generateContent สำหรับโมเดล Multi-modal
         const result = await model.generateContent(prompt);
         
-        // แงะไฟล์ Base64 ออกมาจาก Response 
+        // ดึงไฟล์ Base64 ออกมาจาก Response ของ Gemini
         let base64Data = "";
         const parts = result.response.candidates?.[0]?.content?.parts;
         if (parts) {
@@ -1017,7 +1175,7 @@ app.post('/api/generate-logo', async (req, res) => {
             throw new Error("ระบบ AI ไม่ส่งรูปภาพกลับมา");
         }
         
-        // 🟢 เซฟรูปลงโฟลเดอร์ uploads/generated/
+        // เซฟรูปลงโฟลเดอร์ uploads/generated/
         const fileName = `logo_${Date.now()}.png`;
         const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
         fs.writeFileSync(filePath, base64Data, 'base64');
@@ -1032,8 +1190,8 @@ app.post('/api/generate-logo', async (req, res) => {
         
         res.json({ status: 'success', image_url: imageUrl, prompt: prompt });
     } catch (err) {
-        console.error("Generate Logo Error (Gemini 2.5 Flash Image):", err);
-        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการ Generate รูปภาพด้วย Gemini' });
+        console.error("Generate Logo Error (Gemini 3.1 Flash Image):", err);
+        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการ Generate รูปภาพด้วย Gemini 3.1' });
     }
 });
 

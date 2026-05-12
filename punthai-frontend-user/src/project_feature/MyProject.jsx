@@ -7,27 +7,21 @@ import logoImg from '../assets/logo.png';
 import helpImg from '../assets/help.png';
 import createImg from '../assets/create.png';
 
-export const MyProject = () => {
-    // State สำหรับจัดการ Sidebar
-    const [isCollapsed, setIsCollapsed] = useState(false);
-    
-    // State สำหรับเก็บชื่อแบรนด์ที่เลือกจาก AI
-    const [selectedBrandName, setSelectedBrandName] = useState(null);
+export const MyProject = ({ user }) => {
+    // 🟢 1. หัวใจสำคัญ: ดึงข้อมูล User มาตรงๆ แบบเดียวกับ Navbar (ไม่มี State ไม่ต้องรอโหลด)
+    // ถ้าหน้า App.jsx ไม่ได้ส่ง Props user มาให้ ก็ให้ไปดึงจาก LocalStorage แทนทันที
+    const currentUser = user || JSON.parse(localStorage.getItem('user') || 'null');
 
-    // State สำหรับเก็บชื่อโปรเจกต์ และ รายการสินค้า
+    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [selectedBrandName, setSelectedBrandName] = useState(null);
     const [projectName, setProjectName] = useState('กำลังโหลดข้อมูล...');
     const [projectLogo, setProjectLogo] = useState(null);
     const [products, setProducts] = useState([]);
-
-    // 👇 1. เพิ่ม State สำหรับเก็บสีและฟอนต์ที่เลือก 👇
     const [selectedColors, setSelectedColors] = useState([]); 
     const [selectedFont, setSelectedFont] = useState(null);
-
-    // เพิ่ม State สำหรับ Popup แก้ไขชื่อโปรเจกต์
     const [showNamePopup, setShowNamePopup] = useState(false);
     const [editNameInput, setEditNameInput] = useState('');
 
-    // รับ projectId ที่ถูกส่งมาจากหน้า Home
     const location = useLocation();
     const navigate = useNavigate();
     const projectId = location.state?.projectId;
@@ -73,12 +67,11 @@ export const MyProject = () => {
                 })
                 .catch(err => console.error("Fetch brand names error:", err));
 
-            // 👇 4. ดึงข้อมูล สี และ ฟอนต์ ที่ถูกเลือกจาก API ใหม่ 👇
+            // 4. ดึงข้อมูล สี และ ฟอนต์
             fetch(`http://localhost:3000/api/projects/${projectId}/selected-assets`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
-                        // ถ้ามีสีที่ถูกเลือก
                         if (data.color) {
                             setSelectedColors([
                                 data.color.color_code_1, 
@@ -88,14 +81,12 @@ export const MyProject = () => {
                                 data.color.color_code_5
                             ].filter(Boolean));
                         }
-                        // ถ้ามีฟอนต์ที่ถูกเลือก
                         if (data.font) {
                             setSelectedFont(data.font);
                         }
                     }
                 })
                 .catch(err => console.error("Fetch selected assets error:", err));
-
         } else {
             setProjectName('ไม่พบรหัสโปรเจกต์');
         }
@@ -134,10 +125,34 @@ export const MyProject = () => {
                         <img src={logoImg} alt="logo" className="mp-logo-img" />
                     </Link>
                 </div>
+                
                 <div className="mp-nav-icons">
                     <button className="mp-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
                     <button className="mp-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
-                    <button className="mp-btn-users"><iconify-icon icon="solar:user-linear"></iconify-icon></button>
+                    
+                    {/* 🟢 2. โค้ดแสดงรูปโปรไฟล์ ก๊อปปี้มาจาก Navbar.jsx เป๊ะๆ ทุกบรรทัด 🟢 */}
+                    <button 
+                        className="mp-btn-users" 
+                        onClick={() => navigate('/profile')}
+                        style={{ 
+                            overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', 
+                            cursor: 'pointer', padding: 0, width: '40px', height: '40px', borderRadius: '50%', border: 'none' 
+                        }}
+                    >
+                        {currentUser && currentUser.image_profile && currentUser.image_profile !== 'null' ? (
+                            <img
+                                src={currentUser.image_profile.startsWith('http') ? currentUser.image_profile : `http://localhost:3000/uploads/${currentUser.image_profile}`}
+                                alt="User"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                                onError={(e) => {
+                                    e.target.onerror = null; 
+                                    e.target.src = "https://cdn-icons-png.flaticon.com/512/149/149071.png"; 
+                                }}
+                            />
+                        ) : (
+                            <iconify-icon icon="solar:user-linear" style={{ pointerEvents: 'none', fontSize: '24px' }}></iconify-icon>
+                        )}
+                    </button>
                 </div>
             </header>
 
@@ -303,7 +318,6 @@ export const MyProject = () => {
                                 </div>
                                 <button 
                                     className="mp-btn" 
-                                    // ส่งค่า activeTab ไปให้หน้า CreateConcept
                                     onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'color' } })}
                                 >
                                     Edit Colors
@@ -323,7 +337,6 @@ export const MyProject = () => {
                                 <button 
                                     className="mp-btn" 
                                     style={{ background: selectedFont ? '#fff3ee' : '#f5f5f5', color: selectedFont ? '#d75a2a' : '#aaa' }}
-                                    // ส่งค่า activeTab ไปให้หน้า CreateConcept
                                     onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'font' } })}
                                 >
                                     Edit Fonts

@@ -11,12 +11,12 @@ export const Profile = ({ user }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const [userData, setUserData] = useState({});
-  // 👇 1. สร้าง State สำหรับเก็บข้อมูลโปรเจกต์
   const [projects, setProjects] = useState([]);
 
   // ดึงข้อมูล User และ Projects
   useEffect(() => {
     const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    // ลำดับความสำคัญ: Props > LocalStorage
     const currentUser = user || (storedUser.user_id ? storedUser : null);
 
     if (!currentUser) {
@@ -24,7 +24,7 @@ export const Profile = ({ user }) => {
     } else {
       setUserData(currentUser);
       
-      // 👇 2. ดึงข้อมูลโปรเจกต์ของ User คนนี้ (API เรียงจากใหม่ไปเก่าให้แล้ว)
+      // ดึงข้อมูลโปรเจกต์
       fetch(`http://localhost:3000/api/projects/${currentUser.user_id}`)
         .then(res => res.json())
         .then(data => {
@@ -40,7 +40,6 @@ export const Profile = ({ user }) => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
-  // 👇 3. ฟังก์ชันสร้างโปรเจกต์ใหม่ (เหมือนหน้า Home)
   const handleCreateProjectDirectly = async (e) => {
     if (e) e.preventDefault();
     try {
@@ -60,9 +59,17 @@ export const Profile = ({ user }) => {
     }
   };
 
+  // 🟢 ฟังก์ชันช่วยเช็ค URL รูปโปรไฟล์ (ใช้ซ้ำได้หลายจุด)
+  const getProfileImage = (imagePath) => {
+    if (!imagePath || imagePath === 'null') return null;
+    return imagePath.startsWith('http') 
+      ? imagePath 
+      : `http://localhost:3000/uploads/${imagePath}`;
+  };
+
   return (
     <>
-      {/* ===== NAVBAR ===== */}
+      {/* ===== PF-NAVBAR (Header) ===== */}
       <header className="pf-navbar">
         <div className="pf-logo">
             <Link to="/">
@@ -76,8 +83,18 @@ export const Profile = ({ user }) => {
           <button className="pf-btn-world">
             <iconify-icon icon="ph:bell-ringing-light"></iconify-icon>
           </button>
-          <button className="pf-btn-users">
-            <iconify-icon icon="solar:user-linear"></iconify-icon>
+          
+          {/* 🟢 แก้ไขปุ่ม User ใน Navbar ให้โชว์รูปโปรไฟล์ 🟢 */}
+          <button className="pf-btn-users" style={{ overflow: 'hidden', padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            {getProfileImage(userData.image_profile) ? (
+                <img 
+                    src={getProfileImage(userData.image_profile)} 
+                    alt="User" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+            ) : (
+                <iconify-icon icon="solar:user-linear"></iconify-icon>
+            )}
           </button>
         </div>
       </header>
@@ -86,23 +103,19 @@ export const Profile = ({ user }) => {
         {/* ===== SIDEBAR ===== */}
         <button 
           className="pf-toggle-btn" 
-          id="pf-toggleBtn" 
           onClick={toggleSidebar}
           style={{ left: isSidebarCollapsed ? 'calc(80px - 17px)' : 'calc(240px - 17px)' }}
         >
           {isSidebarCollapsed ? '❯' : '❮'}
         </button>
 
-        <aside className={`pf-sidebar ${isSidebarCollapsed ? 'pf-collapsed' : ''}`} id="pf-sidebar">
+        <aside className={`pf-sidebar ${isSidebarCollapsed ? 'pf-collapsed' : ''}`}>
           <ul className="pf-menu">
-            <li className="pf-active" style={{ cursor: 'pointer' }}>
+            <li className="pf-active">
               <span className="pf-icon"><iconify-icon icon="solar:user-linear"></iconify-icon></span>
               <span className="pf-text">Profile</span>
             </li>
-            <li onClick={() => navigate('/brandbook')} style={{ cursor: 'pointer' }}>
-              <span className="pf-icon"><iconify-icon icon="mdi:book-open-page-variant-outline"></iconify-icon></span>
-              <span className="pf-text">Brandbook</span>
-            </li>
+            
             <li onClick={() => navigate('/settings')} style={{ cursor: 'pointer' }}>
               <span className="pf-icon"><iconify-icon icon="mdi:cog-outline"></iconify-icon></span>
               <span className="pf-text">Settings</span>
@@ -120,43 +133,40 @@ export const Profile = ({ user }) => {
           
           {/* Profile Bar */}
           <div className="pf-profile-bar">
-            <div className="pf-avatar" id="pf-avatarCircle" style={{ overflow: 'hidden' }}>
-              {userData.image_profile && userData.image_profile !== 'null' ? (
+            {/* 🟢 แก้ไข Avatar วงกลมใหญ่ให้รองรับ Google 🟢 */}
+            <div className="pf-avatar" id="pf-avatarCircle" style={{ overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#eee' }}>
+              {getProfileImage(userData.image_profile) ? (
                   <img 
-                      src={`http://localhost:3000/uploads/${userData.image_profile}`} 
+                      src={getProfileImage(userData.image_profile)} 
                       alt="Profile" 
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => {
                           e.target.onerror = null; 
-                          e.target.style.display = 'none'; 
+                          e.target.src = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
                       }}
                   />
               ) : (
-                  userData.user_name ? userData.user_name.substring(0, 2).toUpperCase() : 'PT'
+                  <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#666' }}>
+                    {userData.user_name ? userData.user_name.substring(0, 2).toUpperCase() : 'PT'}
+                  </span>
               )}
             </div>
 
             <div className="pf-profile-info">
               <div className="pf-username">
                 {userData.user_name || 'กำลังโหลด...'}
-                {/* 👇 ป้ายโชว์สถานะในหน้า Profile 👇 */}
                 <span style={{ 
                     fontSize: '12px', 
                     background: userData.subscription_status === 'PRO' ? 'linear-gradient(45deg, #FFD700, #FFA500)' : '#eee', 
                     color: userData.subscription_status === 'PRO' ? '#000' : '#666', 
                     padding: '2px 8px', 
                     borderRadius: '12px', 
-                    marginLeft: '8px',
-                    boxShadow: userData.subscription_status === 'PRO' ? '0 2px 10px rgba(255, 165, 0, 0.4)' : 'none'
+                    marginLeft: '8px'
                 }}>
                   {userData.subscription_status || 'STANDARD'}
                 </span>
-                
-                <button className="pf-edit-inline-btn" aria-label="Edit username" style={{ marginLeft: '5px' }}>
-                  <iconify-icon icon="mdi:pencil-outline"></iconify-icon>
-                </button>
               </div>
-              <div className="pf-profile-sub">{userData.email || 'Travel & Brand Creator · Bangkok, TH'}</div>
+              <div className="pf-profile-sub">{userData.email}</div>
             </div>
             
             <div className="pf-profile-actions">
@@ -164,14 +174,10 @@ export const Profile = ({ user }) => {
                 <iconify-icon icon="mdi:account-edit-outline"></iconify-icon>
                 Edit Profile
               </button>
-              <button className="pf-btn-secondary" onClick={() => navigate('/settings')}>
-                <iconify-icon icon="mdi:cog-outline"></iconify-icon>
-                Settings
-              </button>
             </div>
           </div>
 
-          {/* Stats Row */}
+          {/* ส่วนอื่นๆ ของโปรเจกต์คงเดิม... */}
           <div className="pf-stats-row">
             <div className="pf-stat-card">
               <div className="pf-stat-icon-wrap pf-orange">
@@ -180,24 +186,13 @@ export const Profile = ({ user }) => {
               <div className="pf-stat-num pf-orange">{projects.length}</div>
               <div className="pf-stat-label">total projects</div>
             </div>
-            <div className="pf-stat-card">
-              <div className="pf-stat-icon-wrap pf-green">
-                <iconify-icon icon="mdi:check-circle-outline"></iconify-icon>
-              </div>
-              <div className="pf-stat-num pf-green">0</div>
-              <div className="pf-stat-label">completed</div>
-            </div>
           </div>
 
-          {/* Projects Section */}
           <div className="pf-section-header">
             <h2 className="pf-section-title">My Projects</h2>
-            <button className="pf-see-all-btn" onClick={() => navigate('/your-projects')}>see all →</button>
           </div>
 
           <div className="pf-projects-grid">
-            
-            {/* 👇 4. โชว์การ์ดโปรเจกต์จาก Database แทน Mockup (แบบหน้า Home) 👇 */}
             {projects.map(proj => (
               <div 
                 key={proj.project_id} 
@@ -205,7 +200,6 @@ export const Profile = ({ user }) => {
                 onClick={() => navigate('/project', { state: { projectId: proj.project_id } })}
               >
                 <div className="pf-home-card-icon">
-                  {/* เช็คว่ามีรูปโลโก้ไหม ถ้ามีโชว์โลโก้ ถ้าไม่มีโชว์ไอคอนแฟ้ม */}
                   {proj.image_logo ? (
                     <img src={`http://localhost:3000${proj.image_logo}`} alt="Logo" className="pf-home-logo-img" />
                   ) : (
@@ -213,18 +207,13 @@ export const Profile = ({ user }) => {
                   )}
                 </div>
                 <h3>{proj.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ'}</h3>
-                <span className={`pf-status-badge ${proj.status === 'ยังไม่ได้เริ่ม' ? 'pending' : 'active'}`}>
-                  {proj.status || 'ยังไม่ได้เริ่ม'}
-                </span>
               </div>
             ))}
 
-            {/* 👇 5. ปุ่มสร้างโปรเจกต์ใหม่ เอาไว้ต่อท้ายสุดเสมอ 👇 */}
             <div className="pf-home-card pf-create-new" onClick={handleCreateProjectDirectly}>
               <iconify-icon icon="line-md:plus-circle" style={{ fontSize: '50px', color: '#d75a2a' }}></iconify-icon>
               <span style={{ color: '#d75a2a', fontWeight: 'bold', marginTop: '10px' }}>สร้างแบรนด์ใหม่</span>
             </div>
-
           </div>
         </main>
       </div>

@@ -22,18 +22,27 @@ export const ResultLogo = () => {
     const [brandName, setBrandName] = useState('');
     const [brandValue, setBrandValue] = useState('');
     const [importedProducts, setImportedProducts] = useState([]);
-    const [selectedStyles, setSelectedStyles] = useState([]);
+    
+    // 🟢 เปลี่ยนจาก Array เป็น String และรับค่าสไตล์เดียว
+    const [selectedStyle, setSelectedStyle] = useState('combination'); 
+    
     const [detailsInput, setDetailsInput] = useState('');
     const [negativeInput, setNegativeInput] = useState('');
-    
     const [useImportedColor, setUseImportedColor] = useState(false);
     const [useImportedFont, setUseImportedFont] = useState(false);
 
     const [downloadMenuOpen, setDownloadMenuOpen] = useState(null);
     const [downloading, setDownloading] = useState(null);
-    const [menuPos, setMenuPos] = useState(null);  
 
-    const styleOptions = ['ทันสมัย', 'ความเป็นไทย', 'หรูหรา', 'เรียบง่าย', 'มินิมอล', 'เป็นกันเอง', 'การ์ตูน', 'ตัวหนังสือ', 'คลาสสิค'];
+    // 🟢 กำหนดรูปแบบสไตล์ทั้ง 6 แบบ พร้อมไอคอน
+    const styleOptions = [
+        { id: 'wordmark', name: 'Wordmark', desc: '(ตัวอักษรล้วน)', icon: 'mdi:format-text' },
+        { id: 'lettermark', name: 'Lettermark', desc: '(อักษรย่อ)', icon: 'mdi:format-letter-case' },
+        { id: 'combination', name: 'Combination', desc: '(ผสม)', icon: 'mdi:puzzle-outline' },
+        { id: 'emblem', name: 'Emblem', desc: '(ตราสัญลักษณ์)', icon: 'mdi:shield-check-outline' },
+        { id: 'mascot', name: 'Mascot', desc: '(มาสคอต)', icon: 'mdi:teddy-bear' },
+        { id: 'minimal', name: 'Minimal', desc: '(มินิมอล)', icon: 'mdi:shape-outline' }
+    ];
 
     const fetchImages = () => {
         fetch(`http://localhost:3000/api/generated-logos/${projectId}`)
@@ -55,7 +64,6 @@ export const ResultLogo = () => {
     useEffect(() => {
         if (projectId) {
             fetchImages();
-            
             const savedData = localStorage.getItem(`lastLogoForm_${projectId}`);
             if (savedData) {
                 try {
@@ -63,14 +71,14 @@ export const ResultLogo = () => {
                     setBrandName(parsed.brand_name || '');
                     setBrandValue(parsed.brand_value || '');
                     
-                    // 💡 แก้บั๊ก: ถ้าโหลดมาเป็น String ให้แปลงกลับเป็น Array หรือเก็บค่าไว้ให้ปลอดภัย
                     let loadedProducts = parsed.products || [];
                     if (typeof loadedProducts === 'string') {
                         loadedProducts = [{ name_product: loadedProducts }];
                     }
                     setImportedProducts(loadedProducts);
 
-                    setSelectedStyles(parsed.styles || []);
+                    // โหลดค่า Style เดิมที่เคยเลือกไว้
+                    setSelectedStyle(parsed.styles || 'combination');
                     setDetailsInput(parsed.details || '');
                     setNegativeInput(parsed.negative_prompt || parsed.not_want || '');
                 } catch (e) { console.error("Error parsing saved form data:", e); }
@@ -84,49 +92,30 @@ export const ResultLogo = () => {
     const handleLike = async (id) => {
         const imgToUpdate = generatedImages.find(img => img.id === id);
         const newLikeStatus = !imgToUpdate.isLiked;
-
-        setGeneratedImages(images => 
-            images.map(img => img.id === id ? { ...img, isLiked: newLikeStatus } : img)
-        );
-
+        setGeneratedImages(images => images.map(img => img.id === id ? { ...img, isLiked: newLikeStatus } : img));
         try {
             await fetch(`http://localhost:3000/api/like-generated-item/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_liked: newLikeStatus ? 1 : 0 })
             });
-        } catch (error) {
-            console.error("Error updating like status:", error);
-        }
+        } catch (error) { console.error(error); }
     };
 
     const handleSelect = async (id, url, isCurrentlySelected) => {
         const actionType = isCurrentlySelected ? 'deselect' : 'select';
-
-        setGeneratedImages(images => 
-            images.map(img => {
-                if (img.id === id) {
-                    return { ...img, isSelected: !isCurrentlySelected };
-                }
-                return { ...img, isSelected: false };
-            })
-        );
-
+        setGeneratedImages(images => images.map(img => {
+            if (img.id === id) return { ...img, isSelected: !isCurrentlySelected };
+            return { ...img, isSelected: false };
+        }));
         try {
             await fetch(`http://localhost:3000/api/generated-logos/select/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ project_id: projectId, image_url: url, action: actionType })
             });
-            
-            if (actionType === 'select') {
-                alert("เลือกรูปโลโก้นี้สำเร็จ! รูปจะไปแสดงในหน้า Project ของคุณครับ");
-            } else {
-                alert("ยกเลิกการเลือกรูปโลโก้แล้วครับ");
-            }
-        } catch (error) {
-            console.error("Error selecting logo:", error);
-        }
+            if (actionType === 'select') alert("เลือกรูปโลโก้นี้สำเร็จ!");
+        } catch (error) { console.error(error); }
     };
 
     const handleDownload = async (imgUrl, imgId, format) => {
@@ -136,39 +125,10 @@ export const ResultLogo = () => {
             await downloadLogo(fullUrl, format, `logo_${imgId}`);
             setDownloadMenuOpen(null);
         } catch (err) {
-            console.error('Download error:', err);
             alert(`ดาวน์โหลด ${format.toUpperCase()} ไม่สำเร็จ: ${err.message}`);
         } finally {
             setDownloading(null);
         }
-    };
-    const openDownloadMenu = (e, imgId) => {
-        e.stopPropagation();
-        const rect = e.currentTarget.getBoundingClientRect();
-        setMenuPos({
-            top: rect.bottom + 8,
-            right: window.innerWidth - rect.right
-        });
-        setDownloadMenuOpen(downloadMenuOpen === imgId ? null : imgId);
-    };
-    const toggleStyle = (style) => {
-        if (selectedStyles.includes(style)) {
-            setSelectedStyles(selectedStyles.filter(s => s !== style));
-        } else {
-            setSelectedStyles([...selectedStyles, style]);
-        }
-    };
-
-    const handleImportBrandName = async () => {
-        try {
-            const res = await fetch(`http://localhost:3000/api/brand-names/${projectId}`);
-            const data = await res.json();
-            if (data.status === 'success' && data.names) {
-                const selected = data.names.find(n => n.is_selected === 1 || n.is_selected === true);
-                if (selected) setBrandName(selected.brand_name);
-                else alert("ยังไม่มีชื่อแบรนด์ที่ถูกเลือกในโปรเจกต์นี้");
-            }
-        } catch (err) { console.error(err); }
     };
 
     const handleImportBrandValue = async () => {
@@ -193,13 +153,11 @@ export const ResultLogo = () => {
 
     const handleSubmitLogo = async () => {
         if (!brandName.trim()) return alert("กรุณาระบุชื่อแบรนด์");
-        if (selectedStyles.length === 0) return alert("กรุณาเลือกสไตล์อย่างน้อย 1 อย่าง");
+        if (!selectedStyle) return alert("กรุณาเลือกสไตล์ของโลโก้");
 
         setIsLoading(true);
         try {
             const userData = JSON.parse(localStorage.getItem('user') || '{}');
-            
-            // 💡 แก้บั๊ก: แปลงข้อมูลสินค้าให้เป็นข้อความก่อนส่ง API เสมอ
             const productsText = Array.isArray(importedProducts) 
                 ? importedProducts.map(p => p.name_product || p).join(', ') 
                 : importedProducts;
@@ -209,15 +167,14 @@ export const ResultLogo = () => {
                 user_id: userData.user_id || 0,
                 brand_name: brandName,
                 brand_value: brandValue,
-                products: productsText, // 👈 ส่งเป็นข้อความให้ API
-                styles: selectedStyles,
+                products: productsText, 
+                styles: selectedStyle, // 🟢 ส่งสไตล์ที่เลือกเป็น String ก้อนเดียว
                 details: detailsInput,
                 negative_prompt: negativeInput,
                 use_imported_color: useImportedColor,
                 use_imported_font: useImportedFont
             };
 
-            // เซฟลง LocalStorage ไว้โหลดครั้งหน้า
             localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
 
             const res = await fetch('http://localhost:3000/api/generate-logo', {
@@ -227,7 +184,6 @@ export const ResultLogo = () => {
             });
 
             const data = await res.json();
-
             if (data.status === 'success') {
                 setIsModalOpen(false); 
                 fetchImages(); 
@@ -235,7 +191,6 @@ export const ResultLogo = () => {
                 alert("เกิดข้อผิดพลาด: " + data.message);
             }
         } catch (err) {
-            console.error(err);
             alert("ไม่สามารถติดต่อ AI Server ได้");
         } finally {
             setIsLoading(false);
@@ -244,7 +199,6 @@ export const ResultLogo = () => {
 
     return (
         <>
-            {/* Navbar */}
             <header className="clg-navbar">
                 <div className="clg-logo">
                     <img src={logoImg} alt="logo" className="logo-img" />
@@ -252,13 +206,12 @@ export const ResultLogo = () => {
                 <div className="clg-nav-icons">
                     <button className="btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
                     <button className="clg-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
-                    <button className="clg-btn-users"><iconify-icon icon="solar:user-linear"></iconify-icon></button>
+                    <button className="clg-btn-users" onClick={() => navigate('/profile')}><iconify-icon icon="solar:user-linear"></iconify-icon></button>
                 </div>
             </header>
 
             <div className="clg-container">
-                {/* Sidebar */}
-                <aside className={`cncpt-sidebar ${isSidebarCollapsed ? 'cncpt-collapsed' : ''}`} id="cncpt-sidebar">
+                <aside className={`cncpt-sidebar ${isSidebarCollapsed ? 'cncpt-collapsed' : ''}`}>
                     <button className="cncpt-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>{isSidebarCollapsed ? '❯' : '❮'}</button>
                     <ul className="cncpt-menu">
                         <li onClick={() => navigate('/project', { state: { projectId } })}><span className="cncpt-icon"><iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon></span><span className="cncpt-text">Projects</span></li>
@@ -279,7 +232,6 @@ export const ResultLogo = () => {
                     </ul>
                 </aside>
 
-                {/* Main Content */}
                 <main className="rl-main">
                     <h1>ยินดีด้วย! โลโก้แบรนด์ของคุณพร้อมแล้ว</h1>
                     <p className="rl-subtitle">นี่คือโลโก้ที่กำหนดเองที่สร้างขึ้นสำหรับแบรนด์ของคุณโดย AI</p>
@@ -295,79 +247,34 @@ export const ResultLogo = () => {
                                             <iconify-icon icon="wordpress:fullscreen"></iconify-icon>
                                         </button>
                                         <div style={{ position: 'relative' }}>
-                                            <button 
-                                                className="rl-action-btn" 
-                                                onClick={() => setDownloadMenuOpen(downloadMenuOpen === img.id ? null : img.id)}
-                                                title="ดาวน์โหลด"
-                                            >
+                                            <button className="rl-action-btn" onClick={() => setDownloadMenuOpen(downloadMenuOpen === img.id ? null : img.id)}>
                                                 <iconify-icon icon="mynaui:download"></iconify-icon>
                                             </button>
                                             {downloadMenuOpen === img.id && (
                                                 <div style={{
-                                                    position: 'absolute', top: '100%', right: 0, marginTop: 6,
-                                                    background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
-                                                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 6, zIndex: 100,
-                                                    minWidth: 180
+                                                    position: 'absolute', top: '100%', right: 0, marginTop: 6, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 6, zIndex: 100, minWidth: 180
                                                 }}>
-                                                    <div style={{ fontSize: 11, color: '#6b7280', padding: '6px 10px', borderBottom: '1px solid #f3f4f6', marginBottom: 4 }}>
-                                                        เลือกรูปแบบไฟล์ดาวน์โหลด
-                                                    </div>
-                                                    {[
-                                                        { ext: 'png', label: 'PNG', desc: 'สำหรับงานทั่วไป' },
-                                                        { ext: 'svg', label: 'SVG', desc: 'สำหรับโลโก้ (Vector)' },
-                                                        { ext: 'eps', label: 'EPS', desc: 'สำหรับงานพิมพ์(Print)' },
-                                                        { ext: 'jpg', label: 'JPG', desc: 'รูปภาพทั่วไป' },
-                                                        { ext: 'pdf', label: 'PDF', desc: 'สำหรับเอกสาร (ทั่วไป)' },
-                                                    ].map(opt => {
-                                                        const isLoading = downloading === `${img.id}_${opt.ext}`;
-                                                        return (
-                                                            <button key={opt.ext}
-                                                                onClick={(e) => { e.stopPropagation(); handleDownload(img.url, img.id, opt.ext); }}
-                                                                disabled={isLoading}
-                                                                style={{
-                                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                                                    width: '100%', padding: '8px 10px', background: 'transparent',
-                                                                    border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13,
-                                                                    color: '#374151', textAlign: 'left', gap: 8
-                                                                }}
-                                                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                                <span style={{ fontWeight: 600 }}>{opt.label}</span>
-                                                                <span style={{ fontSize: 11, color: '#9ca3af' }}>
-                                                                    {isLoading ? 'กำลังโหลด...' : opt.desc}
-                                                                </span>
-                                                            </button>
-                                                        );
-                                                    })}
+                                                    <div style={{ fontSize: 11, color: '#6b7280', padding: '6px 10px', borderBottom: '1px solid #f3f4f6', marginBottom: 4 }}>เลือกรูปแบบไฟล์ดาวน์โหลด</div>
+                                                    {[{ ext: 'png', label: 'PNG' }, { ext: 'svg', label: 'SVG' }, { ext: 'eps', label: 'EPS' }, { ext: 'jpg', label: 'JPG' }, { ext: 'pdf', label: 'PDF' }].map(opt => (
+                                                        <button key={opt.ext}
+                                                            onClick={(e) => { e.stopPropagation(); handleDownload(img.url, img.id, opt.ext); }}
+                                                            disabled={downloading === `${img.id}_${opt.ext}`}
+                                                            style={{ display: 'flex', justifyContent: 'space-between', width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, color: '#374151' }}>
+                                                            <span style={{ fontWeight: 600 }}>{opt.label}</span>
+                                                        </button>
+                                                    ))}
                                                 </div>
                                             )}
                                         </div>
-                                        <button 
-                                            className={`rl-action-btn rl-favorite-btn ${img.isLiked ? 'active' : ''}`} 
-                                            onClick={() => handleLike(img.id)}
-                                        >
+                                        <button className={`rl-action-btn rl-favorite-btn ${img.isLiked ? 'active' : ''}`} onClick={() => handleLike(img.id)}>
                                             <iconify-icon icon={img.isLiked ? "solar:heart-bold" : "solar:heart-linear"}></iconify-icon>
                                         </button>
-
-                                        <button 
-                                            className="rl-action-btn" 
-                                            onClick={() => handleSelect(img.id, img.url, img.isSelected)}
-                                            title="เลือกใช้เป็นโลโก้หลัก"
-                                        >
-                                            <iconify-icon 
-                                                icon={img.isSelected ? "mdi:check-circle" : "mdi:check-circle-outline"} 
-                                                style={{ color: img.isSelected ? '#4CAF50' : '#666' }}
-                                            ></iconify-icon>
+                                        <button className="rl-action-btn" onClick={() => handleSelect(img.id, img.url, img.isSelected)}>
+                                            <iconify-icon icon={img.isSelected ? "mdi:check-circle" : "mdi:check-circle-outline"} style={{ color: img.isSelected ? '#4CAF50' : '#666' }}></iconify-icon>
                                         </button>
-                                        
-                                        
                                     </div>
                                     <div className="rl-logo-box" style={{ border: 'none', padding: 0 }}>
-                                        <img 
-                                            src={`http://localhost:3000${img.url}`} 
-                                            alt={`Logo ${index + 1}`} 
-                                            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '12px' }} 
-                                        />
+                                        <img src={`http://localhost:3000${img.url}`} alt={`Logo ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '12px' }} />
                                     </div>
                                 </div>
                             ))}
@@ -375,16 +282,9 @@ export const ResultLogo = () => {
                     )}
                 </main>
 
-                {/* ปุ่มสร้างรูปโลโก้ใหม่ (Popup) */}
-                <button 
-                    className="rl-floating-text-btn" 
-                    onClick={() => setIsModalOpen(true)}
-                >
-                    สร้างรูปโลโก้ใหม่
-                </button>
+                <button className="rl-floating-text-btn" onClick={() => setIsModalOpen(true)}>สร้างรูปโลโก้ใหม่</button>
             </div>
 
-            {/* Popup สำหรับขยายรูป */}
             {selectedImage && (
                 <div className="rl-modal-overlay" style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', justifyContent:'center', alignItems:'center'}} onClick={() => setSelectedImage(null)}>
                     <div className="rl-modal-content" style={{position:'relative', maxWidth:'90%', maxHeight:'90vh'}} onClick={e => e.stopPropagation()}>
@@ -394,7 +294,6 @@ export const ResultLogo = () => {
                 </div>
             )}
 
-            {/* Popup สำหรับเจนรูปใหม่ */}
             {isModalOpen && (
                 <div className="rl-modal" onClick={() => setIsModalOpen(false)}>
                     <div className="rl-modal-box" onClick={(e) => e.stopPropagation()}>
@@ -402,13 +301,8 @@ export const ResultLogo = () => {
                         <h2 style={{color: '#d3542b', marginBottom: '20px', textAlign: 'left'}}>แก้ไขข้อมูลเพื่อสร้างโลโก้ใหม่</h2>
 
                         <div className="rl-form-group">
-                            <label style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                                <span><span className="rl-step">1</span> ชื่อแบรนด์ <span style={{color:'red'}}>*</span></span>
-                                <button onClick={handleImportBrandName} style={{background:'#fff3ee', color:'#d75a2a', border:'none', padding:'5px 12px', borderRadius:'20px', cursor:'pointer', fontSize:'13px', display:'flex', alignItems:'center', gap:'5px'}}>
-                                    <iconify-icon icon="mdi:download"></iconify-icon> นำเข้าชื่อ
-                                </button>
-                            </label>
-                            <input type="text" placeholder="ระบุชื่อแบรนด์..." value={brandName} onChange={(e) => setBrandName(e.target.value)} />
+                            <label><span className="rl-step">1</span> ชื่อแบรนด์</label>
+                            <input type="text" placeholder="ระบุชื่อแบรนด์ของคุณ" value={brandName} onChange={(e) => setBrandName(e.target.value)} />
                         </div>
 
                         <div className="rl-form-group">
@@ -428,29 +322,43 @@ export const ResultLogo = () => {
                                     <iconify-icon icon="mdi:basket"></iconify-icon> นำเข้าสินค้า
                                 </button>
                             </label>
-                            {/* 💡 แก้บั๊ก: รองรับทั้งแบบ Array และแบบ String ในหน้า UI */}
                             <p style={{fontSize:'13px', color:'#888', marginTop:'5px'}}>
-                                {importedProducts.length > 0 
-                                    ? `ใช้สินค้า: ${Array.isArray(importedProducts) ? importedProducts.map(p => p.name_product || p).join(', ') : importedProducts}` 
-                                    : '*ไม่ระบุ'}
+                                {importedProducts.length > 0 ? `ใช้สินค้า: ${Array.isArray(importedProducts) ? importedProducts.map(p => p.name_product || p).join(', ') : importedProducts}` : '*ไม่ระบุ'}
                             </p>
                         </div>
 
+                        {/* 🟢 ข้อ 4 แบบใหม่ 6 สไตล์ 🟢 */}
                         <div className="rl-form-group">
                             <label><span className="rl-step">4</span> สไตล์โลโก้ <span style={{color:'red'}}>*</span></label>
-                            <div style={{display:'flex', flexWrap:'wrap', gap:'8px', marginTop:'10px'}}>
+                            <div style={{display:'flex', flexWrap:'wrap', gap:'10px', marginTop:'10px'}}>
                                 {styleOptions.map(style => (
-                                    <span 
-                                        key={style} onClick={() => toggleStyle(style)}
+                                    <div 
+                                        key={style.id} 
+                                        onClick={() => setSelectedStyle(style.id)}
                                         style={{
-                                            padding: '6px 14px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px',
-                                            border: selectedStyles.includes(style) ? '1px solid #d75a2a' : '1px solid #ddd',
-                                            background: selectedStyles.includes(style) ? '#d75a2a' : '#fff',
-                                            color: selectedStyles.includes(style) ? '#fff' : '#666'
+                                            padding: '15px 10px', 
+                                            borderRadius: '12px', 
+                                            cursor: 'pointer', 
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: 'calc(33.33% - 7px)',
+                                            boxSizing: 'border-box',
+                                            border: selectedStyle === style.id ? '2px solid #d75a2a' : '1px solid #eee',
+                                            background: selectedStyle === style.id ? '#fff3ee' : '#fafafa',
+                                            transition: 'all 0.2s ease',
+                                            gap: '5px'
                                         }}
                                     >
-                                        {style}
-                                    </span>
+                                        <iconify-icon icon={style.icon} style={{ fontSize: '32px', color: selectedStyle === style.id ? '#d75a2a' : '#888' }}></iconify-icon>
+                                        <span style={{ fontWeight: 'bold', fontSize: '13px', color: selectedStyle === style.id ? '#d75a2a' : '#444' }}>
+                                            {style.name}
+                                        </span>
+                                        <span style={{ fontSize: '11px', color: '#888', textAlign: 'center' }}>
+                                            {style.desc}
+                                        </span>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -486,7 +394,6 @@ export const ResultLogo = () => {
                 </div>
             )}
 
-            {/* Loading Overlay ขยายเต็มจอ */}
             {isLoading && (
                 <div style={{position:'fixed', inset:0, background:'rgba(255,255,255,0.85)', zIndex:99999, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
                     <iconify-icon icon="line-md:loading-loop" style={{fontSize:'60px', color:'#d75a2a'}}></iconify-icon>

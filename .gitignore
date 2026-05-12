@@ -1,2 +1,3 @@
 **/.env
 .claude/
+client_secret_*.json
