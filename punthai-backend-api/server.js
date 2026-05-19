@@ -1955,6 +1955,248 @@ app.get('/api/mockup/dieline-bg-history/:projectId', async (req, res) => {
     }
 });
 
+// ----- 6c) POST generate AI package mockup preview (design → realistic photo) -----
+app.post('/api/mockup/generate-package-mockup', async (req, res) => {
+    const {
+        project_id, user_id,
+        package_image_url,
+        panel_images, // [{label, image_base64, w_mm, h_mm}] — only visible panels
+        package_type, package_material, product_name,
+        bg_style = 'white'
+    } = req.body;
+
+    if (!project_id || !panel_images?.length) {
+        return res.status(400).json({ status: 'error', message: 'project_id and panel_images required' });
+    }
+
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    });
+    const sendEvent = (event, data) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+        sendEvent('progress', { step: 1, total: 4, message: 'กำลังเตรียมรูปภาพ...' });
+
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel(
+            { model: 'gemini-3.1-flash-image-preview', generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } },
+            { timeout: 300000 }
+        );
+
+        // Get brand name
+        let conn = await pool.getConnection();
+        const [nameRows] = await conn.query(
+            `SELECT brand_name FROM name_concept WHERE project_id = ? AND is_selected = 1 LIMIT 1`, [project_id]);
+        const brandName = nameRows[0]?.brand_name || '';
+        conn.release();
+
+        const imageParts = [];
+        let imgIdx = 1;
+
+        // Image 1: Package photo (if available)
+        if (package_image_url) {
+            const possiblePaths = [
+                path.join(process.cwd(), package_image_url.replace(/^\//, '')),
+                path.join(process.cwd(), '..', 'punthai-frontend-user', 'public', package_image_url.replace(/^\//, ''))
+            ];
+            for (const pkgPath of possiblePaths) {
+                if (fs.existsSync(pkgPath)) {
+                    const buf = await sharp(pkgPath)
+                        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+                        .jpeg({ quality: 85 })
+                        .toBuffer();
+                    imageParts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
+                    imgIdx++;
+                    break;
+                }
+            }
+        }
+        const hasPackageImg = imgIdx > 1;
+
+        // Each selected panel as separate image
+        const panelDescs = [];
+        for (const pi of panel_images) {
+            const clean = pi.image_base64.replace(/^data:image\/\w+;base64,/, '');
+            const buf = await sharp(Buffer.from(clean, 'base64'))
+                .resize(1536, 1536, { fit: 'inside', withoutEnlargement: true })
+                .png()
+                .toBuffer();
+            imageParts.push({ inlineData: { mimeType: 'image/png', data: buf.toString('base64') } });
+            panelDescs.push(`- Image ${imgIdx}: "${pi.label}" panel design (${pi.w_mm}x${pi.h_mm}mm)`);
+            imgIdx++;
+        }
+
+        sendEvent('progress', { step: 2, total: 4, message: 'กำลังส่งข้อมูลให้ AI...' });
+
+        const bgStyleMap = {
+            white: 'Pure clean white seamless studio background',
+            wood: 'Natural warm-toned wood table surface as background',
+            marble: 'Elegant white marble surface as background',
+            nature: 'Fresh green leaves and natural botanical elements arranged around the product',
+            linen: 'Soft neutral-toned linen fabric texture as background',
+            concrete: 'Modern raw concrete / cement surface as background',
+            gradient: 'Professional photography studio with soft gradient backdrop and rim lighting',
+        };
+
+        // Map Thai panel labels to English face names
+        const mapFace = (label) => {
+            const l = (label || '').toLowerCase();
+            if (l.includes('หน้า')) return 'FRONT';
+            if (l.includes('หลัง')) return 'BACK';
+            if (l.includes('ซ้าย')) return 'LEFT SIDE';
+            if (l.includes('ขวา')) return 'RIGHT SIDE';
+            if (l.includes('บน')) return 'TOP';
+            if (l.includes('ล่าง')) return 'BOTTOM';
+            return label;
+        };
+
+        const panelPlacement = panel_images.map(pi => `- "${pi.label}" (Image) → ${mapFace(pi.label)} face (${pi.w_mm}mm × ${pi.h_mm}mm)`).join('\n');
+
+        let prompt = '';
+        if (hasPackageImg) {
+            prompt = `You are a product packaging mockup photographer. Your job: take a real package photo and print custom artwork onto its surfaces.
+
+IMAGES PROVIDED:
+- Image 1: REFERENCE PHOTO of the actual product package — copy its EXACT shape, angle, proportions, and material
+${panelDescs.join('\n')}
+
+TASK:
+Recreate the package from Image 1 with the artwork from the other images printed on it.
+Use the SAME camera angle and perspective as Image 1.
+
+WHICH FACE GETS WHICH DESIGN:
+${panelPlacement}
+
+ABSOLUTE REQUIREMENTS:
+1. SHAPE & PROPORTIONS: The package must be IDENTICAL to Image 1 — same width-to-height ratio, same 3D angle, same camera perspective. Do NOT stretch, squeeze, or change the aspect ratio.
+2. CAMERA ANGLE: Use the SAME viewing angle as Image 1. If Image 1 shows the package from front-left, your result must also show front-left. Do NOT mirror or flip the orientation.
+3. DESIGN STAYS ON PACKAGE ONLY: The artwork must appear ONLY on the package surfaces. The background must be COMPLETELY CLEAN — no pattern, no design bleeding outside the package edges. The design is PRINTED on the package material, it does not extend beyond the package boundary.
+4. FACE ORIENTATION: When looking at the front of the package, the LEFT SIDE panel is on the viewer's LEFT, the RIGHT SIDE panel is on the viewer's RIGHT. Do NOT swap left and right.
+5. FAITHFUL REPRODUCTION: Copy ALL text, logos, images, patterns from each panel image exactly as shown. Do not add, remove, rearrange, or reinterpret any element.
+6. CLEAN BACKGROUND: ${bgStyleMap[bg_style] || bgStyleMap.white}. The background must have ZERO design elements from the package artwork.
+
+${brandName ? `Brand: "${brandName}"` : ''}
+${product_name ? `Product: "${product_name}"` : ''}
+Package: ${package_type || 'pouch/bag'}, material: ${package_material || 'paper/plastic'}
+
+OUTPUT: Generate a SQUARE image (1:1 aspect ratio). The product should be centered with padding around it.
+PHOTOGRAPHY: Professional studio product photo, soft lighting, natural shadow under product, sharp focus, no people/hands/props.`;
+        } else {
+            prompt = `You are a product packaging mockup photographer. Create a photorealistic 3D mockup of a ${package_type || 'product package'}.
+
+IMAGES PROVIDED:
+${panelDescs.join('\n')}
+
+TASK:
+Generate a realistic ${package_type || 'pouch/bag'} made of ${package_material || 'paper/plastic'} and print the provided artwork onto it.
+Show from a front-left 3/4 angle so the FRONT and LEFT SIDE are visible.
+
+WHICH FACE GETS WHICH DESIGN:
+${panelPlacement}
+
+ABSOLUTE REQUIREMENTS:
+1. DESIGN STAYS ON PACKAGE ONLY: Artwork appears ONLY on package surfaces. Background must be completely clean — no pattern bleeding outside the package edges.
+2. FACE ORIENTATION: LEFT SIDE panel is on the viewer's LEFT when looking at the front. Do NOT swap sides.
+3. PROPORTIONS: The package should have realistic proportions for a ${package_type || 'food pouch'}.
+4. FAITHFUL REPRODUCTION: Copy ALL text, logos, images, patterns exactly. Do not modify or rearrange.
+5. CLEAN BACKGROUND: ${bgStyleMap[bg_style] || bgStyleMap.white}. Zero design elements from the package on the background.
+
+${brandName ? `Brand: "${brandName}"` : ''}
+${product_name ? `Product: "${product_name}"` : ''}
+
+OUTPUT: Generate a SQUARE image (1:1 aspect ratio). The product should be centered with padding around it.
+PHOTOGRAPHY: Professional studio photo, soft lighting, shadow under product, sharp focus, no people/hands.`;
+        }
+
+        sendEvent('progress', { step: 3, total: 4, message: 'AI กำลังสร้างภาพ Mockup...' });
+
+        const contentParts = [...imageParts, { text: prompt }];
+        let result;
+        try {
+            result = await model.generateContent(contentParts);
+        } catch (firstErr) {
+            console.warn('Package mockup attempt 1 failed, retrying in 5s...', firstErr.message);
+            sendEvent('progress', { step: 3, total: 4, message: 'เซิร์ฟเวอร์ AI ยุ่ง กำลังลองใหม่...' });
+            await new Promise(r => setTimeout(r, 5000));
+            result = await model.generateContent(contentParts);
+        }
+
+        let base64Data = '';
+        let mimeType = 'image/png';
+        const parts = result.response.candidates?.[0]?.content?.parts;
+        if (parts) {
+            for (const part of parts) {
+                if (part.inlineData?.data) {
+                    base64Data = part.inlineData.data;
+                    mimeType = part.inlineData.mimeType || 'image/png';
+                    break;
+                }
+            }
+        }
+
+        if (!base64Data) throw new Error('AI ไม่ส่งรูปภาพกลับมา กรุณาลองใหม่');
+
+        sendEvent('progress', { step: 4, total: 4, message: 'กำลังปรับขนาดและบันทึกภาพ...' });
+
+        // Resize to exactly 1024x1024 for consistent output
+        const rawBuf = Buffer.from(base64Data, 'base64');
+        const resizedBuf = await sharp(rawBuf)
+            .resize(1024, 1024, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+            .png({ quality: 95 })
+            .toBuffer();
+
+        const fileName = `package_mockup_${Date.now()}.png`;
+        const dirPath = path.join(process.cwd(), 'uploads', 'generated');
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+        const filePath = path.join(dirPath, fileName);
+        fs.writeFileSync(filePath, resizedBuf);
+        const imageUrl = `/uploads/generated/${fileName}`;
+
+        try {
+            const finalUserId = (!user_id || user_id === 0) ? null : user_id;
+            const c2 = await pool.getConnection();
+            await c2.query(
+                `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
+                [finalUserId, project_id, 'GENERATE_PACKAGE_MOCKUP', prompt.substring(0, 2000), imageUrl]);
+            await c2.query(
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
+                [project_id, finalUserId, 'PACKAGE_MOCKUP', imageUrl, prompt.substring(0, 2000)]);
+            c2.release();
+        } catch (e) { console.warn('log warning', e.message); }
+
+        sendEvent('done', { status: 'success', image_url: imageUrl });
+        res.end();
+    } catch (err) {
+        console.error('Package Mockup Error:', err);
+        sendEvent('error', { message: err.message });
+        res.end();
+    }
+});
+
+// ----- 6d) GET package mockup history -----
+app.get('/api/mockup/package-mockup-history/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT history_id, image_url, prompt, created_at
+             FROM generated_history
+             WHERE project_id = ? AND generation_type = 'PACKAGE_MOCKUP'
+             ORDER BY history_id DESC LIMIT 20`,
+            [projectId]);
+        conn.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error('Package Mockup History Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 // ----- 7) GET mockup ของ project -----
 app.get('/api/mockups/:projectId', async (req, res) => {
     const { projectId } = req.params;

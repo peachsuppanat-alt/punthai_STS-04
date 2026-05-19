@@ -101,161 +101,6 @@ function LabelImageRenderer({ labelData, brandAssets, onReady }) {
     );
 }
 
-// === Sticker Editor ===
-function StickerEditor({ packageImageUrl, labelImageUrl, onExportPng, onSwitchToAI, isExporting, isAIGen }) {
-    const stageRef = useRef();
-    const trRef = useRef();
-    const [stickerProps, setStickerProps] = useState({ x: 200, y: 200, w: 200, h: 250, rotation: 0 });
-    const [selected, setSelected] = useState(true);
-    const [stageSize, setStageSize] = useState({ w: 700, h: 700 });
-
-    const pkgImg = useHtmlImage(packageImageUrl);
-    const lblImg = useHtmlImage(labelImageUrl);
-
-    useEffect(() => {
-        if (pkgImg) {
-            const maxSize = 700;
-            const ratio = pkgImg.width / pkgImg.height;
-            const w = ratio > 1 ? maxSize : maxSize * ratio;
-            const h = ratio > 1 ? maxSize / ratio : maxSize;
-            setStageSize({ w, h });
-            setStickerProps(p => ({ ...p, x: w / 2 - p.w / 2, y: h / 2 - p.h / 2 }));
-        }
-    }, [pkgImg]);
-
-    useEffect(() => {
-        if (lblImg) {
-            const aspect = lblImg.height / lblImg.width;
-            setStickerProps(p => ({ ...p, h: p.w * aspect }));
-        }
-    }, [lblImg]);
-
-    useEffect(() => {
-        if (selected && trRef.current && stageRef.current) {
-            const node = stageRef.current.findOne('#sticker');
-            if (node) { trRef.current.nodes([node]); trRef.current.getLayer().batchDraw(); }
-        } else if (trRef.current) {
-            trRef.current.nodes([]);
-        }
-    }, [selected, stickerProps]);
-
-    const handleStageClick = (e) => {
-        if (e.target === e.target.getStage()) setSelected(false);
-    };
-
-    const handleExport = () => {
-        if (!stageRef.current) return null;
-        if (trRef.current) trRef.current.hide();
-        stageRef.current.draw();
-        const url = stageRef.current.toDataURL({ pixelRatio: 2, mimeType: 'image/png' });
-        if (trRef.current) trRef.current.show();
-        return url;
-    };
-
-    return (
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-            <div style={{ flex: '0 0 300px', background: '#fff', padding: 20, borderRadius: 14, boxShadow: '0 4px 16px rgba(0,0,0,0.06)', maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
-                <h3 style={{ margin: '0 0 16px', color: C.primaryDark, fontSize: 18, fontWeight: 700 }}>ติดสติ๊กเกอร์ฉลาก</h3>
-
-                <div style={{ marginBottom: 16, padding: 12, background: C.bgLight, borderRadius: 8, fontSize: 12, color: C.sub, lineHeight: 1.6 }}>
-                    คลิกที่ฉลากแล้วลากเพื่อย้าย ลากที่มุมเพื่อย่อ-ขยาย หรือลากด้านบนเพื่อหมุน
-                </div>
-
-                <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.text, display: 'block', marginBottom: 6 }}>
-                        ขนาด: {Math.round(stickerProps.w)} px
-                    </label>
-                    <input type="range" min="80" max="600" value={stickerProps.w}
-                        onChange={e => {
-                            const w = parseInt(e.target.value);
-                            const aspect = lblImg ? (lblImg.height / lblImg.width) : 1.25;
-                            setStickerProps(p => ({ ...p, w, h: w * aspect }));
-                        }} style={{ width: '100%' }} />
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.text, display: 'block', marginBottom: 6 }}>
-                        หมุน: {Math.round(stickerProps.rotation)}°
-                    </label>
-                    <input type="range" min="-180" max="180" value={stickerProps.rotation}
-                        onChange={e => setStickerProps(p => ({ ...p, rotation: parseInt(e.target.value) }))}
-                        style={{ width: '100%' }} />
-                </div>
-
-                <button onClick={() => {
-                    const aspect = lblImg ? (lblImg.height / lblImg.width) : 1.25;
-                    setStickerProps({ x: stageSize.w / 2 - 100, y: stageSize.h / 2 - 125, w: 200, h: 200 * aspect, rotation: 0 });
-                    setSelected(true);
-                }} style={{
-                    width: '100%', padding: 10, background: '#fff', border: `1px solid ${C.border}`,
-                    borderRadius: 8, cursor: 'pointer', fontSize: 13, color: C.text, fontWeight: 500,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16
-                }}>
-                    <iconify-icon icon="mdi:restore"></iconify-icon>
-                    คืนค่าตำแหน่ง
-                </button>
-
-                <hr style={{ border: 'none', borderTop: `1px solid ${C.border}`, margin: '16px 0' }} />
-
-                <button onClick={() => { const url = handleExport(); if (url) onExportPng(url); }}
-                    disabled={isExporting} style={{
-                        width: '100%', padding: 12, background: C.text, color: '#fff', border: 'none',
-                        borderRadius: 8, fontWeight: 600, cursor: 'pointer', marginBottom: 8, fontSize: 14,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                    }}>
-                    <iconify-icon icon="mdi:download"></iconify-icon>
-                    {isExporting ? 'กำลังบันทึก...' : 'บันทึกเป็น PNG'}
-                </button>
-                <div style={{ fontSize: 11, color: C.sub, marginBottom: 16, lineHeight: 1.5 }}>
-                    บันทึกภาพ Mockup จากการประกอบโค้ด ฟรี ไม่ใช้เครดิต
-                </div>
-
-                <button onClick={onSwitchToAI} disabled={isAIGen} style={{
-                    width: '100%', padding: 12, background: C.primaryDark, color: '#fff', border: 'none',
-                    borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 14,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                }}>
-                    <iconify-icon icon="mdi:auto-fix"></iconify-icon>
-                    สลับไปโหมด AI Mockup
-                </button>
-                <div style={{ fontSize: 11, color: C.sub, marginTop: 6, lineHeight: 1.5 }}>
-                    AI สร้างภาพ Studio Photography ใช้ DALL-E credit
-                </div>
-            </div>
-
-            <div style={{ flex: 1, background: C.bgPage, borderRadius: 14, padding: 24, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 600 }}>
-                <Stage ref={stageRef} width={stageSize.w} height={stageSize.h}
-                    onMouseDown={handleStageClick} onTouchStart={handleStageClick}
-                    style={{ background: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', borderRadius: 8 }}>
-                    <Layer>
-                        {pkgImg && <KImg image={pkgImg} x={0} y={0} width={stageSize.w} height={stageSize.h} listening={false} />}
-                        {lblImg && (
-                            <KImg image={lblImg} id="sticker"
-                                x={stickerProps.x} y={stickerProps.y}
-                                width={stickerProps.w} height={stickerProps.h}
-                                rotation={stickerProps.rotation} draggable
-                                shadowColor="black" shadowBlur={8} shadowOpacity={0.25}
-                                shadowOffset={{ x: 2, y: 4 }}
-                                onClick={() => setSelected(true)} onTap={() => setSelected(true)}
-                                onDragEnd={e => setStickerProps(p => ({ ...p, x: e.target.x(), y: e.target.y() }))}
-                                onTransformEnd={e => {
-                                    const n = e.target;
-                                    setStickerProps({
-                                        x: n.x(), y: n.y(),
-                                        w: Math.max(30, n.width() * n.scaleX()),
-                                        h: Math.max(30, n.height() * n.scaleY()),
-                                        rotation: n.rotation()
-                                    });
-                                    n.scaleX(1); n.scaleY(1);
-                                }} />
-                        )}
-                        <Transformer ref={trRef} rotateEnabled={true}
-                            boundBoxFunc={(oldB, newB) => newB.width < 30 ? oldB : newB} />
-                    </Layer>
-                </Stage>
-            </div>
-        </div>
-    );
-}
 
 // === Package Design Editor ===
 function PackageDesignEditor({ projectId, userId, projectName, product, brandAssets, labelData, labelImageUrl, onBack }) {
@@ -284,6 +129,15 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     const [saveStatus, setSaveStatus] = useState('');
     const dataLoadedRef = useRef(false);
 
+    // AI Mockup Preview state
+    const [isGenMockup, setIsGenMockup] = useState(false);
+    const [mockupProgress, setMockupProgress] = useState(null);
+    const [aiMockupPreviewUrl, setAiMockupPreviewUrl] = useState(null);
+    const [mockupBgStyle, setMockupBgStyle] = useState('white');
+    const [mockupHistory, setMockupHistory] = useState([]);
+    const [lightboxUrl, setLightboxUrl] = useState(null); // for image popup
+    const [mockupPanelSelection, setMockupPanelSelection] = useState({}); // which panels to include
+
     // Canvas sizing
     const CANVAS_W = 700;
     const activePanel = panels[activePanelIdx];
@@ -306,6 +160,13 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 setMaterialData(d.data);
                 const p = d.data.panels_json ? (typeof d.data.panels_json === 'string' ? JSON.parse(d.data.panels_json) : d.data.panels_json) : [];
                 setPanels(p);
+                // Default: select front + first side for mockup generation
+                const sel = {};
+                p.forEach((panel, idx) => {
+                    const label = (panel.label || '').toLowerCase();
+                    sel[panel.id] = idx < 2 || label.includes('หน้า') || label.includes('ซ้าย');
+                });
+                setMockupPanelSelection(sel);
                 const initial = {};
                 p.forEach(panel => { initial[panel.id] = { bg_mode: 'solid', bg_color: '#FFFFFF', bg_opacity: 1, bg_image_url: null, elements: [] }; });
                 setPanelDesigns(initial);
@@ -357,7 +218,15 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
         } catch (e) { console.error('[PkgDesign] fetch AI history:', e); }
     };
 
-    useEffect(() => { if (projectId) fetchAiBgHistory(); }, [projectId]);
+    useEffect(() => { if (projectId) { fetchAiBgHistory(); fetchMockupHistory(); } }, [projectId]);
+
+    const fetchMockupHistory = async () => {
+        try {
+            const r = await fetch(`${API}/api/mockup/package-mockup-history/${projectId}`);
+            const d = await r.json();
+            if (d.status === 'success') setMockupHistory(d.data || []);
+        } catch (e) { console.error('[PkgDesign] fetch mockup history:', e); }
+    };
 
     // Auto-save (debounced 1500ms) — only after initial data loaded
     useEffect(() => {
@@ -789,6 +658,112 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     const handleExportPdf = () => exportFile('pdf');
     const handleExportAi = () => exportFile('ai');
 
+    // === Generate AI Mockup Preview ===
+    const handleGenMockup = async () => {
+        if (!materialData || panels.length === 0) return;
+        const selectedPanels = panels.filter(p => mockupPanelSelection[p.id]);
+        if (selectedPanels.length === 0) { alert('กรุณาเลือกอย่างน้อย 1 ด้าน'); return; }
+
+        setIsGenMockup(true);
+        setMockupProgress({ step: 0, total: 4, message: 'กำลังเตรียมภาพแต่ละด้าน...' });
+        setAiMockupPreviewUrl(null);
+
+        try {
+            const origIdx = activePanelIdx;
+            const panelImages = [];
+
+            // 1. Capture only selected panels as individual images
+            for (const sp of selectedPanels) {
+                const idx = panels.findIndex(p => p.id === sp.id);
+                if (idx < 0) continue;
+                setActivePanelIdx(idx);
+                await new Promise(r => setTimeout(r, 250));
+                const s = stageRef.current;
+                if (s) {
+                    const dataUrl = s.toDataURL({ pixelRatio: 2 });
+                    panelImages.push({
+                        label: sp.label,
+                        image_base64: dataUrl,
+                        w_mm: sp.w_mm,
+                        h_mm: sp.h_mm
+                    });
+                }
+            }
+            setActivePanelIdx(origIdx);
+
+            // 2. Get package image URL
+            const matId = product.materials?.[0]?.id;
+            let packageImageUrl = null;
+            if (matId) {
+                try {
+                    const r = await fetch(`${API}/api/mockup/material/${matId}`);
+                    const d = await r.json();
+                    if (d.status === 'success' && d.data.images?.length > 0) {
+                        packageImageUrl = d.data.images[0].image_path;
+                    }
+                } catch (e) { console.warn(e); }
+            }
+
+            setMockupProgress({ step: 1, total: 4, message: 'กำลังส่งให้ AI สร้างภาพ...' });
+
+            // 3. Send to backend via SSE
+            const resp = await fetch(`${API}/api/mockup/generate-package-mockup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: projectId,
+                    user_id: userId,
+                    package_image_url: packageImageUrl,
+                    panel_images: panelImages,
+                    package_type: product.materials?.[0]?.package_type || product.materials?.[0]?.name,
+                    package_material: product.materials?.[0]?.material_type,
+                    product_name: product.name_product,
+                    bg_style: mockupBgStyle
+                })
+            });
+
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                const messages = buffer.split('\n\n');
+                buffer = messages.pop() || '';
+
+                for (const msg of messages) {
+                    let eventType = '';
+                    let eventData = '';
+                    for (const line of msg.split('\n')) {
+                        if (line.startsWith('event: ')) eventType = line.slice(7);
+                        else if (line.startsWith('data: ')) eventData = line.slice(6);
+                    }
+                    if (!eventData) continue;
+                    try {
+                        const data = JSON.parse(eventData);
+                        if (eventType === 'progress') setMockupProgress(data);
+                        else if (eventType === 'done' && data.image_url) {
+                            setAiMockupPreviewUrl(`${API}${data.image_url}`);
+                            fetchMockupHistory(); // refresh history
+                        }
+                        else if (eventType === 'error') throw new Error(data.message);
+                    } catch (e) {
+                        if (e.message && !e.message.includes('JSON')) throw e;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Gen mockup error:', err);
+            alert(`สร้าง Mockup ไม่สำเร็จ: ${err.message}`);
+        } finally {
+            setIsGenMockup(false);
+            setMockupProgress(null);
+        }
+    };
+
     const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
 
     const selectedEl = currentDesign?.elements?.find(el => el.id === selectedElId);
@@ -848,7 +823,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 </div>
 
                 {/* === Background Section === */}
-                <SidebarSection title="🎨 Background" open={openSections.bg} onToggle={() => toggleSection('bg')}>
+                <SidebarSection title={<><iconify-icon icon="mdi:palette" style={{verticalAlign:'middle'}}></iconify-icon> Background</>} open={openSections.bg} onToggle={() => toggleSection('bg')}>
                     {/* AI Background */}
                     <div style={{ marginBottom: 12 }}>
                         <div style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', marginBottom: 6 }}>AI สร้างลวดลาย (ทุกด้านพร้อมกัน)</div>
@@ -857,7 +832,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                             style={{ width: '100%', height: 56, border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, fontSize: 12, resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
                         <button onClick={generateAiBg} disabled={isAiGenerating || !aiPrompt.trim()}
                             style={{ marginTop: 6, width: '100%', padding: '8px 0', background: isAiGenerating ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: isAiGenerating ? 'wait' : 'pointer' }}>
-                            {isAiGenerating ? '⏳ กำลังสร้าง...' : '✨ สร้างลวดลาย AI'}
+                            {isAiGenerating ? <><iconify-icon icon="mdi:loading" style={{verticalAlign:'middle'}} class="spin"></iconify-icon> กำลังสร้าง...</> : <><iconify-icon icon="mdi:auto-fix" style={{verticalAlign:'middle'}}></iconify-icon> สร้างลวดลาย AI</>}
                         </button>
                     </div>
 
@@ -928,7 +903,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 </SidebarSection>
 
                 {/* === Text Section === */}
-                <SidebarSection title="✏️ ข้อความ" open={openSections.text} onToggle={() => toggleSection('text')}>
+                <SidebarSection title={<><iconify-icon icon="mdi:format-text" style={{verticalAlign:'middle'}}></iconify-icon> ข้อความ</>} open={openSections.text} onToggle={() => toggleSection('text')}>
                     <button onClick={() => addElement('text')}
                         style={{ width: '100%', padding: '8px 0', background: '#f0fdf4', border: `1px solid #86efac`, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#166534', marginBottom: 8 }}>
                         + เพิ่มข้อความ
@@ -948,7 +923,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 </SidebarSection>
 
                 {/* === Image Section === */}
-                <SidebarSection title="🖼 รูปภาพ / โลโก้" open={openSections.image} onToggle={() => toggleSection('image')}>
+                <SidebarSection title={<><iconify-icon icon="mdi:image-outline" style={{verticalAlign:'middle'}}></iconify-icon> รูปภาพ / โลโก้</>} open={openSections.image} onToggle={() => toggleSection('image')}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: C.text }}>
                             <iconify-icon icon="mdi:image-plus"></iconify-icon> อัพโหลดรูป
@@ -964,15 +939,15 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 </SidebarSection>
 
                 {/* === Shape Section === */}
-                <SidebarSection title="◆ รูปทรง" open={openSections.shape} onToggle={() => toggleSection('shape')}>
+                <SidebarSection title={<><iconify-icon icon="mdi:shape-outline" style={{verticalAlign:'middle'}}></iconify-icon> รูปทรง</>} open={openSections.shape} onToggle={() => toggleSection('shape')}>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <button onClick={() => addElement('rect')}
                             style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: '#fff' }}>
-                            ▭ สี่เหลี่ยม
+                            <iconify-icon icon="mdi:square-outline" style={{verticalAlign:'middle'}}></iconify-icon> สี่เหลี่ยม
                         </button>
                         <button onClick={() => addElement('circle')}
                             style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: '#fff' }}>
-                            ● วงกลม
+                            <iconify-icon icon="mdi:circle-outline" style={{verticalAlign:'middle'}}></iconify-icon> วงกลม
                         </button>
                     </div>
                     {selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle') && (
@@ -985,38 +960,38 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 </SidebarSection>
 
                 {/* === Import Label === */}
-                <SidebarSection title="📋 Import จากฉลาก" open={openSections.label} onToggle={() => toggleSection('label')}>
+                <SidebarSection title={<><iconify-icon icon="mdi:clipboard-text-outline" style={{verticalAlign:'middle'}}></iconify-icon> Import จากฉลาก</>} open={openSections.label} onToggle={() => toggleSection('label')}>
                     {!labelData ? (
                         <div style={{ fontSize: 12, color: C.sub, textAlign: 'center', padding: 8 }}>ยังไม่มีฉลากที่ออกแบบไว้</div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                             <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginBottom: 2 }}>วางฉลากทั้งชิ้น</div>
-                            <LabelPartBtn label="🏷 ฉลากเต็ม (รูปภาพ)" available={!!(labelImageUrl || labelData?.final_label_url)} onClick={() => addElement('label_import')} />
+                            <LabelPartBtn icon="mdi:label-outline" label="ฉลากเต็ม (รูปภาพ)" available={!!(labelImageUrl || labelData?.final_label_url)} onClick={() => addElement('label_import')} />
 
                             <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>ข้อมูลสินค้า</div>
-                            <LabelPartBtn label="📛 ชื่อสินค้า" detail={labelData?.product_name} available={!!labelData?.product_name} onClick={() => addElement('label_text_product_name')} />
-                            <LabelPartBtn label="✨ Tagline" detail={labelData?.tagline} available={!!labelData?.tagline} onClick={() => addElement('label_text_tagline')} />
-                            <LabelPartBtn label="⚖ น้ำหนักสุทธิ" detail={labelData?.net_weight} available={!!labelData?.net_weight} onClick={() => addElement('label_text_net_weight')} />
-                            <LabelPartBtn label="📝 ส่วนประกอบ" available={!!labelData?.ingredients} onClick={() => addElement('label_text_ingredients')} />
+                            <LabelPartBtn icon="mdi:tag-text-outline" label="ชื่อสินค้า" detail={labelData?.product_name} available={!!labelData?.product_name} onClick={() => addElement('label_text_product_name')} />
+                            <LabelPartBtn icon="mdi:star-four-points-outline" label="Tagline" detail={labelData?.tagline} available={!!labelData?.tagline} onClick={() => addElement('label_text_tagline')} />
+                            <LabelPartBtn icon="mdi:scale-balance" label="น้ำหนักสุทธิ" detail={labelData?.net_weight} available={!!labelData?.net_weight} onClick={() => addElement('label_text_net_weight')} />
+                            <LabelPartBtn icon="mdi:text-box-outline" label="ส่วนประกอบ" available={!!labelData?.ingredients} onClick={() => addElement('label_text_ingredients')} />
 
                             <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>คำแนะนำ / คำเตือน</div>
-                            <LabelPartBtn label="📖 วิธีใช้" available={!!labelData?.usage_instruction} onClick={() => addElement('label_text_usage')} />
-                            <LabelPartBtn label="🏠 วิธีเก็บรักษา" available={!!labelData?.storage_instruction} onClick={() => addElement('label_text_storage')} />
-                            <LabelPartBtn label="⚠ คำเตือน" available={!!labelData?.warnings} onClick={() => addElement('label_text_warnings')} />
+                            <LabelPartBtn icon="mdi:book-open-variant" label="วิธีใช้" available={!!labelData?.usage_instruction} onClick={() => addElement('label_text_usage')} />
+                            <LabelPartBtn icon="mdi:home-outline" label="วิธีเก็บรักษา" available={!!labelData?.storage_instruction} onClick={() => addElement('label_text_storage')} />
+                            <LabelPartBtn icon="mdi:alert-outline" label="คำเตือน" available={!!labelData?.warnings} onClick={() => addElement('label_text_warnings')} />
 
                             <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>ข้อมูลทางกฎหมาย</div>
-                            <LabelPartBtn label="🏭 ผู้ผลิต" available={!!labelData?.manufacturer_info} onClick={() => addElement('label_text_manufacturer')} />
-                            <LabelPartBtn label="🔖 เลข อย." detail={labelData?.fda_number} available={!!labelData?.fda_number} onClick={() => addElement('label_text_fda')} />
-                            <LabelPartBtn label="📅 MFG / EXP" available={!!(labelData?.mfg_date || labelData?.exp_date)} onClick={() => addElement('label_text_dates')} />
-                            <LabelPartBtn label="🔢 LOT" detail={labelData?.lot_number} available={!!labelData?.lot_number} onClick={() => addElement('label_text_lot')} />
+                            <LabelPartBtn icon="mdi:factory" label="ผู้ผลิต" available={!!labelData?.manufacturer_info} onClick={() => addElement('label_text_manufacturer')} />
+                            <LabelPartBtn icon="mdi:bookmark-outline" label="เลข อย." detail={labelData?.fda_number} available={!!labelData?.fda_number} onClick={() => addElement('label_text_fda')} />
+                            <LabelPartBtn icon="mdi:calendar-outline" label="MFG / EXP" available={!!(labelData?.mfg_date || labelData?.exp_date)} onClick={() => addElement('label_text_dates')} />
+                            <LabelPartBtn icon="mdi:pound" label="LOT" detail={labelData?.lot_number} available={!!labelData?.lot_number} onClick={() => addElement('label_text_lot')} />
 
                             <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>โลโก้ / เครื่องหมาย</div>
-                            <LabelPartBtn label="👑 โลโก้แบรนด์" available={!!brandAssets?.logoUrl} onClick={() => addElement('label_logo')} />
-                            <LabelPartBtn label="🏅 Certifications" detail={(() => { try { const c = Array.isArray(labelData?.certifications) ? labelData.certifications : JSON.parse(labelData?.certifications || '[]'); return c.join(', '); } catch { return ''; } })()} available={!!labelData?.certifications} onClick={() => addElement('label_certs')} />
+                            <LabelPartBtn icon="mdi:crown" label="โลโก้แบรนด์" available={!!brandAssets?.logoUrl} onClick={() => addElement('label_logo')} />
+                            <LabelPartBtn icon="mdi:medal-outline" label="Certifications" detail={(() => { try { const c = Array.isArray(labelData?.certifications) ? labelData.certifications : JSON.parse(labelData?.certifications || '[]'); return c.join(', '); } catch { return ''; } })()} available={!!labelData?.certifications} onClick={() => addElement('label_certs')} />
 
                             <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>Barcode / QR Code</div>
-                            <LabelPartBtn label="||||| Barcode (EAN-13)" detail={labelData?.barcode_value} available={true} onClick={() => addElement('barcode')} />
-                            <LabelPartBtn label="◻ QR Code" detail={labelData?.qr_code_value} available={true} onClick={() => addElement('qrcode')} />
+                            <LabelPartBtn icon="mdi:barcode" label="Barcode (EAN-13)" detail={labelData?.barcode_value} available={true} onClick={() => addElement('barcode')} />
+                            <LabelPartBtn icon="mdi:qrcode" label="QR Code" detail={labelData?.qr_code_value} available={true} onClick={() => addElement('qrcode')} />
                         </div>
                     )}
                 </SidebarSection>
@@ -1030,7 +1005,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                             </span>
                             <button onClick={() => deleteElement(selectedEl.id)}
                                 style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>
-                                🗑 ลบ
+                                <iconify-icon icon="mdi:delete-outline" style={{verticalAlign:'middle'}}></iconify-icon> ลบ
                             </button>
                         </div>
                         {selectedEl.type === 'barcode' && (
@@ -1056,68 +1031,239 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <button onClick={handleSave} disabled={isSaving}
                         style={{ padding: '10px 0', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: isSaving ? 'wait' : 'pointer' }}>
-                        {isSaving ? '💾 กำลังบันทึก...' : '💾 บันทึก'}
+                        {isSaving ? <><iconify-icon icon="mdi:content-save" style={{verticalAlign:'middle'}}></iconify-icon> กำลังบันทึก...</> : <><iconify-icon icon="mdi:content-save" style={{verticalAlign:'middle'}}></iconify-icon> บันทึก</>}
                     </button>
                     <div style={{ display: 'flex', gap: 6 }}>
                         <button onClick={handleExportPng} disabled={isExporting}
                             style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
-                            🖼 PNG
+                            <iconify-icon icon="mdi:image-outline" style={{verticalAlign:'middle'}}></iconify-icon> PNG
                         </button>
                         <button onClick={handleExportPdf} disabled={isExporting}
                             style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
-                            📄 PDF
+                            <iconify-icon icon="mdi:file-pdf-box" style={{verticalAlign:'middle'}}></iconify-icon> PDF
                         </button>
                         <button onClick={handleExportAi} disabled={isExporting}
                             style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
-                            🎨 AI
+                            <iconify-icon icon="mdi:adobe" style={{verticalAlign:'middle'}}></iconify-icon> AI
                         </button>
                     </div>
                     <div style={{ fontSize: 10, color: C.sub, textAlign: 'center' }}>PDF/AI = print-ready, crop marks, fold lines</div>
                     {saveMsg && <div style={{ fontSize: 12, color: '#16a34a', textAlign: 'center' }}>{saveMsg}</div>}
                     {saveStatus && !saveMsg && <div style={{ fontSize: 11, color: saveStatus.includes('ไม่') ? '#dc2626' : '#16a34a', textAlign: 'center' }}>{saveStatus}</div>}
                 </div>
+
+                {/* === AI Mockup Preview === */}
+                <div style={{ marginTop: 16, padding: 12, background: '#fdf4ff', borderRadius: 10, border: '1px solid #e9d5ff' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <iconify-icon icon="mdi:cube-scan" style={{fontSize:16}}></iconify-icon>
+                        AI สร้างภาพ Mockup สมบูรณ์
+                    </div>
+                    <div style={{ fontSize: 10, color: '#6b21a8', marginBottom: 8, lineHeight: 1.5 }}>
+                        เลือกด้านที่จะแสดง แล้วให้ AI สร้างภาพ 3D Mockup สมจริง
+                    </div>
+
+                    {/* Panel selection checkboxes */}
+                    <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 600, marginBottom: 4 }}>เลือกด้านที่จะใช้:</div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {panels.map(p => (
+                                <label key={p.id} style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 6, fontSize: 10, cursor: 'pointer',
+                                    border: mockupPanelSelection[p.id] ? '2px solid #7c3aed' : `1px solid ${C.border}`,
+                                    background: mockupPanelSelection[p.id] ? '#ede9fe' : '#fff',
+                                    color: mockupPanelSelection[p.id] ? '#7c3aed' : C.sub, fontWeight: mockupPanelSelection[p.id] ? 600 : 400
+                                }}>
+                                    <input type="checkbox" checked={!!mockupPanelSelection[p.id]}
+                                        onChange={e => setMockupPanelSelection(prev => ({ ...prev, [p.id]: e.target.checked }))}
+                                        style={{ width: 12, height: 12, accentColor: '#7c3aed' }} />
+                                    {p.label}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Background style selector */}
+                    <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 600, marginBottom: 4 }}>พื้นหลัง:</div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {[
+                                { key: 'white', label: 'ขาว', color: '#fff' },
+                                { key: 'wood', label: 'ไม้', color: '#d4a574' },
+                                { key: 'marble', label: 'หินอ่อน', color: '#e8e0d8' },
+                                { key: 'nature', label: 'ธรรมชาติ', color: '#86efac' },
+                                { key: 'gradient', label: 'สตูดิโอ', color: '#c4b5fd' },
+                            ].map(bg => (
+                                <button key={bg.key} onClick={() => setMockupBgStyle(bg.key)}
+                                    style={{
+                                        padding: '3px 8px', borderRadius: 6, fontSize: 10, cursor: 'pointer',
+                                        border: mockupBgStyle === bg.key ? '2px solid #7c3aed' : `1px solid ${C.border}`,
+                                        background: bg.color, color: '#333',
+                                        fontWeight: mockupBgStyle === bg.key ? 700 : 400
+                                    }}>
+                                    {bg.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <button onClick={handleGenMockup} disabled={isGenMockup || panels.length === 0}
+                        style={{
+                            width: '100%', padding: '10px 0', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: isGenMockup ? 'wait' : 'pointer',
+                            background: isGenMockup ? '#c4b5fd' : 'linear-gradient(135deg, #7c3aed, #a855f7)',
+                            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                        }}>
+                        {isGenMockup ? (
+                            <><iconify-icon icon="mdi:loading" class="spin" style={{verticalAlign:'middle'}}></iconify-icon> {mockupProgress?.message || 'กำลังสร้าง...'}</>
+                        ) : (
+                            <><iconify-icon icon="mdi:cube-scan" style={{verticalAlign:'middle'}}></iconify-icon> สร้างภาพ Mockup ({panels.filter(p => mockupPanelSelection[p.id]).length} ด้าน)</>
+                        )}
+                    </button>
+
+                    {/* Progress */}
+                    {isGenMockup && mockupProgress && (
+                        <div style={{ marginTop: 6 }}>
+                            <div style={{ height: 4, background: '#e9d5ff', borderRadius: 4, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', background: '#7c3aed', borderRadius: 4, width: `${(mockupProgress.step / mockupProgress.total) * 100}%`, transition: 'width 0.3s' }} />
+                            </div>
+                            <div style={{ fontSize: 10, color: '#7c3aed', marginTop: 3, textAlign: 'center' }}>
+                                ขั้นตอน {mockupProgress.step}/{mockupProgress.total}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Result preview — click to open popup */}
+                    {aiMockupPreviewUrl && (
+                        <div style={{ marginTop: 8 }}>
+                            <img src={aiMockupPreviewUrl} alt="AI Mockup"
+                                onClick={() => setLightboxUrl(aiMockupPreviewUrl)}
+                                style={{ width: '100%', borderRadius: 8, border: `1px solid ${C.border}`, cursor: 'pointer' }} />
+                            <div style={{ fontSize: 9, color: '#7c3aed', textAlign: 'center', marginTop: 2 }}>คลิกเพื่อขยาย</div>
+                        </div>
+                    )}
+
+                    {/* Mockup History */}
+                    {mockupHistory.length > 0 && (
+                        <div style={{ marginTop: 10 }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: '#7c3aed', marginBottom: 4 }}>ประวัติ Mockup ({mockupHistory.length})</div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxHeight: 130, overflowY: 'auto' }}>
+                                {mockupHistory.map(h => (
+                                    <div key={h.history_id}
+                                        onClick={() => setLightboxUrl(`${API}${h.image_url}`)}
+                                        style={{
+                                            width: 60, height: 60, borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
+                                            border: `1px solid ${C.border}`, flexShrink: 0,
+                                            transition: 'transform 0.15s', position: 'relative'
+                                        }}
+                                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+                                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                                        <img src={`${API}${h.image_url}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ fontSize: 9, color: '#a78bfa', marginTop: 6, textAlign: 'center' }}>ใช้ Gemini AI Credit</div>
+                </div>
             </div>
 
             {/* === CANVAS AREA === */}
             <div style={{ flex: 1, background: C.bgPage, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 20, overflow: 'auto', position: 'relative' }}>
-                {/* Mini Map */}
-                <DielineMiniMap panels={panels} activePanelIdx={activePanelIdx} onClickPanel={idx => { setActivePanelIdx(idx); setSelectedElId(null); }}
-                    materialData={materialData} panelDesigns={panelDesigns} aiDielineBgImg={aiDielineBgImg} />
-
                 {/* Panel info */}
                 <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
                     <button onClick={() => { const prev = (activePanelIdx - 1 + panels.length) % panels.length; setActivePanelIdx(prev); setSelectedElId(null); }}
-                        style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14 }}>◀</button>
+                        style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14, display:'flex', alignItems:'center' }}><iconify-icon icon="mdi:chevron-left"></iconify-icon></button>
                     <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
                         {activePanel?.label} ({activePanel?.w_mm} × {activePanel?.h_mm} mm)
                     </span>
                     <button onClick={() => { const next = (activePanelIdx + 1) % panels.length; setActivePanelIdx(next); setSelectedElId(null); }}
-                        style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14 }}>▶</button>
+                        style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14, display:'flex', alignItems:'center' }}><iconify-icon icon="mdi:chevron-right"></iconify-icon></button>
                 </div>
 
-                {/* Konva Stage */}
-                <div style={{ background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 2 }}>
-                    <Stage ref={stageRef} width={canvasW} height={canvasH} onClick={handleStageClick}>
-                        <Layer>
-                            {/* Background */}
-                            <PanelBackground design={currentDesign} width={canvasW} height={canvasH}
-                                panel={activePanel} panels={panels} materialData={materialData}
-                                aiDielineBgImg={aiDielineBgImg} />
+                {/* Canvas + Mini Map side by side */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                    {/* Konva Stage */}
+                    <div style={{ background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 2 }}>
+                        <Stage ref={stageRef} width={canvasW} height={canvasH} onClick={handleStageClick}>
+                            <Layer>
+                                {/* Background */}
+                                <PanelBackground design={currentDesign} width={canvasW} height={canvasH}
+                                    panel={activePanel} panels={panels} materialData={materialData}
+                                    aiDielineBgImg={aiDielineBgImg} />
 
-                            {/* Elements */}
-                            {currentDesign?.elements?.map(el => (
-                                <PanelElement key={el.id} el={el} isSelected={el.id === selectedElId}
-                                    onSelect={() => setSelectedElId(el.id)}
-                                    onChange={(updates) => updateElement(activePanel.id, el.id, updates)} />
-                            ))}
+                                {/* Elements */}
+                                {currentDesign?.elements?.map(el => (
+                                    <PanelElement key={el.id} el={el} isSelected={el.id === selectedElId}
+                                        onSelect={() => setSelectedElId(el.id)}
+                                        onChange={(updates) => updateElement(activePanel.id, el.id, updates)} />
+                                ))}
 
-                            <Transformer ref={trRef}
-                                boundBoxFunc={(oldB, newB) => newB.width < 10 ? oldB : newB}
-                                rotateEnabled={true} keepRatio={false} />
-                        </Layer>
-                    </Stage>
+                                <Transformer ref={trRef}
+                                    boundBoxFunc={(oldB, newB) => newB.width < 10 ? oldB : newB}
+                                    rotateEnabled={true} keepRatio={false} />
+                            </Layer>
+                        </Stage>
+                    </div>
+
+                    {/* Mini Map (right side) */}
+                    <DielineMiniMap panels={panels} activePanelIdx={activePanelIdx} onClickPanel={idx => { setActivePanelIdx(idx); setSelectedElId(null); }}
+                        materialData={materialData} panelDesigns={panelDesigns} aiDielineBgImg={aiDielineBgImg} />
                 </div>
             </div>
+
+            {/* === Lightbox Popup === */}
+            {lightboxUrl && (
+                <div onClick={() => setLightboxUrl(null)}
+                    style={{
+                        position: 'fixed', inset: 0, zIndex: 9999,
+                        background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                    }}>
+                    <div onClick={e => e.stopPropagation()} style={{ position: 'relative' }}>
+                        <img src={lightboxUrl} alt="Mockup Preview"
+                            style={{ width: 1024, maxWidth: '90vw', maxHeight: '80vh', borderRadius: 12, boxShadow: '0 12px 48px rgba(0,0,0,0.5)', objectFit: 'contain', background: '#fff' }} />
+                        <button onClick={() => setLightboxUrl(null)}
+                            style={{
+                                position: 'absolute', top: -12, right: -12, width: 32, height: 32, borderRadius: '50%',
+                                background: '#fff', border: 'none', cursor: 'pointer', fontSize: 18,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                            }}>
+                            <iconify-icon icon="mdi:close"></iconify-icon>
+                        </button>
+                    </div>
+                    <div style={{ marginTop: 16, display: 'flex', gap: 12 }} onClick={e => e.stopPropagation()}>
+                        <button onClick={async () => {
+                            try {
+                                const resp = await fetch(lightboxUrl);
+                                const blob = await resp.blob();
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.download = `mockup_${product.name_product || 'design'}.png`;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                URL.revokeObjectURL(url);
+                            } catch (e) { console.error('Download error:', e); }
+                        }}
+                            style={{
+                                padding: '10px 24px', background: '#7c3aed', color: '#fff', borderRadius: 8,
+                                fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
+                                display: 'flex', alignItems: 'center', gap: 6
+                            }}>
+                            <iconify-icon icon="mdi:download" style={{verticalAlign:'middle'}}></iconify-icon> ดาวน์โหลด
+                        </button>
+                        <button onClick={() => setLightboxUrl(null)}
+                            style={{
+                                padding: '10px 24px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)',
+                                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                            }}>
+                            ปิด
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -1284,13 +1430,13 @@ function DielineMiniMap({ panels, activePanelIdx, onClickPanel, materialData, pa
     if (!materialData) return null;
     const dW = parseFloat(materialData.dieline_width_mm);
     const dH = parseFloat(materialData.dieline_height_mm);
-    const maxW = 260, maxH = 120;
+    const maxW = 200, maxH = 300;
     const scale = Math.min(maxW / dW, maxH / dH);
     const mapW = dW * scale, mapH = dH * scale;
 
     return (
-        <div style={{ marginBottom: 14, background: '#fff', borderRadius: 8, padding: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'inline-block' }}>
-            <div style={{ fontSize: 10, color: C.sub, marginBottom: 4, textAlign: 'center' }}>
+        <div style={{ background: '#fff', borderRadius: 8, padding: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'inline-block', flexShrink: 0 }}>
+            <div style={{ fontSize: 10, color: C.sub, marginBottom: 6, textAlign: 'center', fontWeight: 600 }}>
                 Die-line ({dW} × {dH} mm)
             </div>
             <svg width={mapW} height={mapH} viewBox={`0 0 ${dW} ${dH}`} style={{ display: 'block' }}>
@@ -1320,7 +1466,7 @@ function DielineMiniMap({ panels, activePanelIdx, onClickPanel, materialData, pa
 }
 
 // === Label Part Button ===
-function LabelPartBtn({ label, detail, available, onClick }) {
+function LabelPartBtn({ icon, label, detail, available, onClick }) {
     return (
         <button onClick={available ? onClick : undefined}
             style={{
@@ -1330,7 +1476,7 @@ function LabelPartBtn({ label, detail, available, onClick }) {
                 background: available ? '#fffbeb' : '#f9fafb', color: available ? '#92400e' : '#9ca3af',
                 opacity: available ? 1 : 0.5, textAlign: 'left'
             }}>
-            <span style={{ fontWeight: 500 }}>{label}</span>
+            <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>{icon && <iconify-icon icon={icon} style={{fontSize:14,verticalAlign:'middle'}}></iconify-icon>}{label}</span>
             {detail && <span style={{ fontSize: 10, color: '#a16207', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail}</span>}
             {available && <span style={{ fontSize: 10, color: '#d97706' }}>+</span>}
         </button>
@@ -1369,13 +1515,10 @@ function ModeSelector({ onPick, onBack, productName, hasPanels }) {
                 สำหรับสินค้า "{productName}" — เลือกวิธีที่เหมาะกับงานของคุณ
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-                <ModeCard iconName="mdi:sticker-outline" title="ติดสติ๊กเกอร์ฉลาก"
-                    desc="วางฉลากที่ออกแบบไว้ลงบนภาพบรรจุภัณฑ์ ปรับตำแหน่ง ขนาด หรือหมุน บันทึกเป็น PNG ฟรี"
-                    badge="แนะนำ" badgeColor={C.label} onClick={() => onPick('sticker')} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, maxWidth: 700 }}>
                 <ModeCard iconName="mdi:cube-unfolded" title="ออกแบบบรรจุภัณฑ์ทั้งชิ้น"
                     desc="ออกแบบกราฟิกลงบนพื้นผิวบรรจุภัณฑ์ทุกด้าน ใช้ AI สร้างลวดลาย หรือออกแบบเอง ส่งออกเป็น PDF"
-                    badge="ใหม่" badgeColor="#2563eb"
+                    badge="แนะนำ" badgeColor={C.label}
                     disabled={!hasPanels}
                     disabledMsg="บรรจุภัณฑ์นี้ยังไม่รองรับการออกแบบทั้งชิ้น"
                     onClick={() => onPick('package_design')} />
@@ -1976,17 +2119,6 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
     };
     const handleBackToMode = () => { setView('mode'); setAiMockupUrl(null); };
 
-    const handleExportPng = (dataUrl) => {
-        if (!dataUrl) return;
-        setIsExporting(true);
-        try {
-            const link = document.createElement('a');
-            link.href = dataUrl;
-            link.download = `mockup_${selectedProduct?.name_product || 'design'}.png`;
-            link.click();
-        } finally { setIsExporting(false); }
-    };
-
     const handleAIMockup = async (bgStyle = 'white') => {
         if (!selectedProduct) return;
         setIsAIGen(true);
@@ -2083,31 +2215,6 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
                 <ModeSelector onPick={handlePickMode} onBack={handleBackToPicker}
                     productName={selectedProduct.name_product}
                     hasPanels={!!(selectedProduct.materials?.[0]?.panels_json || selectedProduct.materials?.[0]?.dieline_width_mm)} />
-            )}
-
-            {view === 'sticker' && (
-                <div style={{ padding: 24 }}>
-                    <button onClick={handleBackToMode} style={{
-                        background: 'none', border: 'none', color: C.sub, cursor: 'pointer',
-                        marginBottom: 16, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, padding: 0
-                    }}>
-                        <iconify-icon icon="mdi:chevron-left"></iconify-icon>
-                        กลับไปเลือกโหมด
-                    </button>
-                    {packageImageUrl && labelImageUrl ? (
-                        <StickerEditor
-                            packageImageUrl={packageImageUrl}
-                            labelImageUrl={labelImageUrl}
-                            onExportPng={handleExportPng}
-                            onSwitchToAI={() => setView('aimockup')}
-                            isExporting={isExporting} isAIGen={isAIGen}
-                        />
-                    ) : (
-                        <div style={{ padding: 40, textAlign: 'center', color: C.sub }}>
-                            กำลังเตรียม Preview... {!packageImageUrl && '(โหลดภาพบรรจุภัณฑ์)'} {!labelImageUrl && '(เรนเดอร์ฉลาก)'}
-                        </div>
-                    )}
-                </div>
             )}
 
             {view === 'package_design' && selectedProduct && (
