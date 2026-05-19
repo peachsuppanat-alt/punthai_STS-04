@@ -9,6 +9,7 @@ import fs from 'fs';
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import axios from 'axios';
+import sharp from 'sharp';
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -27,7 +28,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static('uploads'));
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.OPENAI_API_KEY,
 });
 
 const googleImagen = new OpenAI({
@@ -37,15 +38,15 @@ const googleImagen = new OpenAI({
 
 // สร้าง Connection Pool Database
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 3306,
-  ssl: process.env.DB_SSL === 'true' ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : undefined,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 3306,
+    ssl: process.env.DB_SSL === 'true' ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : undefined,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
 // Setup โฟลเดอร์สำหรับเก็บรูปภาพ
@@ -62,143 +63,143 @@ if (!fs.existsSync(generatedDir)) {
 
 // ตั้งค่า Multer สำหรับรูปภาพที่ User อัปโหลดมาเอง
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/') // 👈 เก็บในโฟลเดอร์ uploads/
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname))
-  }
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/') // 👈 เก็บในโฟลเดอร์ uploads/
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + path.extname(file.originalname))
+    }
 });
 const upload = multer({ storage: storage });
 
 // ================= API LOGIN & REGISTER =================
 // ================= API LOGIN & REGISTER (อัปเดตใหม่) =================
 app.post('/api/register', upload.single('img_profile'), async (req, res) => {
-  const { user_name, password, email, first_name, last_name } = req.body; 
-  const image_profile = req.file ? req.file.filename : null; 
-  const subscription_status = 'STANDARD';
+    const { user_name, password, email, first_name, last_name } = req.body;
+    const image_profile = req.file ? req.file.filename : null;
+    const subscription_status = 'STANDARD';
 
-  if (!user_name || !password || !email) {
-      return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน!' });
-  }
-
-  try {
-    const connection = await pool.getConnection();
-    const [checkUser] = await connection.query('SELECT * FROM user_profile WHERE user_name = ? OR email = ?', [user_name, email]);
-    if (checkUser.length > 0) {
-      connection.release();
-      return res.status(400).json({ status: 'error', message: 'ชื่อผู้ใช้หรืออีเมลนี้มีอยู่ในระบบแล้ว' });
+    if (!user_name || !password || !email) {
+        return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน!' });
     }
 
-    // 🔒 เข้ารหัสผ่านด้วย bcrypt ก่อนบันทึกลงฐานข้อมูล (เพิ่มความปลอดภัยสูงสุด)
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    try {
+        const connection = await pool.getConnection();
+        const [checkUser] = await connection.query('SELECT * FROM user_profile WHERE user_name = ? OR email = ?', [user_name, email]);
+        if (checkUser.length > 0) {
+            connection.release();
+            return res.status(400).json({ status: 'error', message: 'ชื่อผู้ใช้หรืออีเมลนี้มีอยู่ในระบบแล้ว' });
+        }
 
-    const [result] = await connection.query(
-      `INSERT INTO user_profile (user_name, password, email, first_name, last_name, image_profile, subscription_status) 
+        // 🔒 เข้ารหัสผ่านด้วย bcrypt ก่อนบันทึกลงฐานข้อมูล (เพิ่มความปลอดภัยสูงสุด)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const [result] = await connection.query(
+            `INSERT INTO user_profile (user_name, password, email, first_name, last_name, image_profile, subscription_status) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [user_name, hashedPassword, email, first_name || null, last_name || null, image_profile, subscription_status]
-    );
-    const [newUser] = await connection.query('SELECT * FROM user_profile WHERE user_id = ?', [result.insertId]);
-    connection.release();
-    res.json({ status: 'success', message: 'สมัครสมาชิกสำเร็จ!', user: newUser[0] });
-  } catch (error) {
-    console.error("❌ Register Error:", error); 
-    res.status(500).json({ status: 'error', message: 'Database Error', error: error.message });
-  }
+            [user_name, hashedPassword, email, first_name || null, last_name || null, image_profile, subscription_status]
+        );
+        const [newUser] = await connection.query('SELECT * FROM user_profile WHERE user_id = ?', [result.insertId]);
+        connection.release();
+        res.json({ status: 'success', message: 'สมัครสมาชิกสำเร็จ!', user: newUser[0] });
+    } catch (error) {
+        console.error("❌ Register Error:", error);
+        res.status(500).json({ status: 'error', message: 'Database Error', error: error.message });
+    }
 });
 
 app.post('/api/login', async (req, res) => {
-  const { user_name, password } = req.body;
-  try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.query('SELECT * FROM user_profile WHERE user_name = ?', [user_name]);
+    const { user_name, password } = req.body;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query('SELECT * FROM user_profile WHERE user_name = ?', [user_name]);
 
-    if (rows.length > 0) {
-      const user = rows[0];
-      let validPassword = false;
+        if (rows.length > 0) {
+            const user = rows[0];
+            let validPassword = false;
 
-      // 🔍 เช็คว่ารหัสผ่านใน Database เป็น Hash หรือยัง?
-      // (ปกติ Hash ของ bcrypt จะขึ้นต้นด้วย $2a$, $2b$ หรือ $2y$)
-      const isHashed = user.password && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'));
+            // 🔍 เช็คว่ารหัสผ่านใน Database เป็น Hash หรือยัง?
+            // (ปกติ Hash ของ bcrypt จะขึ้นต้นด้วย $2a$, $2b$ หรือ $2y$)
+            const isHashed = user.password && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'));
 
-      if (isHashed) {
-        // 🔒 กรณีที่ 1: เป็นบัญชีใหม่ที่เข้ารหัสแล้ว
-        validPassword = await bcrypt.compare(password, user.password);
-      } else {
-        // 🔓 กรณีที่ 2: เป็นบัญชีเก่าที่ยังไม่ได้เข้ารหัส (Plain Text)
-        if (password === user.password) {
-          validPassword = true;
+            if (isHashed) {
+                // 🔒 กรณีที่ 1: เป็นบัญชีใหม่ที่เข้ารหัสแล้ว
+                validPassword = await bcrypt.compare(password, user.password);
+            } else {
+                // 🔓 กรณีที่ 2: เป็นบัญชีเก่าที่ยังไม่ได้เข้ารหัส (Plain Text)
+                if (password === user.password) {
+                    validPassword = true;
 
-          // 💡 [อัปเกรดอัตโนมัติ] เมื่อบัญชีเก่าล็อกอินสำเร็จ ให้ทำการ Hash รหัสผ่านเซฟกลับลง Database ทันที
-          try {
-            const salt = await bcrypt.genSalt(10);
-            const newHashedPassword = await bcrypt.hash(password, salt);
-            await connection.query('UPDATE user_profile SET password = ? WHERE user_id = ?', [newHashedPassword, user.user_id]);
-            console.log(`✅ อัปเกรดความปลอดภัยให้บัญชีเก่า: ${user_name} เรียบร้อยแล้ว!`);
-          } catch (hashErr) {
-            console.error("Auto-migrate password error:", hashErr);
-          }
+                    // 💡 [อัปเกรดอัตโนมัติ] เมื่อบัญชีเก่าล็อกอินสำเร็จ ให้ทำการ Hash รหัสผ่านเซฟกลับลง Database ทันที
+                    try {
+                        const salt = await bcrypt.genSalt(10);
+                        const newHashedPassword = await bcrypt.hash(password, salt);
+                        await connection.query('UPDATE user_profile SET password = ? WHERE user_id = ?', [newHashedPassword, user.user_id]);
+                        console.log(`✅ อัปเกรดความปลอดภัยให้บัญชีเก่า: ${user_name} เรียบร้อยแล้ว!`);
+                    } catch (hashErr) {
+                        console.error("Auto-migrate password error:", hashErr);
+                    }
+                }
+            }
+
+            connection.release();
+
+            if (validPassword) {
+                // เอา password ออกจาก object ก่อนส่งกลับไปให้ Frontend เพื่อความปลอดภัย
+                delete user.password;
+                res.json({ status: 'success', message: 'เข้าสู่ระบบสำเร็จ!', user: user });
+            } else {
+                res.status(401).json({ status: 'error', message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+            }
+        } else {
+            connection.release();
+            res.status(401).json({ status: 'error', message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
         }
-      }
-
-      connection.release();
-
-      if (validPassword) {
-        // เอา password ออกจาก object ก่อนส่งกลับไปให้ Frontend เพื่อความปลอดภัย
-        delete user.password; 
-        res.json({ status: 'success', message: 'เข้าสู่ระบบสำเร็จ!', user: user });
-      } else {
-        res.status(401).json({ status: 'error', message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
-      }
-    } else {
-      connection.release();
-      res.status(401).json({ status: 'error', message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+    } catch (error) {
+        console.error("Login Error:", error);
+        res.status(500).json({ status: 'error', message: 'Error Server', error: error.message });
     }
-  } catch (error) {
-    console.error("Login Error:", error);
-    res.status(500).json({ status: 'error', message: 'Error Server', error: error.message });
-  }
 });
 
 // ================= API GOOGLE AUTH (เพิ่มใหม่) =================
 app.post('/api/auth/google', async (req, res) => {
-  const { token } = req.body;
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const payload = ticket.getPayload();
-    const { sub: googleId, email, given_name, family_name, picture } = payload; // ดึง picture ออกมา
+    const { token } = req.body;
+    try {
+        const ticket = await googleClient.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        const { sub: googleId, email, given_name, family_name, picture } = payload; // ดึง picture ออกมา
 
-    const connection = await pool.getConnection();
-    const [users] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
-    
-    if (users.length > 0) {
-      // 🟢 ถ้ามีบัญชีอยู่แล้ว ให้ อัปเดต รูปโปรไฟล์จาก Google เข้าไปใหม่
-      await connection.query('UPDATE user_profile SET google_id = ?, image_profile = ? WHERE email = ?', [googleId, picture, email]);
-      const [updatedUser] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
-      connection.release();
-      return res.json({ status: 'success', message: 'เข้าสู่ระบบด้วย Google สำเร็จ', user: updatedUser[0] });
-    } else {
-      // 🟢 ถ้ายังไม่มีบัญชี ให้เพิ่ม picture ลงในฐานข้อมูลด้วย
-      const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
-      const baseUserName = email.split('@')[0];
-      
-      const [result] = await connection.query(
-        `INSERT INTO user_profile (user_name, password, email, first_name, last_name, google_id, image_profile, subscription_status) 
+        const connection = await pool.getConnection();
+        const [users] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
+
+        if (users.length > 0) {
+            // 🟢 ถ้ามีบัญชีอยู่แล้ว ให้ อัปเดต รูปโปรไฟล์จาก Google เข้าไปใหม่
+            await connection.query('UPDATE user_profile SET google_id = ?, image_profile = ? WHERE email = ?', [googleId, picture, email]);
+            const [updatedUser] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
+            connection.release();
+            return res.json({ status: 'success', message: 'เข้าสู่ระบบด้วย Google สำเร็จ', user: updatedUser[0] });
+        } else {
+            // 🟢 ถ้ายังไม่มีบัญชี ให้เพิ่ม picture ลงในฐานข้อมูลด้วย
+            const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
+            const baseUserName = email.split('@')[0];
+
+            const [result] = await connection.query(
+                `INSERT INTO user_profile (user_name, password, email, first_name, last_name, google_id, image_profile, subscription_status) 
          VALUES (?, ?, ?, ?, ?, ?, ?, 'STANDARD')`,
-        [baseUserName, randomPassword, email, given_name, family_name, googleId, picture]
-      );
-      const [newUser] = await connection.query('SELECT * FROM user_profile WHERE user_id = ?', [result.insertId]);
-      connection.release();
-      return res.json({ status: 'success', message: 'สมัครสมาชิกด้วย Google สำเร็จ', user: newUser[0] });
+                [baseUserName, randomPassword, email, given_name, family_name, googleId, picture]
+            );
+            const [newUser] = await connection.query('SELECT * FROM user_profile WHERE user_id = ?', [result.insertId]);
+            connection.release();
+            return res.json({ status: 'success', message: 'สมัครสมาชิกด้วย Google สำเร็จ', user: newUser[0] });
+        }
+    } catch (error) {
+        console.error("Google Auth Error:", error);
+        res.status(500).json({ status: 'error', message: 'Google Authentication Failed' });
     }
-  } catch (error) {
-    console.error("Google Auth Error:", error);
-    res.status(500).json({ status: 'error', message: 'Google Authentication Failed' });
-  }
 });
 
 // ================= API UPDATE PROFILE =================
@@ -254,36 +255,36 @@ app.put('/api/users/profile/:userId', upload.single('image_profile'), async (req
 
 // ================= 4. API จัดการโปรเจกต์ (Projects) =================
 app.post('/api/projects', async (req, res) => {
-  const { user_id } = req.body;
-  if (!user_id) return res.status(400).json({ status: 'error', message: 'ไม่พบ user_id' });
-  try {
-    const connection = await pool.getConnection();
-    const [result] = await connection.query(
-      'INSERT INTO project (user_id, status) VALUES (?, ?)',
-      [user_id, 'ยังไม่ได้เริ่ม']
-    );
-    connection.release();
-    res.json({ status: 'success', message: 'สร้างโปรเจกต์สำเร็จ', project_id: result.insertId });
-  } catch (error) {
-    console.error("❌ Create Project Error:", error);
-    res.status(500).json({ status: 'error', message: 'สร้างโปรเจกต์ไม่สำเร็จ', error: error.message });
-  }
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ status: 'error', message: 'ไม่พบ user_id' });
+    try {
+        const connection = await pool.getConnection();
+        const [result] = await connection.query(
+            'INSERT INTO project (user_id, status) VALUES (?, ?)',
+            [user_id, 'ยังไม่ได้เริ่ม']
+        );
+        connection.release();
+        res.json({ status: 'success', message: 'สร้างโปรเจกต์สำเร็จ', project_id: result.insertId });
+    } catch (error) {
+        console.error("❌ Create Project Error:", error);
+        res.status(500).json({ status: 'error', message: 'สร้างโปรเจกต์ไม่สำเร็จ', error: error.message });
+    }
 });
 
 app.get('/api/projects/:user_id', async (req, res) => {
-  const { user_id } = req.params;
-  try {
-    const connection = await pool.getConnection();
-    const [projects] = await connection.query(
-      'SELECT * FROM project WHERE user_id = ? ORDER BY project_id DESC',
-      [user_id]
-    );
-    connection.release();
-    res.json({ status: 'success', projects });
-  } catch (error) {
-    console.error("❌ Fetch Projects Error:", error);
-    res.status(500).json({ status: 'error', message: 'ดึงข้อมูลโปรเจกต์ไม่สำเร็จ' });
-  }
+    const { user_id } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        const [projects] = await connection.query(
+            'SELECT * FROM project WHERE user_id = ? ORDER BY project_id DESC',
+            [user_id]
+        );
+        connection.release();
+        res.json({ status: 'success', projects });
+    } catch (error) {
+        console.error("❌ Fetch Projects Error:", error);
+        res.status(500).json({ status: 'error', message: 'ดึงข้อมูลโปรเจกต์ไม่สำเร็จ' });
+    }
 });
 
 app.get('/api/projects/detail/:id', async (req, res) => {
@@ -518,7 +519,7 @@ app.get('/api/brand_dna/:projectId', async (req, res) => {
         connection.release();
         if (rows.length > 0) {
             let dna = rows[0];
-            try { dna.design_suggestions = JSON.parse(dna.design_suggestions); } catch (e) {}
+            try { dna.design_suggestions = JSON.parse(dna.design_suggestions); } catch (e) { }
             res.json({ status: 'success', data: dna });
         } else {
             res.json({ status: 'not_found' });
@@ -650,7 +651,7 @@ app.get('/api/brand-dna-full/:projectId', async (req, res) => {
         let dna = null;
         if (dnaRows.length > 0) {
             dna = dnaRows[0];
-            try { dna.design_suggestions = JSON.parse(dna.design_suggestions); } catch (e) {}
+            try { dna.design_suggestions = JSON.parse(dna.design_suggestions); } catch (e) { }
         }
 
         const [colorRows] = await connection.query(`
@@ -706,7 +707,7 @@ app.post('/api/generate-brand-names', async (req, res) => {
         - สินค้า: ${product}
         - ประเภท: ${category}
         - ประโยชน์/จุดเด่น: ${benefit || 'ไม่ระบุ'}
-        - กลุ่มเป้าหมาย: ${finalTarget,target}
+        - กลุ่มเป้าหมาย: ${finalTarget, target}
         - สไตล์ชื่อที่ต้องการ: ${tags.join(', ')}
         - ความต้องการพิเศษ: ${special || 'ไม่ระบุ'}
 
@@ -776,267 +777,267 @@ app.put('/api/brand-names/select/:conceptId', async (req, res) => {
 
 // ================= API Color Palette =================
 app.post('/api/color-palettes/save-one', async (req, res) => {
-  const { project_id, name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5 } = req.body;
-  if (!project_id || !name_palette) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  try {
-    const connection = await pool.getConnection();
-    const [existing] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [name_palette]);
-    let color_id;
-    if (existing.length > 0) {
-      color_id = existing[0].color_id;
-      await connection.query(
-        'UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
-        [color_code_1||'', color_code_2||'', color_code_3||'', color_code_4||'', color_code_5||'', color_id]
-      );
-    } else {
-      const [result] = await connection.query(
-        'INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
-        [name_palette, color_code_1||'', color_code_2||'', color_code_3||'', color_code_4||'', color_code_5||'']
-      );
-      color_id = result.insertId;
+    const { project_id, name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5 } = req.body;
+    if (!project_id || !name_palette) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+    try {
+        const connection = await pool.getConnection();
+        const [existing] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [name_palette]);
+        let color_id;
+        if (existing.length > 0) {
+            color_id = existing[0].color_id;
+            await connection.query(
+                'UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
+                [color_code_1 || '', color_code_2 || '', color_code_3 || '', color_code_4 || '', color_code_5 || '', color_id]
+            );
+        } else {
+            const [result] = await connection.query(
+                'INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
+                [name_palette, color_code_1 || '', color_code_2 || '', color_code_3 || '', color_code_4 || '', color_code_5 || '']
+            );
+            color_id = result.insertId;
+        }
+        const [existingConcept] = await connection.query(
+            'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?', [project_id, color_id]);
+        let concept_id;
+        if (existingConcept.length > 0) {
+            concept_id = existingConcept[0].id;
+        } else {
+            const [result] = await connection.query(
+                'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)',
+                [color_id, project_id]);
+            concept_id = result.insertId;
+        }
+        connection.release();
+        res.json({ status: 'success', color_id, concept_id });
+    } catch (err) {
+        console.error('❌ Save One Palette Error:', err);
+        res.status(500).json({ status: 'error', message: 'บันทึก palette ไม่สำเร็จ', error: err.message });
     }
-    const [existingConcept] = await connection.query(
-      'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?', [project_id, color_id]);
-    let concept_id;
-    if (existingConcept.length > 0) {
-      concept_id = existingConcept[0].id;
-    } else {
-      const [result] = await connection.query(
-        'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)',
-        [color_id, project_id]);
-      concept_id = result.insertId;
-    }
-    connection.release();
-    res.json({ status: 'success', color_id, concept_id });
-  } catch (err) {
-    console.error('❌ Save One Palette Error:', err);
-    res.status(500).json({ status: 'error', message: 'บันทึก palette ไม่สำเร็จ', error: err.message });
-  }
 });
 
 app.post('/api/color-palettes/save', async (req, res) => {
-  const { project_id, palettes } = req.body;
-  if (!project_id || !Array.isArray(palettes) || palettes.length === 0) {
-    return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  }
-  try {
-    const connection = await pool.getConnection();
-    for (const p of palettes) {
-      const [existing] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [p.name_palette]);
-      let color_id;
-      if (existing.length > 0) {
-        color_id = existing[0].color_id;
-        await connection.query(
-          'UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
-          [p.color_code_1||'', p.color_code_2||'', p.color_code_3||'', p.color_code_4||'', p.color_code_5||'', color_id]);
-      } else {
-        const [result] = await connection.query(
-          'INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
-          [p.name_palette, p.color_code_1||'', p.color_code_2||'', p.color_code_3||'', p.color_code_4||'', p.color_code_5||'']);
-        color_id = result.insertId;
-      }
-      const [existingConcept] = await connection.query(
-        'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?', [project_id, color_id]);
-      if (existingConcept.length === 0) {
-        await connection.query(
-          'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [color_id, project_id]);
-      }
+    const { project_id, palettes } = req.body;
+    if (!project_id || !Array.isArray(palettes) || palettes.length === 0) {
+        return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
     }
-    connection.release();
-    res.json({ status: 'success', message: 'บันทึก palettes สำเร็จ' });
-  } catch (err) {
-    console.error('❌ Save Color Palettes Error:', err);
-    res.status(500).json({ status: 'error', message: 'บันทึก palettes ไม่สำเร็จ', error: err.message });
-  }
+    try {
+        const connection = await pool.getConnection();
+        for (const p of palettes) {
+            const [existing] = await connection.query('SELECT color_id FROM color WHERE name_palette = ?', [p.name_palette]);
+            let color_id;
+            if (existing.length > 0) {
+                color_id = existing[0].color_id;
+                await connection.query(
+                    'UPDATE color SET color_code_1=?, color_code_2=?, color_code_3=?, color_code_4=?, color_code_5=? WHERE color_id=?',
+                    [p.color_code_1 || '', p.color_code_2 || '', p.color_code_3 || '', p.color_code_4 || '', p.color_code_5 || '', color_id]);
+            } else {
+                const [result] = await connection.query(
+                    'INSERT INTO color (name_palette, color_code_1, color_code_2, color_code_3, color_code_4, color_code_5) VALUES (?,?,?,?,?,?)',
+                    [p.name_palette, p.color_code_1 || '', p.color_code_2 || '', p.color_code_3 || '', p.color_code_4 || '', p.color_code_5 || '']);
+                color_id = result.insertId;
+            }
+            const [existingConcept] = await connection.query(
+                'SELECT id FROM color_concept WHERE project_id = ? AND color_id = ?', [project_id, color_id]);
+            if (existingConcept.length === 0) {
+                await connection.query(
+                    'INSERT INTO color_concept (color_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [color_id, project_id]);
+            }
+        }
+        connection.release();
+        res.json({ status: 'success', message: 'บันทึก palettes สำเร็จ' });
+    } catch (err) {
+        console.error('❌ Save Color Palettes Error:', err);
+        res.status(500).json({ status: 'error', message: 'บันทึก palettes ไม่สำเร็จ', error: err.message });
+    }
 });
 
 app.get('/api/color-palettes/:projectId', async (req, res) => {
-  const { projectId } = req.params;
-  if (!projectId || projectId === 'undefined') return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
-  try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.query(
-      `SELECT cc.id AS concept_id, cc.color_id, cc.is_liked, cc.is_selected, cc.created_at,
+    const { projectId } = req.params;
+    if (!projectId || projectId === 'undefined') return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(
+            `SELECT cc.id AS concept_id, cc.color_id, cc.is_liked, cc.is_selected, cc.created_at,
          c.name_palette, c.color_code_1, c.color_code_2, c.color_code_3, c.color_code_4, c.color_code_5
        FROM color_concept cc JOIN color c ON cc.color_id = c.color_id
        WHERE cc.project_id = ?
        ORDER BY cc.is_selected DESC, cc.is_liked DESC, cc.id DESC`, [projectId]);
-    connection.release();
-    res.json({ status: 'success', palettes: rows });
-  } catch (err) {
-    console.error('❌ Fetch Color Palettes Error:', err);
-    res.status(500).json({ status: 'error', message: 'ดึงข้อมูล palettes ไม่สำเร็จ' });
-  }
+        connection.release();
+        res.json({ status: 'success', palettes: rows });
+    } catch (err) {
+        console.error('❌ Fetch Color Palettes Error:', err);
+        res.status(500).json({ status: 'error', message: 'ดึงข้อมูล palettes ไม่สำเร็จ' });
+    }
 });
 
 app.put('/api/color-palettes/like/:colorId', async (req, res) => {
-  const { colorId } = req.params;
-  const { is_liked, project_id } = req.body;
-  if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
-  try {
-    const connection = await pool.getConnection();
-    await connection.query(
-      'UPDATE color_concept SET is_liked = ? WHERE color_id = ? AND project_id = ?',
-      [is_liked ? 1 : 0, colorId, project_id]);
-    connection.release();
-    res.json({ status: 'success' });
-  } catch (err) {
-    console.error('❌ Like Color Palette Error:', err);
-    res.status(500).json({ status: 'error', message: 'Database error' });
-  }
+    const { colorId } = req.params;
+    const { is_liked, project_id } = req.body;
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
+    try {
+        const connection = await pool.getConnection();
+        await connection.query(
+            'UPDATE color_concept SET is_liked = ? WHERE color_id = ? AND project_id = ?',
+            [is_liked ? 1 : 0, colorId, project_id]);
+        connection.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        console.error('❌ Like Color Palette Error:', err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
 });
 
 app.put('/api/color-palettes/select/:conceptId', async (req, res) => {
-  const { conceptId } = req.params;
-  const { project_id } = req.body;
-  if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
-  try {
-    const connection = await pool.getConnection();
-    const [conceptRows] = await connection.query('SELECT color_id FROM color_concept WHERE id = ?', [conceptId]);
-    if (conceptRows.length === 0) {
-      connection.release();
-      return res.status(404).json({ status: 'error', message: 'ไม่พบ concept นี้' });
+    const { conceptId } = req.params;
+    const { project_id } = req.body;
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
+    try {
+        const connection = await pool.getConnection();
+        const [conceptRows] = await connection.query('SELECT color_id FROM color_concept WHERE id = ?', [conceptId]);
+        if (conceptRows.length === 0) {
+            connection.release();
+            return res.status(404).json({ status: 'error', message: 'ไม่พบ concept นี้' });
+        }
+        const finalColorId = conceptRows[0].color_id;
+        await connection.query('UPDATE color_concept SET is_selected = 0 WHERE project_id = ?', [project_id]);
+        await connection.query('UPDATE color_concept SET is_selected = 1 WHERE id = ?', [conceptId]);
+        await connection.query('UPDATE project SET color_id = ? WHERE project_id = ?', [finalColorId, project_id]);
+        connection.release();
+        res.json({ status: 'success', color_id: finalColorId });
+    } catch (err) {
+        console.error('❌ Select Color Palette Error:', err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
     }
-    const finalColorId = conceptRows[0].color_id;
-    await connection.query('UPDATE color_concept SET is_selected = 0 WHERE project_id = ?', [project_id]);
-    await connection.query('UPDATE color_concept SET is_selected = 1 WHERE id = ?', [conceptId]);
-    await connection.query('UPDATE project SET color_id = ? WHERE project_id = ?', [finalColorId, project_id]);
-    connection.release();
-    res.json({ status: 'success', color_id: finalColorId });
-  } catch (err) {
-    console.error('❌ Select Color Palette Error:', err);
-    res.status(500).json({ status: 'error', message: 'Database error' });
-  }
 });
 
 // ================= API Font =================
 app.post('/api/fonts/sync-google', async (req, res) => {
-  const { fonts } = req.body;
-  if (!Array.isArray(fonts) || fonts.length === 0) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  try {
-    const connection = await pool.getConnection();
-    let inserted = 0;
-    for (const f of fonts) {
-      const [existing] = await connection.query('SELECT font_id FROM font WHERE font_name = ?', [f.font_name]);
-      if (existing.length === 0) {
-        await connection.query('INSERT INTO font (font_name, file_font) VALUES (?, NULL)', [f.font_name]);
-        inserted++;
-      }
+    const { fonts } = req.body;
+    if (!Array.isArray(fonts) || fonts.length === 0) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+    try {
+        const connection = await pool.getConnection();
+        let inserted = 0;
+        for (const f of fonts) {
+            const [existing] = await connection.query('SELECT font_id FROM font WHERE font_name = ?', [f.font_name]);
+            if (existing.length === 0) {
+                await connection.query('INSERT INTO font (font_name, file_font) VALUES (?, NULL)', [f.font_name]);
+                inserted++;
+            }
+        }
+        connection.release();
+        res.json({ status: 'success', inserted });
+    } catch (err) {
+        console.error('❌ Sync Google Fonts Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
     }
-    connection.release();
-    res.json({ status: 'success', inserted });
-  } catch (err) {
-    console.error('❌ Sync Google Fonts Error:', err);
-    res.status(500).json({ status: 'error', message: err.message });
-  }
 });
 
 app.get('/api/fonts/all/:projectId', async (req, res) => {
-  const { projectId } = req.params;
-  try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.query(
-      `SELECT f.font_id, f.font_name, f.file_font,
+    const { projectId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(
+            `SELECT f.font_id, f.font_name, f.file_font,
          fc.id AS concept_id, fc.is_liked, fc.is_selected
        FROM font f
        LEFT JOIN font_concept fc ON f.font_id = fc.font_id AND fc.project_id = ?
        ORDER BY f.font_id ASC`, [projectId]);
-    connection.release();
-    res.json({ status: 'success', fonts: rows });
-  } catch (err) {
-    console.error('❌ Fetch All Fonts Error:', err);
-    res.status(500).json({ status: 'error', message: err.message });
-  }
+        connection.release();
+        res.json({ status: 'success', fonts: rows });
+    } catch (err) {
+        console.error('❌ Fetch All Fonts Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 app.post('/api/fonts/save-one', async (req, res) => {
-  const { project_id, font_name, file_font } = req.body;
-  if (!project_id || !font_name) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  try {
-    const connection = await pool.getConnection();
-    const [existing] = await connection.query('SELECT font_id FROM font WHERE font_name = ?', [font_name]);
-    let font_id;
-    if (existing.length > 0) {
-      font_id = existing[0].font_id;
-    } else {
-      const [result] = await connection.query('INSERT INTO font (font_name, file_font) VALUES (?, ?)', [font_name, file_font || null]);
-      font_id = result.insertId;
+    const { project_id, font_name, file_font } = req.body;
+    if (!project_id || !font_name) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+    try {
+        const connection = await pool.getConnection();
+        const [existing] = await connection.query('SELECT font_id FROM font WHERE font_name = ?', [font_name]);
+        let font_id;
+        if (existing.length > 0) {
+            font_id = existing[0].font_id;
+        } else {
+            const [result] = await connection.query('INSERT INTO font (font_name, file_font) VALUES (?, ?)', [font_name, file_font || null]);
+            font_id = result.insertId;
+        }
+        const [existingConcept] = await connection.query(
+            'SELECT id FROM font_concept WHERE project_id = ? AND font_id = ?', [project_id, font_id]);
+        let concept_id;
+        if (existingConcept.length > 0) {
+            concept_id = existingConcept[0].id;
+        } else {
+            const [result] = await connection.query(
+                'INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [font_id, project_id]);
+            concept_id = result.insertId;
+        }
+        connection.release();
+        res.json({ status: 'success', font_id, concept_id });
+    } catch (err) {
+        console.error('❌ Save One Font Error:', err);
+        res.status(500).json({ status: 'error', message: 'บันทึก font ไม่สำเร็จ', error: err.message });
     }
-    const [existingConcept] = await connection.query(
-      'SELECT id FROM font_concept WHERE project_id = ? AND font_id = ?', [project_id, font_id]);
-    let concept_id;
-    if (existingConcept.length > 0) {
-      concept_id = existingConcept[0].id;
-    } else {
-      const [result] = await connection.query(
-        'INSERT INTO font_concept (font_id, project_id, is_liked, is_selected) VALUES (?, ?, 0, 0)', [font_id, project_id]);
-      concept_id = result.insertId;
-    }
-    connection.release();
-    res.json({ status: 'success', font_id, concept_id });
-  } catch (err) {
-    console.error('❌ Save One Font Error:', err);
-    res.status(500).json({ status: 'error', message: 'บันทึก font ไม่สำเร็จ', error: err.message });
-  }
 });
 
 app.get('/api/fonts/:projectId', async (req, res) => {
-  const { projectId } = req.params;
-  if (!projectId || projectId === 'undefined') return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
-  try {
-    const connection = await pool.getConnection();
-    const [rows] = await connection.query(
-      `SELECT fc.id AS concept_id, fc.font_id, fc.is_liked, fc.is_selected, fc.created_at,
+    const { projectId } = req.params;
+    if (!projectId || projectId === 'undefined') return res.status(400).json({ status: 'error', message: 'Invalid Project ID' });
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(
+            `SELECT fc.id AS concept_id, fc.font_id, fc.is_liked, fc.is_selected, fc.created_at,
          f.font_name, f.file_font
        FROM font_concept fc JOIN font f ON fc.font_id = f.font_id
        WHERE fc.project_id = ?
        ORDER BY fc.is_selected DESC, fc.is_liked DESC, fc.id DESC`, [projectId]);
-    connection.release();
-    res.json({ status: 'success', fonts: rows });
-  } catch (err) {
-    console.error('❌ Fetch Fonts Error:', err);
-    res.status(500).json({ status: 'error', message: 'ดึงข้อมูล fonts ไม่สำเร็จ' });
-  }
+        connection.release();
+        res.json({ status: 'success', fonts: rows });
+    } catch (err) {
+        console.error('❌ Fetch Fonts Error:', err);
+        res.status(500).json({ status: 'error', message: 'ดึงข้อมูล fonts ไม่สำเร็จ' });
+    }
 });
 
 app.put('/api/fonts/like/:fontId', async (req, res) => {
-  const { fontId } = req.params;
-  const { is_liked, project_id } = req.body;
-  if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
-  try {
-    const connection = await pool.getConnection();
-    await connection.query(
-      'UPDATE font_concept SET is_liked = ? WHERE font_id = ? AND project_id = ?',
-      [is_liked ? 1 : 0, fontId, project_id]);
-    connection.release();
-    res.json({ status: 'success' });
-  } catch (err) {
-    console.error('❌ Like Font Error:', err);
-    res.status(500).json({ status: 'error', message: 'Database error' });
-  }
+    const { fontId } = req.params;
+    const { is_liked, project_id } = req.body;
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
+    try {
+        const connection = await pool.getConnection();
+        await connection.query(
+            'UPDATE font_concept SET is_liked = ? WHERE font_id = ? AND project_id = ?',
+            [is_liked ? 1 : 0, fontId, project_id]);
+        connection.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        console.error('❌ Like Font Error:', err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
 });
 
 app.put('/api/fonts/select/:conceptId', async (req, res) => {
-  const { conceptId } = req.params;
-  const { project_id } = req.body;
-  if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
-  try {
-    const connection = await pool.getConnection();
-    const [conceptRows] = await connection.query('SELECT font_id FROM font_concept WHERE id = ?', [conceptId]);
-    if (conceptRows.length === 0) {
-      connection.release();
-      return res.status(404).json({ status: 'error', message: 'ไม่พบ concept นี้' });
+    const { conceptId } = req.params;
+    const { project_id } = req.body;
+    if (!project_id) return res.status(400).json({ status: 'error', message: 'ต้องการ project_id' });
+    try {
+        const connection = await pool.getConnection();
+        const [conceptRows] = await connection.query('SELECT font_id FROM font_concept WHERE id = ?', [conceptId]);
+        if (conceptRows.length === 0) {
+            connection.release();
+            return res.status(404).json({ status: 'error', message: 'ไม่พบ concept นี้' });
+        }
+        const finalFontId = conceptRows[0].font_id;
+        await connection.query('UPDATE font_concept SET is_selected = 0 WHERE project_id = ?', [project_id]);
+        await connection.query('UPDATE font_concept SET is_selected = 1 WHERE id = ?', [conceptId]);
+        await connection.query('UPDATE project SET font_id = ? WHERE project_id = ?', [finalFontId, project_id]);
+        connection.release();
+        res.json({ status: 'success', font_id: finalFontId });
+    } catch (err) {
+        console.error('❌ Select Font Error:', err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
     }
-    const finalFontId = conceptRows[0].font_id;
-    await connection.query('UPDATE font_concept SET is_selected = 0 WHERE project_id = ?', [project_id]);
-    await connection.query('UPDATE font_concept SET is_selected = 1 WHERE id = ?', [conceptId]);
-    await connection.query('UPDATE project SET font_id = ? WHERE project_id = ?', [finalFontId, project_id]);
-    connection.release();
-    res.json({ status: 'success', font_id: finalFontId });
-  } catch (err) {
-    console.error('❌ Select Font Error:', err);
-    res.status(500).json({ status: 'error', message: 'Database error' });
-  }
 });
 
 // ================= Helper: ดาวน์โหลดรูปภาพ =================
@@ -1051,7 +1052,7 @@ const downloadImage = async (url, filepath) => {
 
 /// create logo 
 app.post('/api/generate-logo', async (req, res) => {
-    const { project_id, user_id, brand_name, brand_value, products, styles, details, negative_prompt, use_imported_color, use_imported_font,target_audience } = req.body;
+    const { project_id, user_id, brand_name, brand_value, products, styles, details, negative_prompt, use_imported_color, use_imported_font, target_audience } = req.body;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'Project ID is required' });
     const finalUserId = (!user_id || user_id === 0) ? null : user_id;
 
@@ -1089,7 +1090,7 @@ app.post('/api/generate-logo', async (req, res) => {
         // ============================================================================
         // ADVANCED PROMPT ENGINEERING (Dynamic Style Injection)
         // ============================================================================
-        
+
         let styleDirective = "";
         let typographyDirective = `The logo MUST clearly display the exact text: "${brand_name}". Understand the exact structure, anatomy, and spelling of the word "${brand_name}" and render the characters perfectly.`;
         let specificNegative = "";
@@ -1134,31 +1135,31 @@ app.post('/api/generate-logo', async (req, res) => {
         prompt += `\n[VISUAL EXECUTION RULES]\n`;
         prompt += `- ${styleDirective}\n`;
         prompt += `- Background: Pure solid white background #FFFFFF ONLY. No gradients or transparent backgrounds.\n`;
-        
+
         if (colorText) prompt += `- ${colorText}\n`;
         if (fontText) prompt += `- ${fontText}\n`;
 
         prompt += `\n[STRICT TYPOGRAPHY RULES]\n`;
         prompt += `${typographyDirective} DO NOT add any other words, slogans, random letters, or gibberish. The typography must blend seamlessly with the logo mark.\n`;
-        
+
         let defaultNegative = `realistic photo, 3D render, drop shadows, gradients, color palettes, design tools, chaotic, messy, extra words, misspelled text, gibberish`;
-        
-        let finalNegative = negative_prompt 
-            ? `${negative_prompt}, ${defaultNegative}, ${specificNegative}` 
+
+        let finalNegative = negative_prompt
+            ? `${negative_prompt}, ${defaultNegative}, ${specificNegative}`
             : `${defaultNegative}, ${specificNegative}`;
-            
+
         prompt += `\n[NEGATIVE PROMPT - DO NOT DRAW]: ${finalNegative}`;
         // ============================================================================
         // ============================================================================
 
-       
-       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         // 🟢 เปลี่ยนชื่อโมเดลโดยเติม -preview ต่อท้ายครับ
         const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image-preview" });
 
         // ใช้คำสั่ง generateContent สำหรับโมเดล Multi-modal
         const result = await model.generateContent(prompt);
-        
+
         // ดึงไฟล์ Base64 ออกมาจาก Response ของ Gemini
         let base64Data = "";
         const parts = result.response.candidates?.[0]?.content?.parts;
@@ -1174,7 +1175,7 @@ app.post('/api/generate-logo', async (req, res) => {
         if (!base64Data) {
             throw new Error("ระบบ AI ไม่ส่งรูปภาพกลับมา");
         }
-        
+
         // เซฟรูปลงโฟลเดอร์ uploads/generated/
         const fileName = `logo_${Date.now()}.png`;
         const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
@@ -1187,7 +1188,7 @@ app.post('/api/generate-logo', async (req, res) => {
             [project_id, finalUserId, 'LOGO', imageUrl, prompt]
         );
         conn2.release();
-        
+
         res.json({ status: 'success', image_url: imageUrl, prompt: prompt });
     } catch (err) {
         console.error("Generate Logo Error (Gemini 3.1 Flash Image):", err);
@@ -1213,7 +1214,7 @@ app.get('/api/generated-logos/:projectId', async (req, res) => {
     try {
         const connection = await pool.getConnection();
         const [rows] = await connection.query(
-            "SELECT * FROM generated_history WHERE project_id = ? AND generation_type = 'LOGO' ORDER BY is_selected DESC, is_liked DESC, history_id DESC", 
+            "SELECT * FROM generated_history WHERE project_id = ? AND generation_type = 'LOGO' ORDER BY is_selected DESC, is_liked DESC, history_id DESC",
             [projectId]
         );
         connection.release();
@@ -1247,71 +1248,71 @@ app.put('/api/generated-logos/select/:historyId', async (req, res) => {
 
 // ================= API Package Catalog =================
 app.patch('/api/brand_product/:id/package', async (req, res) => {
-  const { id } = req.params;
-  const { package_id } = req.body;
-  try {
-    const connection = await pool.getConnection();
-    await connection.query('UPDATE brand_product SET package_id = ? WHERE product_id = ?', [package_id, id]);
-    connection.release();
-    res.json({ status: 'success', message: 'บันทึก package เรียบร้อยแล้ว' });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
-  }
+    const { id } = req.params;
+    const { package_id } = req.body;
+    try {
+        const connection = await pool.getConnection();
+        await connection.query('UPDATE brand_product SET package_id = ? WHERE product_id = ?', [package_id, id]);
+        connection.release();
+        res.json({ status: 'success', message: 'บันทึก package เรียบร้อยแล้ว' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
 });
 
 app.post('/api/package-catalog/like', async (req, res) => {
-  const { product_id, package_id, is_liked } = req.body;
-  if (!product_id || !package_id) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  try {
-    const connection = await pool.getConnection();
-    const [existing] = await connection.query(
-      'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
-    if (existing.length > 0) {
-      await connection.query(
-        'UPDATE package_catalog SET is_liked = ? WHERE product_id = ? AND package_id = ?',
-        [is_liked ? 1 : 0, product_id, package_id]);
-    } else {
-      await connection.query(
-        'INSERT INTO package_catalog (package_id, product_id, is_liked, is_selected) VALUES (?, ?, ?, 0)',
-        [package_id, product_id, is_liked ? 1 : 0]);
+    const { product_id, package_id, is_liked } = req.body;
+    if (!product_id || !package_id) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+    try {
+        const connection = await pool.getConnection();
+        const [existing] = await connection.query(
+            'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
+        if (existing.length > 0) {
+            await connection.query(
+                'UPDATE package_catalog SET is_liked = ? WHERE product_id = ? AND package_id = ?',
+                [is_liked ? 1 : 0, product_id, package_id]);
+        } else {
+            await connection.query(
+                'INSERT INTO package_catalog (package_id, product_id, is_liked, is_selected) VALUES (?, ?, ?, 0)',
+                [package_id, product_id, is_liked ? 1 : 0]);
+        }
+        connection.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        console.error('❌ Package like error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
     }
-    connection.release();
-    res.json({ status: 'success' });
-  } catch (err) {
-    console.error('❌ Package like error:', err);
-    res.status(500).json({ status: 'error', message: err.message });
-  }
 });
 
 app.post('/api/package-catalog', async (req, res) => {
-  const { product_id, package_id, action } = req.body;
-  if (!product_id || !package_id || !action) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
-  try {
-    const connection = await pool.getConnection();
-    if (action === 'select') {
-      await connection.query('UPDATE package_catalog SET is_selected = 0 WHERE product_id = ?', [product_id]);
+    const { product_id, package_id, action } = req.body;
+    if (!product_id || !package_id || !action) return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+    try {
+        const connection = await pool.getConnection();
+        if (action === 'select') {
+            await connection.query('UPDATE package_catalog SET is_selected = 0 WHERE product_id = ?', [product_id]);
+        }
+        const [existing] = await connection.query(
+            'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
+        if (existing.length > 0) {
+            if (action === 'select') {
+                await connection.query(
+                    'UPDATE package_catalog SET is_selected = 1 WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
+            } else {
+                await connection.query(
+                    'UPDATE package_catalog SET is_liked = NOT is_liked WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
+            }
+        } else {
+            await connection.query(
+                'INSERT INTO package_catalog (package_id, product_id, is_liked, is_selected) VALUES (?, ?, ?, ?)',
+                [package_id, product_id, action === 'like' ? 1 : 0, action === 'select' ? 1 : 0]);
+        }
+        connection.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        console.error('Package catalog error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
     }
-    const [existing] = await connection.query(
-      'SELECT id FROM package_catalog WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
-    if (existing.length > 0) {
-      if (action === 'select') {
-        await connection.query(
-          'UPDATE package_catalog SET is_selected = 1 WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
-      } else {
-        await connection.query(
-          'UPDATE package_catalog SET is_liked = NOT is_liked WHERE product_id = ? AND package_id = ?', [product_id, package_id]);
-      }
-    } else {
-      await connection.query(
-        'INSERT INTO package_catalog (package_id, product_id, is_liked, is_selected) VALUES (?, ?, ?, ?)',
-        [package_id, product_id, action === 'like' ? 1 : 0, action === 'select' ? 1 : 0]);
-    }
-    connection.release();
-    res.json({ status: 'success' });
-  } catch (err) {
-    console.error('Package catalog error:', err);
-    res.status(500).json({ status: 'error', message: err.message });
-  }
 });
 
 // ================= API ADMIN DASHBOARD =================
@@ -1365,9 +1366,9 @@ app.get('/api/admin/stats/api-usage', async (req, res) => {
         `, [days]);
         connection.release();
         // ส่งทั้ง 2 keys: image (ใหม่) + dalle (เก่า เพื่อ backward compat กับ frontend เดิม)
-        res.json({ 
-            status: 'success', 
-            gemini: geminiStats, 
+        res.json({
+            status: 'success',
+            gemini: geminiStats,
             image: imageStats,
             dalle: imageStats  // 👈 alias เก่า ถ้า frontend ยังใช้ key 'dalle' อยู่
         });
@@ -1445,7 +1446,7 @@ app.post('/api/generate-label-background', async (req, res) => {
         );
         const palette = colorRows[0]
             ? [colorRows[0].color_code_1, colorRows[0].color_code_2, colorRows[0].color_code_3,
-               colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
+            colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
             : '#F5E6D3, #C9A678, #8B6F47';
 
         connection.release();
@@ -1492,9 +1493,9 @@ ${toneMap[tone] ? 'TONE: ' + toneMap[tone] : ''}
         const base64Data = response.data[0].b64_json;
         const fileName = `labelbg_${Date.now()}.png`;
         // ✅ เปลี่ยนให้เซฟลงโฟลเดอร์ uploads/generated/
-        const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName); 
+        const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
         fs.writeFileSync(filePath, base64Data, 'base64');
-        
+
         // เวลาส่ง URL กลับไปให้ Frontend ต้องมี /generated/ ด้วย
         const imageUrl = `/uploads/generated/${fileName}`;
 
@@ -1534,7 +1535,10 @@ app.get('/api/labels/product/:productId', async (req, res) => {
         const row = rows[0];
         try {
             if (row.text_colors && typeof row.text_colors === 'string') row.text_colors = JSON.parse(row.text_colors);
-        } catch (e) {}
+        } catch (e) { }
+        try {
+            if (row.elem_positions && typeof row.elem_positions === 'string') row.elem_positions = JSON.parse(row.elem_positions);
+        } catch (e) { }
         res.json({ status: 'success', data: row });
     } catch (err) {
         res.status(500).json({ status: 'error', message: 'Database error' });
@@ -1551,7 +1555,9 @@ app.post('/api/labels', async (req, res) => {
         certifications,
         qr_code_value, barcode_value, show_qr, show_barcode,
         layout_type, label_width, label_height, text_colors,
-        bg_mode, bg_color, bg_preset_id, bg_image_url, bg_opacity
+        bg_mode, bg_color, bg_preset_id, bg_image_url, bg_opacity,
+        elem_positions, label_mode, panel_id,
+        label_image_base64
     } = req.body;
 
     if (!product_id || !product_name) {
@@ -1569,6 +1575,18 @@ app.post('/api/labels', async (req, res) => {
         const formattedMfgDate = mfg_date ? mfg_date.split('T')[0] : null;
         const formattedExpDate = exp_date ? exp_date.split('T')[0] : null;
 
+        const elemPosJson = elem_positions ? JSON.stringify(elem_positions) : null;
+
+        // บันทึกรูป label snapshot ถ้ามี base64 ส่งมา
+        let finalLabelUrl = null;
+        if (label_image_base64) {
+            const base64Clean = label_image_base64.replace(/^data:image\/\w+;base64,/, '');
+            const fileName = `label_snap_${product_id}.png`;
+            const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
+            fs.writeFileSync(filePath, base64Clean, 'base64');
+            finalLabelUrl = `/uploads/generated/${fileName}`;
+        }
+
         const fields = [
             project_id, product_name, tagline || null, net_weight || null,
             ingredients || null, usage_instruction || null, storage_instruction || null, warnings || null,
@@ -1577,7 +1595,8 @@ app.post('/api/labels', async (req, res) => {
             show_qr ? 1 : 0, show_barcode ? 1 : 0,
             layout_type || 'centered_classic', label_width || 380, label_height || 500, colorsJson,
             bg_mode || 'solid', bg_color || '#FFFFFF', bg_preset_id || null, bg_image_url || null,
-            (bg_opacity !== undefined && bg_opacity !== null) ? bg_opacity : 1.00
+            (bg_opacity !== undefined && bg_opacity !== null) ? bg_opacity : 1.00,
+            elemPosJson, label_mode || 'sticker', panel_id || null, finalLabelUrl
         ];
 
         if (existing.length > 0) {
@@ -1588,7 +1607,8 @@ app.post('/api/labels', async (req, res) => {
                     manufacturer_info=?, fda_number=?, mfg_date=?, exp_date=?, lot_number=?,
                     certifications=?, qr_code_value=?, barcode_value=?, show_qr=?, show_barcode=?,
                     layout_type=?, label_width=?, label_height=?, text_colors=?,
-                    bg_mode=?, bg_color=?, bg_preset_id=?, bg_image_url=?, bg_opacity=?
+                    bg_mode=?, bg_color=?, bg_preset_id=?, bg_image_url=?, bg_opacity=?,
+                    elem_positions=?, label_mode=?, panel_id=?, final_label_url=?
                  WHERE product_id=?`,
                 [...fields, product_id]
             );
@@ -1598,13 +1618,13 @@ app.post('/api/labels', async (req, res) => {
                     project_id, product_name, tagline, net_weight, ingredients, usage_instruction, storage_instruction, warnings,
                     manufacturer_info, fda_number, mfg_date, exp_date, lot_number, certifications,
                     qr_code_value, barcode_value, show_qr, show_barcode, layout_type, label_width, label_height, text_colors,
-                    bg_mode, bg_color, bg_preset_id, bg_image_url, bg_opacity, product_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    bg_mode, bg_color, bg_preset_id, bg_image_url, bg_opacity,
+                    elem_positions, label_mode, panel_id, final_label_url, product_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [...fields, product_id]
             );
         }
 
-        // 🟢 อัปเดตชื่อสินค้ากลับไปยังตาราง brand_product ด้วย!
         await connection.query('UPDATE brand_product SET name_product = ? WHERE product_id = ?', [product_name, product_id]);
 
         connection.release();
@@ -1614,6 +1634,54 @@ app.post('/api/labels', async (req, res) => {
         res.status(500).json({ status: 'error', message: err.message || 'Database error' });
     }
 });
+// 6. ดึงประวัติรูปพื้นหลัง label ของ project
+app.get('/api/label-bg-history/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT history_id, generation_type, image_url, prompt, created_at
+             FROM generated_history
+             WHERE project_id = ? AND generation_type IN ('LABEL_BG', 'LABEL_BG_UPLOAD')
+             ORDER BY created_at DESC`,
+            [projectId]
+        );
+        conn.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Label BG History Error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// 7. อัปโหลดรูปพื้นหลัง label (custom upload)
+if (!fs.existsSync('./uploads/generated')) fs.mkdirSync('./uploads/generated', { recursive: true });
+const labelBgStorage = multer.diskStorage({
+    destination: 'uploads/generated/',
+    filename: (req, file, cb) => cb(null, `labelbg_upload_${Date.now()}${path.extname(file.originalname)}`)
+});
+const labelBgUpload = multer({ storage: labelBgStorage });
+
+app.post('/api/label-bg-upload', labelBgUpload.single('image'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ status: 'error', message: 'No file uploaded' });
+    const { project_id, user_id } = req.body;
+    const imageUrl = `/uploads/generated/${req.file.filename}`;
+
+    try {
+        const conn = await pool.getConnection();
+        await conn.query(
+            `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected)
+             VALUES (?, ?, 'LABEL_BG_UPLOAD', ?, 'User uploaded', 0)`,
+            [project_id || null, user_id || null, imageUrl]
+        );
+        conn.release();
+        res.json({ status: 'success', data: { image_url: imageUrl } });
+    } catch (err) {
+        console.error("Label BG Upload Error:", err);
+        res.json({ status: 'success', data: { image_url: imageUrl } });
+    }
+});
+
 // =====================================================================
 // END LABEL v2
 // =====================================================================
@@ -1663,7 +1731,7 @@ app.get('/api/mockup/selected-packages/:projectId', async (req, res) => {
         rows.forEach(r => {
             r.images = imgs.filter(i => i.material_id === r.material_id);
             if (r.panels_json && typeof r.panels_json === 'string') {
-                try { r.panels_json = JSON.parse(r.panels_json); } catch(e){}
+                try { r.panels_json = JSON.parse(r.panels_json); } catch (e) { }
             }
         });
         res.json({ status: 'success', data: rows });
@@ -1689,7 +1757,7 @@ app.get('/api/mockup/material/:id', async (req, res) => {
         if (rows.length === 0) return res.status(404).json({ status: 'error', message: 'not found' });
         const r = rows[0];
         if (r.panels_json && typeof r.panels_json === 'string') {
-            try { r.panels_json = JSON.parse(r.panels_json); } catch(e){}
+            try { r.panels_json = JSON.parse(r.panels_json); } catch (e) { }
         }
         r.images = imgs;
         res.json({ status: 'success', data: r });
@@ -1748,7 +1816,7 @@ app.post('/api/generate-mockup-pattern', async (req, res) => {
              WHERE cc.project_id = ? AND cc.is_selected = 1 LIMIT 1`, [project_id]);
         const palette = colorRows[0]
             ? [colorRows[0].color_code_1, colorRows[0].color_code_2, colorRows[0].color_code_3,
-               colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
+            colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
             : '#F5E6D3, #C9A678, #8B6F47';
         conn.release(); conn = null;
 
@@ -1771,7 +1839,7 @@ STRICT RULES:
 
         // 🟢 เรียก Imagen 3 Fast
         const response = await googleImagen.images.generate({
-            model: 'imagen-3.0-fast-generate-001', prompt, n: 1, size: '1024x1024', response_format: 'b64_json'
+            model: 'Gemini 2.5 Flash Preview Image', prompt, n: 1, size: '1024x1024', response_format: 'b64_json'
         });
         const fname = `mockup_pat_${Date.now()}.png`;
         fs.writeFileSync(path.join('uploads', fname), response.data[0].b64_json, 'base64');
@@ -1815,6 +1883,78 @@ app.post('/api/mockup/upload-pattern', patternUpload.single('pattern_image'), as
     }
 });
 
+// ----- 6b) POST generate AI die-line background (Package Design) -----
+app.post('/api/mockup/generate-dieline-bg', async (req, res) => {
+    const { project_id, user_id, user_prompt, dieline_width_mm, dieline_height_mm, panels_json, package_type, product_name } = req.body;
+    if (!project_id || !user_prompt) return res.status(400).json({ status: 'error', message: 'project_id and user_prompt required' });
+    let conn;
+    try {
+        conn = await pool.getConnection();
+        const [colorRows] = await conn.query(
+            `SELECT c.color_code_1, c.color_code_2, c.color_code_3, c.color_code_4, c.color_code_5
+             FROM color_concept cc JOIN color c ON cc.color_id = c.color_id
+             WHERE cc.project_id = ? AND cc.is_selected = 1 LIMIT 1`, [project_id]);
+        const palette = colorRows[0]
+            ? [colorRows[0].color_code_1, colorRows[0].color_code_2, colorRows[0].color_code_3,
+               colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
+            : '#F5E6D3, #C9A678, #8B6F47';
+        conn.release(); conn = null;
+
+        const prompt = `Create a SEAMLESS REPEATING surface pattern for product packaging background.
+Product: ${product_name || 'consumer product'}
+Style: ${user_prompt}
+Colors: ONLY use these hex colors: ${palette}
+STRICT RULES:
+- Create a FLAT, FULL-BLEED pattern that fills the ENTIRE image edge to edge
+- The pattern must be seamless and tileable
+- 2D flat illustration only, suitable for print
+- NO text, NO numbers, NO letters, NO logos, NO mockup, NO box shape, NO die-line
+- Do NOT draw any packaging shape, fold lines, or 3D object
+- Just a beautiful decorative pattern that covers the whole image uniformly
+- The image will be used as a texture/wallpaper to wrap around a package`;
+
+        const response = await googleImagen.images.generate({
+            model: 'gemini-2.5-flash-image', prompt, n: 1, size: '1024x1024', response_format: 'b64_json'
+        });
+        const fname = `dieline_bg_${Date.now()}.png`;
+        fs.writeFileSync(path.join('uploads', fname), response.data[0].b64_json, 'base64');
+        const imageUrl = `/uploads/${fname}`;
+
+        const c2 = await pool.getConnection();
+        await c2.query(
+            `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
+            [user_id || null, project_id, 'GENERATE_DIELINE_BG', prompt, imageUrl]);
+        await c2.query(
+            `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
+            [project_id, user_id || null, 'DIELINE_BG', imageUrl, prompt]);
+        c2.release();
+        res.json({ status: 'success', data: { image_url: imageUrl } });
+    } catch (err) {
+        if (conn) conn.release();
+        console.error('Dieline BG Gen Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ----- 6.5) GET dieline BG history -----
+app.get('/api/mockup/dieline-bg-history/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT history_id, image_url, prompt, created_at
+             FROM generated_history
+             WHERE project_id = ? AND generation_type = 'DIELINE_BG'
+             ORDER BY history_id DESC LIMIT 20`,
+            [projectId]);
+        conn.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error('Dieline BG History Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 // ----- 7) GET mockup ของ project -----
 app.get('/api/mockups/:projectId', async (req, res) => {
     const { projectId } = req.params;
@@ -1832,7 +1972,7 @@ app.get('/api/mockups/:projectId', async (req, res) => {
         conn.release();
         panels.forEach(p => {
             if (p.elements_json && typeof p.elements_json === 'string') {
-                try { p.elements_json = JSON.parse(p.elements_json); } catch(e){}
+                try { p.elements_json = JSON.parse(p.elements_json); } catch (e) { }
             }
         });
         m.panels = panels;
@@ -1846,7 +1986,8 @@ app.get('/api/mockups/:projectId', async (req, res) => {
 app.post('/api/mockups', async (req, res) => {
     const {
         project_id, product_id, package_material_id, size_id, label_id,
-        bleed_mm, resolution_dpi, panels = []
+        bleed_mm, resolution_dpi, panels = [],
+        design_mode, ai_dieline_bg_url, ai_bg_prompt
     } = req.body;
     if (!project_id || !package_material_id) {
         return res.status(400).json({ status: 'error', message: 'project_id and package_material_id required' });
@@ -1868,15 +2009,20 @@ app.post('/api/mockups', async (req, res) => {
             mockupId = existing[0].mockup_id;
             await conn.query(
                 `UPDATE mockup_design SET package_material_id=?, size_id=?, label_id=?,
-                   bleed_mm=?, resolution_dpi=?, status='saved' WHERE mockup_id=?`,
+                   bleed_mm=?, resolution_dpi=?, status='saved',
+                   design_mode=COALESCE(?,design_mode), ai_dieline_bg_url=?, ai_bg_prompt=?
+                 WHERE mockup_id=?`,
                 [package_material_id, size_id || null, label_id || null,
-                 bleed_mm || 3.0, resolution_dpi || 300, mockupId]);
+                    bleed_mm || 3.0, resolution_dpi || 300,
+                    design_mode || null, ai_dieline_bg_url || null, ai_bg_prompt || null,
+                    mockupId]);
         } else {
             const [r] = await conn.query(
-                `INSERT INTO mockup_design (project_id, product_id, package_material_id, size_id, label_id, bleed_mm, resolution_dpi, status)
-                 VALUES (?,?,?,?,?,?,?,'saved')`,
+                `INSERT INTO mockup_design (project_id, product_id, package_material_id, size_id, label_id, bleed_mm, resolution_dpi, status, design_mode, ai_dieline_bg_url, ai_bg_prompt)
+                 VALUES (?,?,?,?,?,?,?,'saved',?,?,?)`,
                 [project_id, product_id || null, package_material_id, size_id || null, label_id || null,
-                 bleed_mm || 3.0, resolution_dpi || 300]);
+                    bleed_mm || 3.0, resolution_dpi || 300,
+                    design_mode || 'sticker', ai_dieline_bg_url || null, ai_bg_prompt || null]);
             mockupId = r.insertId;
         }
         for (const p of panels) {
@@ -1887,14 +2033,14 @@ app.post('/api/mockups', async (req, res) => {
                 await conn.query(
                     `UPDATE mockup_panel SET bg_mode=?, bg_color=?, bg_pattern_id=?, bg_image_url=?, bg_opacity=?, elements_json=?
                      WHERE panel_id=?`,
-                    [p.bg_mode||'solid', p.bg_color||'#FFFFFF', p.bg_pattern_id||null,
-                     p.bg_image_url||null, p.bg_opacity||1.00, elJson, exP[0].panel_id]);
+                    [p.bg_mode || 'solid', p.bg_color || '#FFFFFF', p.bg_pattern_id || null,
+                    p.bg_image_url || null, p.bg_opacity || 1.00, elJson, exP[0].panel_id]);
             } else {
                 await conn.query(
                     `INSERT INTO mockup_panel (mockup_id, panel_key, bg_mode, bg_color, bg_pattern_id, bg_image_url, bg_opacity, elements_json)
                      VALUES (?,?,?,?,?,?,?,?)`,
-                    [mockupId, p.panel_key, p.bg_mode||'solid', p.bg_color||'#FFFFFF',
-                     p.bg_pattern_id||null, p.bg_image_url||null, p.bg_opacity||1.00, elJson]);
+                    [mockupId, p.panel_key, p.bg_mode || 'solid', p.bg_color || '#FFFFFF',
+                        p.bg_pattern_id || null, p.bg_image_url || null, p.bg_opacity || 1.00, elJson]);
             }
         }
         conn.release();
@@ -1909,7 +2055,7 @@ app.post('/api/mockups', async (req, res) => {
 // body: { panel_images: [{panel_key, image_data: 'data:image/png;base64,...'}], spec_data: {...} }
 app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
     const { mockupId } = req.params;
-    const { panel_images = [], spec_data = {} } = req.body;
+    const { panel_images = [], spec_data = {}, format = 'pdf' } = req.body; // format: 'pdf' | 'ai'
     try {
         const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
         const pdfDoc = await PDFDocument.create();
@@ -1920,29 +2066,43 @@ app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
                     pm.panels_json, pm.name AS material_name, pm.package_type
              FROM mockup_design m JOIN package_materials pm ON m.package_material_id = pm.id
              WHERE m.mockup_id = ?`, [mockupId]);
-        if (mr.length === 0) { conn.release(); return res.status(404).json({status:'error',message:'mockup not found'}); }
+        if (mr.length === 0) { conn.release(); return res.status(404).json({ status: 'error', message: 'mockup not found' }); }
         const m = mr[0];
         const panels = m.panels_json ? JSON.parse(m.panels_json) : [];
         conn.release();
 
         const MM_TO_PT = 2.83465;
         const bleed = parseFloat(m.bleed_mm || m.mat_bleed) || 3.0;
-        const widthMm  = parseFloat(m.dieline_width_mm)  + bleed * 2;
+        const widthMm = parseFloat(m.dieline_width_mm) + bleed * 2;
         const heightMm = parseFloat(m.dieline_height_mm) + bleed * 2;
         const pageW = widthMm * MM_TO_PT;
         const pageH = heightMm * MM_TO_PT;
 
-        // ---- หน้า 1: die-line print-ready ----
+        // ---- หน้า 1: die-line print-ready (CMYK) ----
         const page = pdfDoc.addPage([pageW, pageH]);
-        page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(1,1,1) });
+        page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(1, 1, 1) });
 
         for (const panel of panels) {
             const imgEntry = panel_images.find(pi => pi.panel_key === panel.id);
             if (!imgEntry) continue;
             const b64 = imgEntry.image_data.replace(/^data:image\/\w+;base64,/, '');
-            const bytes = Buffer.from(b64, 'base64');
-            const img = await pdfDoc.embedPng(bytes);
-            page.drawImage(img, {
+            const pngBytes = Buffer.from(b64, 'base64');
+            // Embed image (JPEG or PNG) — sRGB color preserved for proper CMYK conversion at print RIP
+            let embedImg;
+            const isJpeg = imgEntry.image_data.startsWith('data:image/jpeg');
+            try {
+                if (isJpeg) {
+                    embedImg = await pdfDoc.embedJpg(pngBytes);
+                } else {
+                    // Convert PNG → JPEG for smaller PDF
+                    const jpegBuf = await sharp(pngBytes).jpeg({ quality: 95 }).toBuffer();
+                    embedImg = await pdfDoc.embedJpg(jpegBuf);
+                }
+            } catch (embedErr) {
+                console.warn('Image embed fallback:', embedErr.message);
+                try { embedImg = await pdfDoc.embedPng(pngBytes); } catch { continue; }
+            }
+            page.drawImage(embedImg, {
                 x: (panel.x_mm + bleed) * MM_TO_PT,
                 y: (heightMm - panel.y_mm - panel.h_mm - bleed) * MM_TO_PT,
                 width: panel.w_mm * MM_TO_PT,
@@ -1953,20 +2113,16 @@ app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
         // ---- crop marks 4 มุม ----
         const cropLen = 5 * MM_TO_PT;
         const cropOff = bleed * MM_TO_PT;
-        const cropColor = rgb(0,0,0);
+        const cropColor = rgb(0, 0, 0);
         const drawCrop = (x, y, dx, dy) => {
             page.drawLine({ start: { x, y }, end: { x: x + dx, y: y + dy }, thickness: 0.25, color: cropColor });
         };
-        // bottom-left
         drawCrop(0, cropOff, cropLen, 0);
         drawCrop(cropOff, 0, 0, cropLen);
-        // bottom-right
         drawCrop(pageW - cropLen, cropOff, cropLen, 0);
         drawCrop(pageW - cropOff, 0, 0, cropLen);
-        // top-left
         drawCrop(0, pageH - cropOff, cropLen, 0);
         drawCrop(cropOff, pageH - cropLen, 0, cropLen);
-        // top-right
         drawCrop(pageW - cropLen, pageH - cropOff, cropLen, 0);
         drawCrop(pageW - cropOff, pageH - cropLen, 0, cropLen);
 
@@ -1974,7 +2130,6 @@ app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
         for (let i = 0; i < panels.length; i++) {
             for (let j = i + 1; j < panels.length; j++) {
                 const a = panels[i], b = panels[j];
-                // ถ้า panel ติดกัน (ขอบขวา a = ขอบซ้าย b) → วาดเส้นพับ
                 if (Math.abs((a.x_mm + a.w_mm) - b.x_mm) < 0.5 &&
                     Math.max(a.y_mm, b.y_mm) < Math.min(a.y_mm + a.h_mm, b.y_mm + b.h_mm)) {
                     const xMm = a.x_mm + a.w_mm + bleed;
@@ -1982,11 +2137,10 @@ app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
                     const y2Mm = Math.min(a.y_mm + a.h_mm, b.y_mm + b.h_mm) + bleed;
                     page.drawLine({
                         start: { x: xMm * MM_TO_PT, y: (heightMm - y2Mm) * MM_TO_PT },
-                        end:   { x: xMm * MM_TO_PT, y: (heightMm - y1Mm) * MM_TO_PT },
+                        end: { x: xMm * MM_TO_PT, y: (heightMm - y1Mm) * MM_TO_PT },
                         thickness: 0.5, color: rgb(1, 0, 0), dashArray: [4, 3]
                     });
                 }
-                // ขอบล่าง a = ขอบบน b
                 if (Math.abs((a.y_mm + a.h_mm) - b.y_mm) < 0.5 &&
                     Math.max(a.x_mm, b.x_mm) < Math.min(a.x_mm + a.w_mm, b.x_mm + b.w_mm)) {
                     const yMm = a.y_mm + a.h_mm + bleed;
@@ -1994,57 +2148,65 @@ app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
                     const x2Mm = Math.min(a.x_mm + a.w_mm, b.x_mm + b.w_mm) + bleed;
                     page.drawLine({
                         start: { x: x1Mm * MM_TO_PT, y: (heightMm - yMm) * MM_TO_PT },
-                        end:   { x: x2Mm * MM_TO_PT, y: (heightMm - yMm) * MM_TO_PT },
+                        end: { x: x2Mm * MM_TO_PT, y: (heightMm - yMm) * MM_TO_PT },
                         thickness: 0.5, color: rgb(1, 0, 0), dashArray: [4, 3]
                     });
                 }
             }
         }
 
-        // ---- หน้า 2: spec sheet (A4) ----
-        const specPage = pdfDoc.addPage([595, 842]);
-        const helv = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        const helvR = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        let yy = 800;
-        specPage.drawText('PRINT SPECIFICATION SHEET', { x: 50, y: yy, size: 18, font: helv }); yy -= 30;
-        specPage.drawText(`Project: ${spec_data.project_name || '-'}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
-        specPage.drawText(`Material: ${m.material_name}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
-        specPage.drawText(`Package Type: ${m.package_type}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
-        specPage.drawText(`Die-line size: ${m.dieline_width_mm} x ${m.dieline_height_mm} mm`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
-        specPage.drawText(`Bleed: ${bleed} mm | Resolution: ${m.resolution_dpi} DPI`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 25;
-        specPage.drawText('PRINTING NOTES (for printer)', { x: 50, y: yy, size: 13, font: helv }); yy -= 20;
-        const notes = [
-            '1. Color space: sRGB (please convert to CMYK before printing)',
-            '2. Crop marks at 4 corners — trim along marks',
-            '3. Red dashed lines = fold lines (do not print, score only)',
-            '4. Black solid lines/area = print artwork',
-            `5. Die-line outer size with bleed: ${widthMm} x ${heightMm} mm`,
-            '6. Recommended paper: 250-300 gsm coated for boxes',
-            '7. Recommended finish: Matte or glossy lamination',
-            '8. Embedded fonts: outlined as raster (no font issues)'
-        ];
-        notes.forEach(n => { specPage.drawText(n, { x: 50, y: yy, size: 10, font: helvR }); yy -= 16; });
-        if (spec_data.colors_used && spec_data.colors_used.length > 0) {
-            yy -= 10;
-            specPage.drawText('COLORS USED', { x: 50, y: yy, size: 13, font: helv }); yy -= 18;
-            spec_data.colors_used.forEach(hex => {
-                const r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
-                specPage.drawRectangle({ x: 50, y: yy - 10, width: 18, height: 12, color: rgb(r,g,b) });
-                specPage.drawText(`${hex.toUpperCase()}  →  CMYK approx (convert at printer)`, { x: 75, y: yy - 8, size: 10, font: helvR });
-                yy -= 18;
-            });
+        // ---- หน้า 2: spec sheet (A4) — only for PDF, not AI ----
+        if (format !== 'ai') {
+            const specPage = pdfDoc.addPage([595, 842]);
+            const helv = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+            const helvR = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const safeText = (str) => (str || '-').replace(/[^\x20-\x7E]/g, '').trim() || '(non-ASCII name)';
+            let yy = 800;
+            specPage.drawText('PRINT SPECIFICATION SHEET', { x: 50, y: yy, size: 18, font: helv }); yy -= 30;
+            specPage.drawText(`Project: ${safeText(spec_data.project_name)}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
+            specPage.drawText(`Material: ${safeText(m.material_name)}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
+            specPage.drawText(`Package Type: ${safeText(m.package_type)}`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
+            specPage.drawText(`Die-line size: ${m.dieline_width_mm} x ${m.dieline_height_mm} mm`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 18;
+            specPage.drawText(`Bleed: ${bleed} mm | Resolution: ${m.resolution_dpi} DPI`, { x: 50, y: yy, size: 11, font: helvR }); yy -= 25;
+            specPage.drawText('PRINTING NOTES (for printer)', { x: 50, y: yy, size: 13, font: helv }); yy -= 20;
+            const notes = [
+                '1. Color space: sRGB - convert to CMYK with ICC profile before printing',
+                '2. Crop marks at 4 corners - trim along marks',
+                '3. Red dashed lines = fold lines (do not print, score only)',
+                '4. Black solid lines/area = print artwork',
+                `5. Die-line outer size with bleed: ${widthMm.toFixed(1)} x ${heightMm.toFixed(1)} mm`,
+                '6. Recommended paper: 250-300 gsm coated for boxes',
+                '7. Recommended finish: Matte or glossy lamination',
+                '8. Embedded fonts: outlined as raster (no font issues)'
+            ];
+            notes.forEach(n => { specPage.drawText(safeText(n), { x: 50, y: yy, size: 10, font: helvR }); yy -= 16; });
+            if (spec_data.colors_used && spec_data.colors_used.length > 0) {
+                yy -= 10;
+                specPage.drawText('COLORS USED', { x: 50, y: yy, size: 13, font: helv }); yy -= 18;
+                spec_data.colors_used.forEach(hex => {
+                    const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+                    specPage.drawRectangle({ x: 50, y: yy - 10, width: 18, height: 12, color: rgb(r, g, b) });
+                    specPage.drawText(`${hex.toUpperCase()} -> CMYK approx (convert at printer)`, { x: 75, y: yy - 8, size: 10, font: helvR });
+                    yy -= 18;
+                });
+            }
         }
 
         const pdfBytes = await pdfDoc.save();
-        const fname = `mockup_${mockupId}_${Date.now()}.pdf`;
+        const ext = format === 'ai' ? 'ai' : 'pdf';
+        const fname = `mockup_${mockupId}_${Date.now()}.${ext}`;
         const fpath = path.join('uploads', fname);
         fs.writeFileSync(fpath, pdfBytes);
-        const url = `/uploads/${fname}`;
 
         const c2 = await pool.getConnection();
-        await c2.query(`UPDATE mockup_design SET print_pdf_url=?, status='exported' WHERE mockup_id=?`, [url, mockupId]);
+        await c2.query(`UPDATE mockup_design SET print_pdf_url=?, status='exported' WHERE mockup_id=?`, [`/uploads/${fname}`, mockupId]);
         c2.release();
-        res.json({ status: 'success', pdf_url: url });
+
+        // Send file directly as download
+        const mimeType = format === 'ai' ? 'application/illustrator' : 'application/pdf';
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+        res.send(pdfBytes);
     } catch (err) {
         console.error('Export PDF Error:', err);
         res.status(500).json({ status: 'error', message: err.message });
@@ -2070,18 +2232,18 @@ app.get('/api/mockup/products-status/:projectId', async (req, res) => {
 
         const productIds = products.map(p => p.product_id);
         const [selected] = await conn.query(
-    `SELECT pc.product_id, pc.package_id, p.name AS name_package
+            `SELECT pc.product_id, pc.package_id, p.name AS name_package
      FROM package_catalog pc 
      JOIN packages p ON p.id = pc.package_id
      WHERE pc.is_selected = 1 AND pc.product_id IN (?)`,
-    [productIds]);
+            [productIds]);
 
         let materials = [];
         if (selected.length > 0) {
             const packageIds = [...new Set(selected.map(s => s.package_id))];
             const [mats] = await conn.query(
                 `SELECT id, package_id, name AS material_name, package_type,
-                        dieline_width_mm, dieline_height_mm
+                        dieline_width_mm, dieline_height_mm, panels_json
                  FROM package_materials WHERE package_id IN (?) ORDER BY sort_order ASC`,
                 [packageIds]);
             materials = mats;
@@ -2116,73 +2278,475 @@ app.get('/api/mockup/products-status/:projectId', async (req, res) => {
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
-// ===== POST: AI สร้างภาพ mockup ผลิตภัณฑ์จริง (DALL-E) =====
+// ===== POST: AI สร้างภาพ mockup — SSE streaming + compressed images + retry =====
 app.post('/api/mockup/generate-ai-image', async (req, res) => {
-    const { project_id, user_id, product_id, package_name, package_material, label_data = {}, project_name } = req.body;
+    const {
+        project_id, user_id,
+        label_image_url, package_image_url,
+        package_name, package_material, package_type, product_name,
+        bg_style = 'white',
+        label_width_px, label_height_px,
+        dieline_width_mm, dieline_height_mm
+    } = req.body;
+
     if (!project_id) return res.status(400).json({ status: 'error', message: 'project_id required' });
 
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    });
+    const sendEvent = (event, data) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
     try {
-        const ld = label_data;
+        sendEvent('progress', { step: 1, total: 4, message: 'กำลังเตรียมรูปภาพ...' });
+
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel(
+            { model: 'gemini-3.1-flash-image-preview', generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } },
+            { timeout: 300000 }
+        );
+
         let conn = await pool.getConnection();
-        // ดึง brand name ที่ select
         const [nameRows] = await conn.query(
             `SELECT brand_name FROM name_concept WHERE project_id = ? AND is_selected = 1 LIMIT 1`, [project_id]);
         const brandName = nameRows[0]?.brand_name || '';
         conn.release();
 
-        const prompt = `Professional studio product photography of a ${package_name || 'product package'} (${package_material || 'standard material'}).
+        const imageParts = [];
 
-The package has a custom designed label sticker on the front with these visual characteristics:
-- Brand identity colors: ${ld.colors || 'natural earthy tones'}
-${brandName ? `- Brand name visible on label: "${brandName}"` : ''}
-${ld.product_name ? `- Product name on label: "${ld.product_name}"` : ''}
-${ld.tagline ? `- Tagline visible: "${ld.tagline}"` : ''}
+        // Image 1: บีบอัด package เป็น JPEG 1024px
+        if (package_image_url) {
+            const possiblePaths = [
+                path.join(process.cwd(), package_image_url.replace(/^\//, '')),
+                path.join(process.cwd(), '..', 'punthai-frontend-user', 'public', package_image_url.replace(/^\//, ''))
+            ];
+            for (const pkgPath of possiblePaths) {
+                if (fs.existsSync(pkgPath)) {
+                    const buf = await sharp(pkgPath)
+                        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+                        .jpeg({ quality: 80 })
+                        .toBuffer();
+                    imageParts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
+                    break;
+                }
+            }
+        }
 
-STRICT VISUAL RULES:
-- Photorealistic professional product photography style
-- Soft diffused studio lighting from upper left
-- Clean white or very subtle light gray seamless background
-- Single product centered in frame, hero shot
-- Sharp focus on the package label
-- Commercial e-commerce product shot quality
-- The label/sticker is clean, well-applied, readable
-- Natural shadows beneath product
-- High resolution, clean modern aesthetic
-- NO people, NO hands holding it, NO extra props or food/decoration around it
-- NO text on background, only on the label area`;
+        // Image 2: บีบอัด label เป็น PNG 2048px (คงคุณภาพสูง)
+        if (label_image_url) {
+            const lblPath = path.join(process.cwd(), label_image_url.replace(/^\//, ''));
+            if (fs.existsSync(lblPath)) {
+                const buf = await sharp(lblPath)
+                    .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+                    .png()
+                    .toBuffer();
+                imageParts.push({ inlineData: { mimeType: 'image/png', data: buf.toString('base64') } });
+            }
+        }
 
-        // 🟢 เรียก Nano Banana (Gemini 2.5 Flash Image)
-        const response = await googleImagen.images.generate({
-            model: 'gemini-2.5-flash-image',
-            prompt,
-            n: 1,
-            size: '1024x1024',
-            response_format: 'b64_json'
-        });
-        const fname = `mockup_ai_${Date.now()}.png`;
-        fs.writeFileSync(path.join('uploads', fname), response.data[0].b64_json, 'base64');
-        const imageUrl = `/uploads/${fname}`;
+        if (imageParts.length === 0) {
+            sendEvent('error', { message: 'ไม่พบรูปภาพฉลากหรือบรรจุภัณฑ์' });
+            return res.end();
+        }
+
+        sendEvent('progress', { step: 2, total: 4, message: 'กำลังส่งข้อมูลให้ AI...' });
+
+        const EDITOR_DPI = 96;
+        const labelW_mm = label_width_px ? Math.round((label_width_px / EDITOR_DPI) * 25.4) : null;
+        const labelH_mm = label_height_px ? Math.round((label_height_px / EDITOR_DPI) * 25.4) : null;
+        const pkgW_mm = dieline_width_mm || null;
+        const pkgH_mm = dieline_height_mm || null;
+
+        let coverageInfo = '';
+        if (labelW_mm && pkgW_mm) {
+            const widthRatio = Math.round((labelW_mm / pkgW_mm) * 100);
+            const heightRatio = labelH_mm && pkgH_mm ? Math.round((labelH_mm / pkgH_mm) * 100) : null;
+            coverageInfo = `
+REAL-WORLD SCALE (very important):
+- Package dimensions: ${pkgW_mm}mm wide × ${pkgH_mm}mm tall
+- Label sticker dimensions: ${labelW_mm}mm wide × ${labelH_mm}mm tall
+- The label covers approximately ${widthRatio}% of the package width${heightRatio ? ` and ${heightRatio}% of the package height` : ''}
+- You MUST respect this proportion — the label is NOT full-size, it is a sticker that covers only part of the package front face
+`;
+        }
+
+        const bgStyleMap = {
+            white: 'Pure clean white seamless studio background',
+            wood: 'Natural warm-toned wood table surface as background',
+            marble: 'Elegant white marble surface as background',
+            nature: 'Fresh green leaves and natural botanical elements arranged around the product',
+            linen: 'Soft neutral-toned linen fabric texture as background',
+            concrete: 'Modern raw concrete / cement surface as background',
+            gradient: 'Professional photography studio with soft gradient backdrop and rim lighting',
+        };
+
+        const hasPackageImg = imageParts.length >= 1 && !!package_image_url;
+        const hasLabelImg = !!label_image_url;
+
+        let prompt = '';
+
+        if (hasPackageImg && hasLabelImg) {
+            prompt = `You are a product packaging mockup artist. Your job is to simulate applying a printed label sticker onto a real product package.
+
+IMAGE REFERENCES:
+- Image 1: The ACTUAL product packaging photo — this is the base image
+- Image 2: The label sticker design that needs to be applied onto the packaging
+
+YOUR TASK — STICKER APPLICATION SIMULATION:
+Take Image 1 (the packaging photo) as your base. Imagine you are physically holding the label from Image 2 as a printed sticker, and you are carefully applying/sticking it onto the front surface of the packaging.
+
+The output image must look like: "Here is the same package from Image 1, but now with the label sticker from Image 2 physically applied onto its front surface."
+
+CRITICAL RULES:
+1. The packaging from Image 1 must remain VISUALLY IDENTICAL — same shape, same material appearance, same angle, same proportions. Do NOT redesign or reimagine the packaging.
+2. The label from Image 2 must appear as a PHYSICAL STICKER adhered to the packaging surface:
+   - It should follow the surface contour of the packaging (slight curve if the package is a pouch/bag, cylindrical wrap if it's a bottle)
+   - Show subtle sticker edges — a very faint shadow or slight highlight at the label border showing it's a sticker on a surface
+   - The label surface should match the packaging material feel (matte sticker on matte package, glossy on glossy)
+3. Reproduce ALL text, logos, barcodes, QR codes, decorative elements from the label EXACTLY as shown. Do not invent, remove, or rearrange any element.
+4. The label should be placed CENTERED on the front face of the package, positioned where a product label would naturally go.
+${coverageInfo}
+PACKAGING CONTEXT:
+- Package type: ${package_type || package_name || 'food pouch/bag'}
+- Material: ${package_material || 'plastic/foil'}
+${brandName ? `- Brand: "${brandName}"` : ''}
+${product_name ? `- Product: "${product_name}"` : ''}
+
+BACKGROUND: ${bgStyleMap[bg_style] || bgStyleMap.white}
+
+PHOTOGRAPHY STYLE:
+- Professional studio product photography
+- Soft diffused lighting, natural shadows beneath product
+- Single product, front-facing hero shot (same angle as Image 1)
+- Sharp focus, commercial e-commerce quality
+- NO people, NO hands, NO extra props
+
+ABSOLUTELY DO NOT:
+- Create a completely new or reimagined package design
+- Merge/blend the two images like a collage
+- Show the label floating or as a flat overlay
+- Change the packaging shape, color, or material from Image 1
+- Add text or design elements not present in Image 2
+- Make the label cover the entire package — respect the sticker size ratio`;
+        } else if (hasLabelImg) {
+            prompt = `You are a product mockup artist. Create a photorealistic product packaging photo showing this label design applied as a sticker on a ${package_type || package_name || 'food pouch/bag'} made of ${package_material || 'plastic'}.
+
+IMAGE REFERENCE:
+- Image 1: The label sticker design to apply on packaging
+
+TASK: Generate a realistic ${package_type || 'food package'} and show this label applied as a physical sticker on its front surface.
+${coverageInfo}
+${brandName ? `Brand: "${brandName}"` : ''}
+${product_name ? `Product: "${product_name}"` : ''}
+
+The label must be reproduced EXACTLY — all text, logos, barcodes, colors, decorative elements.
+Place the sticker centered on the front face of the package.
+Professional studio photography, white background, soft lighting, no people/hands.`;
+        } else if (hasPackageImg) {
+            prompt = `Create a professional product mockup photo of this packaging.
+${brandName ? `Brand: "${brandName}"` : ''}
+${product_name ? `Product: "${product_name}"` : ''}
+Professional studio photography, white background, soft lighting, no people/hands.`;
+        }
+
+        sendEvent('progress', { step: 3, total: 4, message: 'AI กำลังสร้างภาพ Mockup...' });
+
+        // เรียก Gemini พร้อม retry 1 ครั้งเมื่อเจอ 503/fetch failed
+        const contentParts = [...imageParts, { text: prompt }];
+        let result;
+        try {
+            result = await model.generateContent(contentParts);
+        } catch (firstErr) {
+            console.warn('Gemini attempt 1 failed, retrying in 5s...', firstErr.message);
+            sendEvent('progress', { step: 3, total: 4, message: 'เซิร์ฟเวอร์ AI ยุ่ง กำลังลองใหม่...' });
+            await new Promise(r => setTimeout(r, 5000));
+            result = await model.generateContent(contentParts);
+        }
+
+        let base64Data = '';
+        let mimeType = 'image/png';
+        const parts = result.response.candidates?.[0]?.content?.parts;
+        if (parts) {
+            for (const part of parts) {
+                if (part.inlineData?.data) {
+                    base64Data = part.inlineData.data;
+                    mimeType = part.inlineData.mimeType || 'image/png';
+                    break;
+                }
+            }
+        }
+
+        if (!base64Data) throw new Error('AI ไม่ส่งรูปภาพกลับมา กรุณาลองใหม่');
+
+        sendEvent('progress', { step: 4, total: 4, message: 'กำลังบันทึกภาพ...' });
+
+        const ext = mimeType.includes('jpeg') ? 'jpg' : 'png';
+        const fileName = `mockup_ai_${Date.now()}.${ext}`;
+        const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
+        fs.writeFileSync(filePath, base64Data, 'base64');
+        const imageUrl = `/uploads/generated/${fileName}`;
 
         try {
             const finalUserId = (!user_id || user_id === 0) ? null : user_id;
             const c2 = await pool.getConnection();
             await c2.query(
                 `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
-                [finalUserId, project_id, 'GENERATE_MOCKUP_AI', prompt, imageUrl]);
+                [finalUserId, project_id, 'GENERATE_MOCKUP_AI', prompt.substring(0, 2000), imageUrl]);
             await c2.query(
                 `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
-                [project_id, finalUserId, 'MOCKUP_AI', imageUrl, prompt]);
+                [project_id, finalUserId, 'MOCKUP_AI', imageUrl, prompt.substring(0, 2000)]);
             c2.release();
         } catch (e) { console.warn('log warning', e.message); }
 
-        res.json({ status: 'success', image_url: imageUrl });
+        sendEvent('done', { status: 'success', image_url: imageUrl });
+        res.end();
     } catch (err) {
         console.error('AI Mockup Error:', err);
+        sendEvent('error', { message: err.message });
+        res.end();
+    }
+});
+// =====================================================================
+// POST /api/labels/export-pdf — สร้าง PDF ฉลากพร้อมพิมพ์
+// =====================================================================
+app.post('/api/labels/export-pdf', async (req, res) => {
+    const {
+        product_id, project_id, label_image,
+        label_width_cm, label_height_cm, bleed_mm = 3,
+        product_name, colors_used = []
+    } = req.body;
+
+    if (!label_image) {
+        return res.status(400).json({ status: 'error', message: 'ไม่มีภาพฉลาก' });
+    }
+
+    try {
+        const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+        const pdfDoc = await PDFDocument.create();
+
+        const MM_TO_PT = 2.83465;
+        const CM_TO_MM = 10;
+        const labelWidthMm = parseFloat(label_width_cm) * CM_TO_MM;
+        const labelHeightMm = parseFloat(label_height_cm) * CM_TO_MM;
+        const bleed = parseFloat(bleed_mm) || 3;
+        const totalWidthMm = labelWidthMm + bleed * 2;
+        const totalHeightMm = labelHeightMm + bleed * 2;
+        const pageW = totalWidthMm * MM_TO_PT;
+        const pageH = totalHeightMm * MM_TO_PT;
+
+        // ---- หน้า 1: ฉลาก print-ready ----
+        const page = pdfDoc.addPage([pageW, pageH]);
+        page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(1, 1, 1) });
+
+        // Embed label image
+        const b64 = label_image.replace(/^data:image\/\w+;base64,/, '');
+        const imgBytes = Buffer.from(b64, 'base64');
+        let labelImg;
+        try {
+            labelImg = await pdfDoc.embedPng(imgBytes);
+        } catch (e) {
+            labelImg = await pdfDoc.embedJpg(imgBytes);
+        }
+
+        // วางฉลากตรงกลาง (offset ด้วย bleed)
+        page.drawImage(labelImg, {
+            x: bleed * MM_TO_PT,
+            y: bleed * MM_TO_PT,
+            width: labelWidthMm * MM_TO_PT,
+            height: labelHeightMm * MM_TO_PT,
+        });
+
+        // ---- Crop marks 4 มุม ----
+        const cropLen = 5 * MM_TO_PT;
+        const cropOff = bleed * MM_TO_PT;
+        const cropColor = rgb(0, 0, 0);
+        const drawCrop = (x, y, dx, dy) => {
+            page.drawLine({ start: { x, y }, end: { x: x + dx, y: y + dy }, thickness: 0.25, color: cropColor });
+        };
+        // bottom-left
+        drawCrop(0, cropOff, cropLen, 0);
+        drawCrop(cropOff, 0, 0, cropLen);
+        // bottom-right
+        drawCrop(pageW - cropLen, cropOff, cropLen, 0);
+        drawCrop(pageW - cropOff, 0, 0, cropLen);
+        // top-left
+        drawCrop(0, pageH - cropOff, cropLen, 0);
+        drawCrop(cropOff, pageH - cropLen, 0, cropLen);
+        // top-right
+        drawCrop(pageW - cropLen, pageH - cropOff, cropLen, 0);
+        drawCrop(pageW - cropOff, pageH - cropLen, 0, cropLen);
+
+        // ---- หน้า 2: Spec Sheet (A4) ----
+        const specPage = pdfDoc.addPage([595, 842]);
+        const helv = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const helvR = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        let yy = 800;
+
+        specPage.drawText('LABEL PRINT SPECIFICATION SHEET', { x: 50, y: yy, size: 18, font: helv });
+        yy -= 30;
+        // กรองเฉพาะตัวอักษรที่ Helvetica รองรับ (Latin/ASCII) เพื่อไม่ให้ crash
+        const safeName = (product_name || '-').replace(/[^\x20-\x7E]/g, '');
+        specPage.drawText(`Product: ${safeName || `(Product ID: ${product_id})`}`, { x: 50, y: yy, size: 11, font: helvR });
+        yy -= 18;
+        specPage.drawText(`Label Size: ${label_width_cm} x ${label_height_cm} cm (${labelWidthMm} x ${labelHeightMm} mm)`, { x: 50, y: yy, size: 11, font: helvR });
+        yy -= 18;
+        specPage.drawText(`Bleed: ${bleed} mm each side`, { x: 50, y: yy, size: 11, font: helvR });
+        yy -= 18;
+        specPage.drawText(`Total with bleed: ${totalWidthMm} x ${totalHeightMm} mm`, { x: 50, y: yy, size: 11, font: helvR });
+        yy -= 30;
+
+        specPage.drawText('PRINTING NOTES', { x: 50, y: yy, size: 13, font: helv });
+        yy -= 20;
+        const notes = [
+            '1. Color space: sRGB (please convert to CMYK before printing)',
+            '2. Crop marks at 4 corners - trim along marks',
+            `3. Label area: ${labelWidthMm} x ${labelHeightMm} mm (inside crop marks)`,
+            `4. Bleed area: ${bleed} mm on each side`,
+            '5. Recommended paper: Art card 210-260 gsm',
+            '6. Recommended finish: Matte or glossy lamination',
+            '7. Content rendered as raster image (no font embedding issues)',
+        ];
+        notes.forEach(n => {
+            specPage.drawText(n, { x: 50, y: yy, size: 10, font: helvR });
+            yy -= 16;
+        });
+
+        // Colors used
+        if (colors_used && colors_used.length > 0) {
+            yy -= 15;
+            specPage.drawText('COLORS USED', { x: 50, y: yy, size: 13, font: helv });
+            yy -= 20;
+            colors_used.forEach(hex => {
+                if (!hex || hex.length < 7) return;
+                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                specPage.drawRectangle({ x: 50, y: yy - 10, width: 18, height: 12, color: rgb(r, g, b) });
+                specPage.drawText(`${hex.toUpperCase()} (convert to CMYK at printer)`, { x: 75, y: yy - 8, size: 10, font: helvR });
+                yy -= 18;
+            });
+        }
+
+        // ---- Thumbnail preview on spec page ----
+        yy -= 25;
+        specPage.drawText('LABEL PREVIEW', { x: 50, y: yy, size: 13, font: helv });
+        yy -= 10;
+        const previewMaxW = 200;
+        const previewMaxH = 260;
+        const aspect = labelWidthMm / labelHeightMm;
+        let prevW, prevH;
+        if (aspect > previewMaxW / previewMaxH) {
+            prevW = previewMaxW;
+            prevH = previewMaxW / aspect;
+        } else {
+            prevH = previewMaxH;
+            prevW = previewMaxH * aspect;
+        }
+        if (yy - prevH > 40) {
+            specPage.drawImage(labelImg, {
+                x: 50,
+                y: yy - prevH,
+                width: prevW,
+                height: prevH,
+            });
+        }
+
+        // ---- Save PDF ----
+        const pdfBytes = await pdfDoc.save();
+        const fname = `label_${product_id || 'design'}_${Date.now()}.pdf`;
+        const fpath = path.join('uploads', fname);
+        fs.writeFileSync(fpath, pdfBytes);
+        const url = `/uploads/${fname}`;
+
+        res.json({ status: 'success', pdf_url: url });
+    } catch (err) {
+        console.error('Label Export PDF Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+// =====================================================================
+// GET /api/package/:packageId/materials — ดึง materials + panels ของ package
+// =====================================================================
+app.get('/api/package/:packageId/materials', async (req, res) => {
+    try {
+        const conn = await pool.getConnection();
+        const [materials] = await conn.query(
+            `SELECT id, package_id, name, detail, package_type,
+                    dieline_width_mm, dieline_height_mm, panels_json,
+                    bleed_mm, safe_zone_mm
+             FROM package_materials
+             WHERE package_id = ?
+             ORDER BY sort_order ASC`, [req.params.packageId]
+        );
+        const materialIds = materials.map(m => m.id).filter(Boolean);
+        let sizes = [];
+        if (materialIds.length > 0) {
+            const [sizeRows] = await conn.query(
+                `SELECT id, material_id, size_label, sort_order
+                 FROM package_material_sizes
+                 WHERE material_id IN (?)
+                 ORDER BY sort_order ASC`, [materialIds]
+            );
+            sizes = sizeRows;
+        }
+        conn.release();
+        materials.forEach(m => {
+            if (m.panels_json && typeof m.panels_json === 'string') {
+                try { m.panels_json = JSON.parse(m.panels_json); } catch (e) { m.panels_json = []; }
+            }
+            m.sizes = sizes.filter(s => s.material_id === m.id);
+        });
+        res.json({ status: 'success', data: materials });
+    } catch (err) {
+        console.error('package materials error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+// ===== GET: ดึงประวัติ mockup ที่เคยสร้าง =====
+app.get('/api/mockup/history/:projectId', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT history_id, image_url, prompt, is_liked, is_selected, created_at
+             FROM generated_history 
+             WHERE project_id = ? AND generation_type = 'MOCKUP_AI'
+             ORDER BY history_id DESC`,
+            [projectId]
+        );
+        conn.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error('Mockup history error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ===== DELETE: ลบ mockup ที่ไม่ต้องการ =====
+app.delete('/api/mockup/history/:historyId', async (req, res) => {
+    const { historyId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT image_url FROM generated_history WHERE history_id = ?`, [historyId]);
+        if (rows.length > 0 && rows[0].image_url) {
+            const filePath = path.join(process.cwd(), rows[0].image_url.replace(/^\//, ''));
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+        await conn.query(`DELETE FROM generated_history WHERE history_id = ?`, [historyId]);
+        conn.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        console.error('Delete mockup error:', err);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`รันได้แล้ว Server running on http://localhost:${PORT}`);
+    console.log(`รันได้แล้ว Server running on http://localhost:${PORT}`);
 });

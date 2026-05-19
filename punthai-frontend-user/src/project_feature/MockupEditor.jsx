@@ -1,8 +1,10 @@
 // punthai-frontend-user/src/MockupEditor.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { Stage, Layer, Image as KImg, Transformer } from 'react-konva';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Stage, Layer, Image as KImg, Rect as KRect, Text as KText, Circle as KCircle, Group, Transformer } from 'react-konva';
 import html2canvas from 'html2canvas';
 import { loadLogoTransparent } from './logoUtils';
+import JsBarcode from 'jsbarcode';
+import QRCode from 'qrcode';
 
 const API = 'http://localhost:3000';
 
@@ -32,7 +34,6 @@ function useHtmlImage(src) {
     }, [src]);
     return img;
 }
-
 // === Render label data → image (hidden DOM via html2canvas) ===
 function LabelImageRenderer({ labelData, brandAssets, onReady }) {
     const ref = useRef();
@@ -67,7 +68,7 @@ function LabelImageRenderer({ labelData, brandAssets, onReady }) {
             }}>
                 {brandAssets?.logoUrl && (
                     <img src={brandAssets.logoUrl} crossOrigin="anonymous" alt="logo"
-                         style={{ width: 90, height: 90, objectFit: 'contain', marginBottom: 12 }} />
+                        style={{ width: 90, height: 90, objectFit: 'contain', marginBottom: 12 }} />
                 )}
                 <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1 }}>
                     {labelData.product_name || 'Product Name'}
@@ -165,19 +166,19 @@ function StickerEditor({ packageImageUrl, labelImageUrl, onExportPng, onSwitchTo
                         ขนาด: {Math.round(stickerProps.w)} px
                     </label>
                     <input type="range" min="80" max="600" value={stickerProps.w}
-                           onChange={e => {
-                               const w = parseInt(e.target.value);
-                               const aspect = lblImg ? (lblImg.height / lblImg.width) : 1.25;
-                               setStickerProps(p => ({ ...p, w, h: w * aspect }));
-                           }} style={{ width: '100%' }} />
+                        onChange={e => {
+                            const w = parseInt(e.target.value);
+                            const aspect = lblImg ? (lblImg.height / lblImg.width) : 1.25;
+                            setStickerProps(p => ({ ...p, w, h: w * aspect }));
+                        }} style={{ width: '100%' }} />
                 </div>
                 <div style={{ marginBottom: 14 }}>
                     <label style={{ fontSize: 12, fontWeight: 600, color: C.text, display: 'block', marginBottom: 6 }}>
                         หมุน: {Math.round(stickerProps.rotation)}°
                     </label>
                     <input type="range" min="-180" max="180" value={stickerProps.rotation}
-                           onChange={e => setStickerProps(p => ({ ...p, rotation: parseInt(e.target.value) }))}
-                           style={{ width: '100%' }} />
+                        onChange={e => setStickerProps(p => ({ ...p, rotation: parseInt(e.target.value) }))}
+                        style={{ width: '100%' }} />
                 </div>
 
                 <button onClick={() => {
@@ -196,11 +197,11 @@ function StickerEditor({ packageImageUrl, labelImageUrl, onExportPng, onSwitchTo
                 <hr style={{ border: 'none', borderTop: `1px solid ${C.border}`, margin: '16px 0' }} />
 
                 <button onClick={() => { const url = handleExport(); if (url) onExportPng(url); }}
-                        disabled={isExporting} style={{
-                    width: '100%', padding: 12, background: C.text, color: '#fff', border: 'none',
-                    borderRadius: 8, fontWeight: 600, cursor: 'pointer', marginBottom: 8, fontSize: 14,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                }}>
+                    disabled={isExporting} style={{
+                        width: '100%', padding: 12, background: C.text, color: '#fff', border: 'none',
+                        borderRadius: 8, fontWeight: 600, cursor: 'pointer', marginBottom: 8, fontSize: 14,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                    }}>
                     <iconify-icon icon="mdi:download"></iconify-icon>
                     {isExporting ? 'กำลังบันทึก...' : 'บันทึกเป็น PNG'}
                 </button>
@@ -223,32 +224,32 @@ function StickerEditor({ packageImageUrl, labelImageUrl, onExportPng, onSwitchTo
 
             <div style={{ flex: 1, background: C.bgPage, borderRadius: 14, padding: 24, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 600 }}>
                 <Stage ref={stageRef} width={stageSize.w} height={stageSize.h}
-                       onMouseDown={handleStageClick} onTouchStart={handleStageClick}
-                       style={{ background: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', borderRadius: 8 }}>
+                    onMouseDown={handleStageClick} onTouchStart={handleStageClick}
+                    style={{ background: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', borderRadius: 8 }}>
                     <Layer>
                         {pkgImg && <KImg image={pkgImg} x={0} y={0} width={stageSize.w} height={stageSize.h} listening={false} />}
                         {lblImg && (
                             <KImg image={lblImg} id="sticker"
-                                  x={stickerProps.x} y={stickerProps.y}
-                                  width={stickerProps.w} height={stickerProps.h}
-                                  rotation={stickerProps.rotation} draggable
-                                  shadowColor="black" shadowBlur={8} shadowOpacity={0.25}
-                                  shadowOffset={{ x: 2, y: 4 }}
-                                  onClick={() => setSelected(true)} onTap={() => setSelected(true)}
-                                  onDragEnd={e => setStickerProps(p => ({ ...p, x: e.target.x(), y: e.target.y() }))}
-                                  onTransformEnd={e => {
-                                      const n = e.target;
-                                      setStickerProps({
-                                          x: n.x(), y: n.y(),
-                                          w: Math.max(30, n.width() * n.scaleX()),
-                                          h: Math.max(30, n.height() * n.scaleY()),
-                                          rotation: n.rotation()
-                                      });
-                                      n.scaleX(1); n.scaleY(1);
-                                  }} />
+                                x={stickerProps.x} y={stickerProps.y}
+                                width={stickerProps.w} height={stickerProps.h}
+                                rotation={stickerProps.rotation} draggable
+                                shadowColor="black" shadowBlur={8} shadowOpacity={0.25}
+                                shadowOffset={{ x: 2, y: 4 }}
+                                onClick={() => setSelected(true)} onTap={() => setSelected(true)}
+                                onDragEnd={e => setStickerProps(p => ({ ...p, x: e.target.x(), y: e.target.y() }))}
+                                onTransformEnd={e => {
+                                    const n = e.target;
+                                    setStickerProps({
+                                        x: n.x(), y: n.y(),
+                                        w: Math.max(30, n.width() * n.scaleX()),
+                                        h: Math.max(30, n.height() * n.scaleY()),
+                                        rotation: n.rotation()
+                                    });
+                                    n.scaleX(1); n.scaleY(1);
+                                }} />
                         )}
                         <Transformer ref={trRef} rotateEnabled={true}
-                                     boundBoxFunc={(oldB, newB) => newB.width < 30 ? oldB : newB} />
+                            boundBoxFunc={(oldB, newB) => newB.width < 30 ? oldB : newB} />
                     </Layer>
                 </Stage>
             </div>
@@ -256,8 +257,1102 @@ function StickerEditor({ packageImageUrl, labelImageUrl, onExportPng, onSwitchTo
     );
 }
 
+// === Package Design Editor ===
+function PackageDesignEditor({ projectId, userId, projectName, product, brandAssets, labelData, labelImageUrl, onBack }) {
+    const stageRef = useRef();
+    const trRef = useRef();
+
+    const [materialData, setMaterialData] = useState(null);
+    const [panels, setPanels] = useState([]);
+    const [activePanelIdx, setActivePanelIdx] = useState(0);
+    const [panelDesigns, setPanelDesigns] = useState({});
+    const [selectedElId, setSelectedElId] = useState(null);
+    const [openSections, setOpenSections] = useState({ bg: true });
+    const [isSaving, setIsSaving] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const [savedMockupId, setSavedMockupId] = useState(null);
+    const [saveMsg, setSaveMsg] = useState('');
+
+    // AI background state
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [isAiGenerating, setIsAiGenerating] = useState(false);
+    const [aiDielineBgUrl, setAiDielineBgUrl] = useState(null);
+    const [aiDielineBgImg, setAiDielineBgImg] = useState(null);
+    const [aiBgHistory, setAiBgHistory] = useState([]);
+
+    // Auto-save state
+    const [saveStatus, setSaveStatus] = useState('');
+    const dataLoadedRef = useRef(false);
+
+    // Canvas sizing
+    const CANVAS_W = 700;
+    const activePanel = panels[activePanelIdx];
+    const mmToPx = activePanel ? Math.min(CANVAS_W / activePanel.w_mm, 600 / activePanel.h_mm) : 3;
+    const canvasW = activePanel ? activePanel.w_mm * mmToPx : CANVAS_W;
+    const canvasH = activePanel ? activePanel.h_mm * mmToPx : 500;
+
+    // Current panel design
+    const currentDesign = activePanel ? (panelDesigns[activePanel.id] || { bg_mode: 'solid', bg_color: '#FFFFFF', bg_opacity: 1, elements: [] }) : null;
+
+    useEffect(() => { fetchMaterial(); }, [product]);
+
+    const fetchMaterial = async () => {
+        const matId = product.materials?.[0]?.id;
+        if (!matId) return;
+        try {
+            const r = await fetch(`${API}/api/mockup/material/${matId}`);
+            const d = await r.json();
+            if (d.status === 'success') {
+                setMaterialData(d.data);
+                const p = d.data.panels_json ? (typeof d.data.panels_json === 'string' ? JSON.parse(d.data.panels_json) : d.data.panels_json) : [];
+                setPanels(p);
+                const initial = {};
+                p.forEach(panel => { initial[panel.id] = { bg_mode: 'solid', bg_color: '#FFFFFF', bg_opacity: 1, bg_image_url: null, elements: [] }; });
+                setPanelDesigns(initial);
+                loadExistingMockup(initial);
+            }
+        } catch (e) { console.error('[PkgDesign] fetch material error:', e); }
+    };
+
+    const loadExistingMockup = async (initialDesigns) => {
+        try {
+            const r = await fetch(`${API}/api/mockups/${projectId}?product_id=${product.product_id}`);
+            const d = await r.json();
+            if (d.status === 'success' && d.data && d.data.panels?.length > 0) {
+                setSavedMockupId(d.data.mockup_id);
+                if (d.data.ai_dieline_bg_url) {
+                    setAiDielineBgUrl(d.data.ai_dieline_bg_url);
+                    loadAiDielineImage(`${API}${d.data.ai_dieline_bg_url}`);
+                }
+                if (d.data.ai_bg_prompt) setAiPrompt(d.data.ai_bg_prompt);
+                const loaded = { ...initialDesigns };
+                d.data.panels.forEach(p => {
+                    loaded[p.panel_key] = {
+                        bg_mode: p.bg_mode || 'solid',
+                        bg_color: p.bg_color || '#FFFFFF',
+                        bg_opacity: parseFloat(p.bg_opacity) || 1,
+                        bg_image_url: p.bg_image_url || null,
+                        elements: Array.isArray(p.elements_json) ? p.elements_json : []
+                    };
+                });
+                setPanelDesigns(loaded);
+            }
+        } catch (e) { console.error('[PkgDesign] load existing:', e); }
+        // Mark data as loaded so auto-save can start
+        setTimeout(() => { dataLoadedRef.current = true; }, 2000);
+    };
+
+    const loadAiDielineImage = (url) => {
+        const img = new window.Image();
+        img.crossOrigin = 'anonymous';
+        img.src = url;
+        img.onload = () => setAiDielineBgImg(img);
+    };
+
+    const fetchAiBgHistory = async () => {
+        try {
+            const r = await fetch(`${API}/api/mockup/dieline-bg-history/${projectId}`);
+            const d = await r.json();
+            if (d.status === 'success') setAiBgHistory(d.data || []);
+        } catch (e) { console.error('[PkgDesign] fetch AI history:', e); }
+    };
+
+    useEffect(() => { if (projectId) fetchAiBgHistory(); }, [projectId]);
+
+    // Auto-save (debounced 1500ms) — only after initial data loaded
+    useEffect(() => {
+        if (!dataLoadedRef.current) return;
+        if (!panels.length || !Object.keys(panelDesigns).length) return;
+        setSaveStatus('กำลังบันทึก...');
+        const timer = setTimeout(() => { handleSave(true); }, 1500);
+        return () => clearTimeout(timer);
+    }, [panelDesigns]);
+
+    const updateDesign = (panelId, updates) => {
+        setPanelDesigns(prev => ({
+            ...prev,
+            [panelId]: { ...prev[panelId], ...updates }
+        }));
+    };
+
+    const updateElement = (panelId, elId, updates) => {
+        setPanelDesigns(prev => {
+            const d = { ...prev[panelId] };
+            d.elements = d.elements.map(el => el.id === elId ? { ...el, ...updates } : el);
+            return { ...prev, [panelId]: d };
+        });
+    };
+
+    const addElement = (type) => {
+        if (!activePanel) return;
+        const id = `el_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const cx = canvasW / 2, cy = canvasH / 2;
+        let el;
+        if (type === 'text') {
+            el = { id, type: 'text', x: cx - 80, y: cy - 16, w: 160, h: 32, rotation: 0, data: 'ข้อความ', fontSize: 24, fill: '#222', fontFamily: brandAssets?.font || "'Sarabun', sans-serif" };
+        } else if (type === 'rect') {
+            el = { id, type: 'shape', x: cx - 60, y: cy - 40, w: 120, h: 80, rotation: 0, fill: brandAssets?.colors?.[2] || '#cccccc' };
+        } else if (type === 'circle') {
+            el = { id, type: 'circle', x: cx, y: cy, radius: 40, fill: brandAssets?.colors?.[2] || '#cccccc' };
+        } else if (type === 'barcode') {
+            const val = labelData?.barcode_value || '8850000000000';
+            el = { id, type: 'barcode', x: cx - 80, y: cy - 25, w: 160, h: 50, rotation: 0, barcodeValue: val, barcodeFormat: 'EAN13' };
+        } else if (type === 'qrcode') {
+            const val = labelData?.qr_code_value || 'https://example.com';
+            el = { id, type: 'qrcode', x: cx - 40, y: cy - 40, w: 80, h: 80, rotation: 0, qrValue: val };
+        } else if (type === 'image') {
+            return; // handled by file upload
+        } else if (type === 'logo' || type === 'label_logo') {
+            if (!brandAssets?.logoUrl) return;
+            // Load logo to get real aspect ratio
+            const logoImg = new window.Image();
+            logoImg.crossOrigin = 'anonymous';
+            logoImg.src = brandAssets.logoUrl;
+            logoImg.onload = () => {
+                const ratio = logoImg.naturalWidth / logoImg.naturalHeight;
+                const maxSize = canvasW * 0.25;
+                let w, h;
+                if (ratio >= 1) { w = maxSize; h = w / ratio; }
+                else { h = maxSize; w = h * ratio; }
+                const logoEl = { id, type: 'image', x: cx - w / 2, y: type === 'label_logo' ? 20 : cy - h / 2, w, h, rotation: 0, src: brandAssets.logoUrl };
+                setPanelDesigns(prev => {
+                    const d = { ...prev[activePanel.id] };
+                    d.elements = [...d.elements, logoEl];
+                    return { ...prev, [activePanel.id]: d };
+                });
+                setSelectedElId(id);
+            };
+            return; // async — don't fall through to sync el
+        } else if (type === 'label_import') {
+            const imgUrl = labelImageUrl || (labelData?.final_label_url ? `${API}${labelData.final_label_url}` : null);
+            if (!imgUrl) return alert('ยังไม่มีฉลากที่ออกแบบไว้');
+            // Load label image to get real aspect ratio
+            const lblImg = new window.Image();
+            lblImg.crossOrigin = 'anonymous';
+            lblImg.src = imgUrl;
+            lblImg.onload = () => {
+                const ratio = lblImg.naturalWidth / lblImg.naturalHeight;
+                const maxW = canvasW * 0.7, maxH = canvasH * 0.7;
+                let w, h;
+                if (ratio >= 1) { w = maxW; h = w / ratio; }
+                else { h = maxH; w = h * ratio; }
+                if (h > maxH) { h = maxH; w = h * ratio; }
+                if (w > maxW) { w = maxW; h = w / ratio; }
+                const lblEl = { id, type: 'image', x: (canvasW - w) / 2, y: (canvasH - h) / 2, w, h, rotation: 0, src: imgUrl };
+                setPanelDesigns(prev => {
+                    const d = { ...prev[activePanel.id] };
+                    d.elements = [...d.elements, lblEl];
+                    return { ...prev, [activePanel.id]: d };
+                });
+                setSelectedElId(id);
+            };
+            return; // async
+        } else if (type?.startsWith('label_text_')) {
+            const field = type.replace('label_text_', '');
+            const textMap = {
+                product_name: { data: labelData?.product_name, fontSize: 32, fill: brandAssets?.colors?.[1] || '#222' },
+                tagline: { data: labelData?.tagline, fontSize: 18, fill: brandAssets?.colors?.[2] || '#d3542b' },
+                net_weight: { data: labelData?.net_weight, fontSize: 14, fill: brandAssets?.colors?.[3] || '#666' },
+                ingredients: { data: labelData?.ingredients ? `ส่วนประกอบ: ${labelData.ingredients}` : null, fontSize: 11, fill: '#333' },
+                usage: { data: labelData?.usage_instruction, fontSize: 11, fill: '#333' },
+                storage: { data: labelData?.storage_instruction, fontSize: 11, fill: '#333' },
+                warnings: { data: labelData?.warnings, fontSize: 11, fill: '#cc0000' },
+                fda: { data: labelData?.fda_number ? `เลข อย. ${labelData.fda_number}` : null, fontSize: 11, fill: '#333' },
+                dates: { data: (labelData?.mfg_date || labelData?.exp_date) ? `MFG: ${labelData.mfg_date || '-'} / EXP: ${labelData.exp_date || '-'}` : null, fontSize: 10, fill: '#666' },
+                lot: { data: labelData?.lot_number ? `LOT: ${labelData.lot_number}` : null, fontSize: 10, fill: '#666' },
+                manufacturer: { data: (() => {
+                    const m = labelData?.manufacturer_info;
+                    if (!m) return null;
+                    const info = typeof m === 'string' ? JSON.parse(m) : m;
+                    return [info.name, info.address, info.phone].filter(Boolean).join('\n');
+                })(), fontSize: 11, fill: '#333' },
+            };
+            const t = textMap[field];
+            if (!t?.data) return;
+            const w = Math.min(canvasW * 0.8, 400);
+            el = { id, type: 'text', x: (canvasW - w) / 2, y: canvasH * 0.3 + Math.random() * 60, w, h: 40, rotation: 0, data: t.data, fontSize: t.fontSize, fill: t.fill, fontFamily: brandAssets?.font || "'Sarabun', sans-serif" };
+        } else if (type === 'label_certs') {
+            if (!labelData?.certifications?.length) return;
+            const certs = Array.isArray(labelData.certifications) ? labelData.certifications : JSON.parse(labelData.certifications || '[]');
+            if (certs.length === 0) return;
+            el = { id, type: 'text', x: canvasW * 0.1, y: canvasH * 0.85, w: canvasW * 0.8, h: 30, rotation: 0, data: certs.join('  •  '), fontSize: 11, fill: '#fff', fontFamily: brandAssets?.font || "'Sarabun', sans-serif" };
+        }
+        if (el) {
+            setPanelDesigns(prev => {
+                const d = { ...prev[activePanel.id] };
+                d.elements = [...d.elements, el];
+                return { ...prev, [activePanel.id]: d };
+            });
+            setSelectedElId(id);
+        }
+    };
+
+    const deleteElement = (elId) => {
+        if (!activePanel) return;
+        setPanelDesigns(prev => {
+            const d = { ...prev[activePanel.id] };
+            d.elements = d.elements.filter(el => el.id !== elId);
+            return { ...prev, [activePanel.id]: d };
+        });
+        setSelectedElId(null);
+    };
+
+    const handleImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !activePanel) return;
+        const fd = new FormData();
+        fd.append('pattern_image', file);
+        fd.append('user_id', userId);
+        try {
+            const r = await fetch(`${API}/api/mockup/upload-pattern`, { method: 'POST', body: fd });
+            const d = await r.json();
+            const imgPath = d.data?.image_url || d.image_url;
+            if (d.status === 'success' && imgPath) {
+                const imgUrl = `${API}${imgPath}`;
+                // Load image to get real dimensions
+                const tempImg = new window.Image();
+                tempImg.crossOrigin = 'anonymous';
+                tempImg.src = imgUrl;
+                tempImg.onload = () => {
+                    const id = `el_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+                    const ratio = tempImg.naturalWidth / tempImg.naturalHeight;
+                    const maxW = canvasW * 0.6, maxH = canvasH * 0.6;
+                    let w, h;
+                    if (ratio >= 1) { w = Math.min(tempImg.naturalWidth, maxW); h = w / ratio; }
+                    else { h = Math.min(tempImg.naturalHeight, maxH); w = h * ratio; }
+                    if (h > maxH) { h = maxH; w = h * ratio; }
+                    if (w > maxW) { w = maxW; h = w / ratio; }
+                    setPanelDesigns(prev => {
+                        const dd = { ...prev[activePanel.id] };
+                        dd.elements = [...dd.elements, { id, type: 'image', x: (canvasW - w) / 2, y: (canvasH - h) / 2, w, h, rotation: 0, src: imgUrl }];
+                        return { ...prev, [activePanel.id]: dd };
+                    });
+                    setSelectedElId(id);
+                };
+            }
+        } catch (err) { console.error('Upload error:', err); }
+        e.target.value = '';
+    };
+
+    const handleBgImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !activePanel) return;
+        const fd = new FormData();
+        fd.append('pattern_image', file);
+        fd.append('user_id', userId);
+        try {
+            const r = await fetch(`${API}/api/mockup/upload-pattern`, { method: 'POST', body: fd });
+            const d = await r.json();
+            const imgPath = d.data?.image_url || d.image_url;
+            if (d.status === 'success' && imgPath) {
+                updateDesign(activePanel.id, { bg_mode: 'upload', bg_image_url: `${API}${imgPath}` });
+            }
+        } catch (err) { console.error('BG upload error:', err); }
+        e.target.value = '';
+    };
+
+    // AI Background Generation
+    const generateAiBg = async () => {
+        if (!aiPrompt.trim() || !materialData) return;
+        setIsAiGenerating(true);
+        try {
+            const r = await fetch(`${API}/api/mockup/generate-dieline-bg`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: projectId,
+                    user_id: userId,
+                    user_prompt: aiPrompt,
+                    dieline_width_mm: materialData.dieline_width_mm,
+                    dieline_height_mm: materialData.dieline_height_mm,
+                    panels_json: panels,
+                    package_type: materialData.package_type,
+                    product_name: labelData?.product_name || product.name_product
+                })
+            });
+            const d = await r.json();
+            if (d.status === 'success') {
+                const fullUrl = `${API}${d.data.image_url}`;
+                setAiDielineBgUrl(d.data.image_url);
+                loadAiDielineImage(fullUrl);
+                panels.forEach(p => {
+                    updateDesign(p.id, { bg_mode: 'dalle', bg_image_url: fullUrl });
+                });
+                fetchAiBgHistory();
+            } else {
+                alert('AI สร้างไม่สำเร็จ: ' + (d.message || 'ลองใหม่อีกครั้ง'));
+            }
+        } catch (err) {
+            console.error('AI BG error:', err);
+            alert('เกิดข้อผิดพลาด: ' + err.message);
+        } finally {
+            setIsAiGenerating(false);
+        }
+    };
+
+    // Save
+    const handleSave = async (isAutoSave = false) => {
+        if (!isAutoSave) setIsSaving(true);
+        if (!isAutoSave) setSaveMsg('');
+        try {
+            const panelsPayload = panels.map(p => {
+                const d = panelDesigns[p.id] || {};
+                return {
+                    panel_key: p.id,
+                    bg_mode: d.bg_mode || 'solid',
+                    bg_color: d.bg_color || '#FFFFFF',
+                    bg_image_url: d.bg_image_url?.replace(API, '') || null,
+                    bg_opacity: d.bg_opacity ?? 1,
+                    elements_json: d.elements || []
+                };
+            });
+            const body = {
+                project_id: projectId,
+                product_id: product.product_id,
+                package_material_id: product.materials?.[0]?.id,
+                label_id: labelData?.label_id || null,
+                bleed_mm: materialData?.bleed_mm || 3,
+                resolution_dpi: 300,
+                design_mode: 'package_design',
+                ai_dieline_bg_url: aiDielineBgUrl || null,
+                ai_bg_prompt: aiPrompt || null,
+                panels: panelsPayload
+            };
+            const r = await fetch(`${API}/api/mockups`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const d = await r.json();
+            if (d.status === 'success') {
+                setSavedMockupId(d.mockup_id);
+                if (isAutoSave) {
+                    setSaveStatus('บันทึกแล้ว');
+                    setTimeout(() => setSaveStatus(''), 2000);
+                } else {
+                    setSaveMsg('บันทึกสำเร็จ');
+                    setTimeout(() => setSaveMsg(''), 3000);
+                }
+            }
+        } catch (err) {
+            console.error('Save error:', err);
+            if (isAutoSave) {
+                setSaveStatus('บันทึกไม่สำเร็จ');
+                setTimeout(() => setSaveStatus(''), 3000);
+            } else {
+                setSaveMsg('บันทึกไม่สำเร็จ');
+            }
+        } finally { if (!isAutoSave) setIsSaving(false); }
+    };
+
+    // Export PNG (full die-line)
+    const handleExportPng = () => {
+        if (!materialData || panels.length === 0) return;
+        setIsExporting(true);
+
+        const dW = parseFloat(materialData.dieline_width_mm);
+        const dH = parseFloat(materialData.dieline_height_mm);
+        const scale = 3;
+        const offscreen = document.createElement('canvas');
+        offscreen.width = dW * scale;
+        offscreen.height = dH * scale;
+        const ctx = offscreen.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+
+        const stageNode = stageRef.current;
+        if (!stageNode) { setIsExporting(false); return; }
+
+        const origIdx = activePanelIdx;
+        let rendered = 0;
+        const totalPanels = panels.length;
+
+        const renderNext = (idx) => {
+            if (idx >= totalPanels) {
+                // Draw fold lines
+                ctx.strokeStyle = '#ff0000';
+                ctx.setLineDash([6, 4]);
+                ctx.lineWidth = 1;
+                for (let i = 0; i < panels.length; i++) {
+                    for (let j = i + 1; j < panels.length; j++) {
+                        const a = panels[i], b = panels[j];
+                        if (Math.abs((a.x_mm + a.w_mm) - b.x_mm) < 0.5) {
+                            const x = (a.x_mm + a.w_mm) * scale;
+                            const y1 = Math.max(a.y_mm, b.y_mm) * scale;
+                            const y2 = Math.min(a.y_mm + a.h_mm, b.y_mm + b.h_mm) * scale;
+                            ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke();
+                        }
+                        if (Math.abs((a.y_mm + a.h_mm) - b.y_mm) < 0.5) {
+                            const y = (a.y_mm + a.h_mm) * scale;
+                            const x1 = Math.max(a.x_mm, b.x_mm) * scale;
+                            const x2 = Math.min(a.x_mm + a.w_mm, b.x_mm + b.w_mm) * scale;
+                            ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+                        }
+                    }
+                }
+                // Draw panel labels
+                ctx.setLineDash([]);
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 0.5;
+                panels.forEach(p => {
+                    ctx.strokeRect(p.x_mm * scale, p.y_mm * scale, p.w_mm * scale, p.h_mm * scale);
+                });
+
+                const link = document.createElement('a');
+                link.href = offscreen.toDataURL('image/png');
+                link.download = `package_design_${product.name_product || 'design'}.png`;
+                link.click();
+                setActivePanelIdx(origIdx);
+                setIsExporting(false);
+                return;
+            }
+
+            setActivePanelIdx(idx);
+            setTimeout(() => {
+                const panelStage = stageRef.current;
+                if (panelStage) {
+                    const dataUrl = panelStage.toDataURL({ pixelRatio: 2 });
+                    const img = new window.Image();
+                    img.onload = () => {
+                        const p = panels[idx];
+                        ctx.drawImage(img, p.x_mm * scale, p.y_mm * scale, p.w_mm * scale, p.h_mm * scale);
+                        renderNext(idx + 1);
+                    };
+                    img.src = dataUrl;
+                } else {
+                    renderNext(idx + 1);
+                }
+            }, 100);
+        };
+        renderNext(0);
+    };
+
+    // Export helper — captures all panels and sends to API
+    const exportFile = async (format = 'pdf') => {
+        if (!savedMockupId) {
+            await handleSave();
+        }
+        const mid = savedMockupId;
+        if (!mid) { alert('กรุณาบันทึกก่อน export'); return; }
+        setIsExporting(true);
+
+        try {
+            const panelImages = [];
+            const origIdx = activePanelIdx;
+
+            for (let i = 0; i < panels.length; i++) {
+                setActivePanelIdx(i);
+                await new Promise(r => setTimeout(r, 200));
+                const s = stageRef.current;
+                if (s) {
+                    // Use JPEG (much smaller than PNG) at high DPI
+                    const dataUrl = s.toDataURL({ pixelRatio: 3, mimeType: 'image/jpeg', quality: 0.92 });
+                    panelImages.push({ panel_key: panels[i].id, image_data: dataUrl });
+                }
+            }
+            setActivePanelIdx(origIdx);
+
+            const r = await fetch(`${API}/api/mockups/${mid}/export-pdf`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    format,
+                    panel_images: panelImages,
+                    spec_data: {
+                        project_name: projectName,
+                        colors_used: brandAssets?.colors || []
+                    }
+                })
+            });
+
+            if (!r.ok) {
+                const errData = await r.json().catch(() => ({}));
+                throw new Error(errData.message || 'Export failed');
+            }
+
+            // Download file directly from response blob
+            const blob = await r.blob();
+            const ext = format === 'ai' ? 'ai' : 'pdf';
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `package_design_${product.name_product || 'design'}_CMYK.${ext}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+        } catch (err) {
+            console.error(`Export ${format} error:`, err);
+            alert(`Export ${format.toUpperCase()} ไม่สำเร็จ: ${err.message}`);
+        } finally { setIsExporting(false); }
+    };
+
+    const handleExportPdf = () => exportFile('pdf');
+    const handleExportAi = () => exportFile('ai');
+
+    const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+
+    const selectedEl = currentDesign?.elements?.find(el => el.id === selectedElId);
+
+    // -- Deselect on stage click empty area --
+    const handleStageClick = (e) => {
+        if (e.target === e.target.getStage() || e.target.name?.() === 'bg') {
+            setSelectedElId(null);
+            trRef.current?.nodes([]);
+        }
+    };
+
+    useEffect(() => {
+        if (!trRef.current) return;
+        const stage = stageRef.current;
+        if (!stage || !selectedElId) { trRef.current.nodes([]); return; }
+        const node = stage.findOne('#' + selectedElId);
+        if (node) { trRef.current.nodes([node]); trRef.current.getLayer().batchDraw(); }
+        else { trRef.current.nodes([]); }
+    }, [selectedElId, activePanelIdx, currentDesign?.elements]);
+
+    if (!materialData || panels.length === 0) {
+        return (
+            <div style={{ padding: 60, textAlign: 'center', color: C.sub }}>
+                <iconify-icon icon="mdi:loading" style={{ fontSize: 32, animation: 'spin 1s linear infinite' }}></iconify-icon>
+                <div style={{ marginTop: 12 }}>กำลังโหลดข้อมูลบรรจุภัณฑ์...</div>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{ display: 'flex', height: 'calc(100vh - 80px)', overflow: 'hidden' }}>
+            {/* === SIDEBAR === */}
+            <div style={{ width: 320, minWidth: 320, borderRight: `1px solid ${C.border}`, overflowY: 'auto', background: '#fff', padding: 16 }}>
+                <button onClick={onBack} style={{ background: 'none', border: 'none', color: C.sub, cursor: 'pointer', marginBottom: 12, fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}>
+                    <iconify-icon icon="mdi:chevron-left"></iconify-icon> กลับ
+                </button>
+                <h3 style={{ margin: '0 0 4px', fontSize: 16, color: C.primaryDark }}>ออกแบบบรรจุภัณฑ์</h3>
+                <p style={{ margin: '0 0 16px', fontSize: 12, color: C.sub }}>{product.name_product} — {materialData.name}</p>
+
+                {/* Panel Selector */}
+                <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>เลือกด้าน</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {panels.map((p, idx) => (
+                            <button key={p.id} onClick={() => { setActivePanelIdx(idx); setSelectedElId(null); }}
+                                style={{
+                                    padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                                    border: idx === activePanelIdx ? `2px solid #2563eb` : `1px solid ${C.border}`,
+                                    background: idx === activePanelIdx ? '#eff6ff' : '#fff',
+                                    color: idx === activePanelIdx ? '#2563eb' : C.text
+                                }}>
+                                {p.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* === Background Section === */}
+                <SidebarSection title="🎨 Background" open={openSections.bg} onToggle={() => toggleSection('bg')}>
+                    {/* AI Background */}
+                    <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', marginBottom: 6 }}>AI สร้างลวดลาย (ทุกด้านพร้อมกัน)</div>
+                        <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
+                            placeholder="เช่น: ลายใบไม้ tropical สีเขียวอ่อน พื้นครีม สไตล์ organic"
+                            style={{ width: '100%', height: 56, border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, fontSize: 12, resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                        <button onClick={generateAiBg} disabled={isAiGenerating || !aiPrompt.trim()}
+                            style={{ marginTop: 6, width: '100%', padding: '8px 0', background: isAiGenerating ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: isAiGenerating ? 'wait' : 'pointer' }}>
+                            {isAiGenerating ? '⏳ กำลังสร้าง...' : '✨ สร้างลวดลาย AI'}
+                        </button>
+                    </div>
+
+                    {/* AI BG History */}
+                    {aiBgHistory.length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 6 }}>ประวัติ AI ({aiBgHistory.length})</div>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxHeight: 120, overflowY: 'auto' }}>
+                                {aiBgHistory.map(h => (
+                                    <div key={h.history_id}
+                                        onClick={() => {
+                                            const fullUrl = `${API}${h.image_url}`;
+                                            setAiDielineBgUrl(h.image_url);
+                                            loadAiDielineImage(fullUrl);
+                                            if (h.prompt) setAiPrompt(h.prompt);
+                                            panels.forEach(p => { updateDesign(p.id, { bg_mode: 'dalle', bg_image_url: fullUrl }); });
+                                        }}
+                                        title={h.prompt || ''}
+                                        style={{
+                                            width: 52, height: 52, borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
+                                            border: aiDielineBgUrl === h.image_url ? '2px solid #2563eb' : `1px solid ${C.border}`,
+                                            flexShrink: 0
+                                        }}>
+                                        <img src={`${API}${h.image_url}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 6 }}>Manual (ด้านนี้เท่านั้น)</div>
+                    </div>
+
+                    {/* Solid Color */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <input type="color" value={currentDesign?.bg_color || '#FFFFFF'}
+                            onChange={e => activePanel && updateDesign(activePanel.id, { bg_mode: 'solid', bg_color: e.target.value })}
+                            style={{ width: 32, height: 32, border: 'none', cursor: 'pointer', borderRadius: 6 }} />
+                        <input type="text" value={currentDesign?.bg_color || '#FFFFFF'}
+                            onChange={e => activePanel && updateDesign(activePanel.id, { bg_mode: 'solid', bg_color: e.target.value })}
+                            style={{ flex: 1, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 12 }} />
+                    </div>
+
+                    {/* Brand color swatches */}
+                    {brandAssets?.colors?.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                            {brandAssets.colors.map(c => (
+                                <button key={c} onClick={() => activePanel && updateDesign(activePanel.id, { bg_mode: 'solid', bg_color: c })}
+                                    style={{ width: 24, height: 24, borderRadius: 6, border: '2px solid #fff', boxShadow: '0 0 0 1px #ccc', background: c, cursor: 'pointer', padding: 0 }} />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Upload BG image */}
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: C.text, marginBottom: 8 }}>
+                        <iconify-icon icon="mdi:image-plus"></iconify-icon> อัพโหลดรูป Background
+                        <input type="file" accept="image/*" onChange={handleBgImageUpload} style={{ display: 'none' }} />
+                    </label>
+
+                    {/* Opacity */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: C.sub }}>ความโปร่งใส</span>
+                        <input type="range" min="0" max="1" step="0.05" value={currentDesign?.bg_opacity ?? 1}
+                            onChange={e => activePanel && updateDesign(activePanel.id, { bg_opacity: parseFloat(e.target.value) })}
+                            style={{ flex: 1 }} />
+                    </div>
+                </SidebarSection>
+
+                {/* === Text Section === */}
+                <SidebarSection title="✏️ ข้อความ" open={openSections.text} onToggle={() => toggleSection('text')}>
+                    <button onClick={() => addElement('text')}
+                        style={{ width: '100%', padding: '8px 0', background: '#f0fdf4', border: `1px solid #86efac`, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#166534', marginBottom: 8 }}>
+                        + เพิ่มข้อความ
+                    </button>
+                    {selectedEl?.type === 'text' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <input type="text" value={selectedEl.data} onChange={e => updateElement(activePanel.id, selectedEl.id, { data: e.target.value })}
+                                style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12 }} />
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                <input type="number" value={selectedEl.fontSize} onChange={e => updateElement(activePanel.id, selectedEl.id, { fontSize: parseInt(e.target.value) || 16 })}
+                                    style={{ width: 60, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 6px', fontSize: 11 }} />
+                                <input type="color" value={selectedEl.fill || '#222'} onChange={e => updateElement(activePanel.id, selectedEl.id, { fill: e.target.value })}
+                                    style={{ width: 32, height: 28, border: 'none', cursor: 'pointer' }} />
+                            </div>
+                        </div>
+                    )}
+                </SidebarSection>
+
+                {/* === Image Section === */}
+                <SidebarSection title="🖼 รูปภาพ / โลโก้" open={openSections.image} onToggle={() => toggleSection('image')}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: C.text }}>
+                            <iconify-icon icon="mdi:image-plus"></iconify-icon> อัพโหลดรูป
+                            <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                        </label>
+                        {brandAssets?.logoUrl && (
+                            <button onClick={() => addElement('logo')}
+                                style={{ padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: '#fff', color: C.text, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <iconify-icon icon="mdi:crown"></iconify-icon> ใส่โลโก้แบรนด์
+                            </button>
+                        )}
+                    </div>
+                </SidebarSection>
+
+                {/* === Shape Section === */}
+                <SidebarSection title="◆ รูปทรง" open={openSections.shape} onToggle={() => toggleSection('shape')}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button onClick={() => addElement('rect')}
+                            style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: '#fff' }}>
+                            ▭ สี่เหลี่ยม
+                        </button>
+                        <button onClick={() => addElement('circle')}
+                            style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: '#fff' }}>
+                            ● วงกลม
+                        </button>
+                    </div>
+                    {selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle') && (
+                        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, color: C.sub }}>สี:</span>
+                            <input type="color" value={selectedEl.fill || '#cccccc'} onChange={e => updateElement(activePanel.id, selectedEl.id, { fill: e.target.value })}
+                                style={{ width: 32, height: 28, border: 'none', cursor: 'pointer' }} />
+                        </div>
+                    )}
+                </SidebarSection>
+
+                {/* === Import Label === */}
+                <SidebarSection title="📋 Import จากฉลาก" open={openSections.label} onToggle={() => toggleSection('label')}>
+                    {!labelData ? (
+                        <div style={{ fontSize: 12, color: C.sub, textAlign: 'center', padding: 8 }}>ยังไม่มีฉลากที่ออกแบบไว้</div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginBottom: 2 }}>วางฉลากทั้งชิ้น</div>
+                            <LabelPartBtn label="🏷 ฉลากเต็ม (รูปภาพ)" available={!!(labelImageUrl || labelData?.final_label_url)} onClick={() => addElement('label_import')} />
+
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>ข้อมูลสินค้า</div>
+                            <LabelPartBtn label="📛 ชื่อสินค้า" detail={labelData?.product_name} available={!!labelData?.product_name} onClick={() => addElement('label_text_product_name')} />
+                            <LabelPartBtn label="✨ Tagline" detail={labelData?.tagline} available={!!labelData?.tagline} onClick={() => addElement('label_text_tagline')} />
+                            <LabelPartBtn label="⚖ น้ำหนักสุทธิ" detail={labelData?.net_weight} available={!!labelData?.net_weight} onClick={() => addElement('label_text_net_weight')} />
+                            <LabelPartBtn label="📝 ส่วนประกอบ" available={!!labelData?.ingredients} onClick={() => addElement('label_text_ingredients')} />
+
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>คำแนะนำ / คำเตือน</div>
+                            <LabelPartBtn label="📖 วิธีใช้" available={!!labelData?.usage_instruction} onClick={() => addElement('label_text_usage')} />
+                            <LabelPartBtn label="🏠 วิธีเก็บรักษา" available={!!labelData?.storage_instruction} onClick={() => addElement('label_text_storage')} />
+                            <LabelPartBtn label="⚠ คำเตือน" available={!!labelData?.warnings} onClick={() => addElement('label_text_warnings')} />
+
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>ข้อมูลทางกฎหมาย</div>
+                            <LabelPartBtn label="🏭 ผู้ผลิต" available={!!labelData?.manufacturer_info} onClick={() => addElement('label_text_manufacturer')} />
+                            <LabelPartBtn label="🔖 เลข อย." detail={labelData?.fda_number} available={!!labelData?.fda_number} onClick={() => addElement('label_text_fda')} />
+                            <LabelPartBtn label="📅 MFG / EXP" available={!!(labelData?.mfg_date || labelData?.exp_date)} onClick={() => addElement('label_text_dates')} />
+                            <LabelPartBtn label="🔢 LOT" detail={labelData?.lot_number} available={!!labelData?.lot_number} onClick={() => addElement('label_text_lot')} />
+
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>โลโก้ / เครื่องหมาย</div>
+                            <LabelPartBtn label="👑 โลโก้แบรนด์" available={!!brandAssets?.logoUrl} onClick={() => addElement('label_logo')} />
+                            <LabelPartBtn label="🏅 Certifications" detail={(() => { try { const c = Array.isArray(labelData?.certifications) ? labelData.certifications : JSON.parse(labelData?.certifications || '[]'); return c.join(', '); } catch { return ''; } })()} available={!!labelData?.certifications} onClick={() => addElement('label_certs')} />
+
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>Barcode / QR Code</div>
+                            <LabelPartBtn label="||||| Barcode (EAN-13)" detail={labelData?.barcode_value} available={true} onClick={() => addElement('barcode')} />
+                            <LabelPartBtn label="◻ QR Code" detail={labelData?.qr_code_value} available={true} onClick={() => addElement('qrcode')} />
+                        </div>
+                    )}
+                </SidebarSection>
+
+                {/* === Selected Element Controls === */}
+                {selectedEl && (
+                    <div style={{ marginTop: 12, padding: 10, background: '#fef2f2', borderRadius: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: '#991b1b' }}>
+                                {selectedEl.type === 'text' ? 'ข้อความ' : selectedEl.type === 'image' ? 'รูปภาพ' : selectedEl.type === 'barcode' ? 'Barcode (EAN-13)' : selectedEl.type === 'qrcode' ? 'QR Code' : 'รูปทรง'}
+                            </span>
+                            <button onClick={() => deleteElement(selectedEl.id)}
+                                style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>
+                                🗑 ลบ
+                            </button>
+                        </div>
+                        {selectedEl.type === 'barcode' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <label style={{ fontSize: 10, color: C.sub }}>ตัวเลข EAN-13 (13 หลัก)</label>
+                                <input type="text" maxLength={13} value={selectedEl.barcodeValue || ''} onChange={e => updateElement(activePanel.id, selectedEl.id, { barcodeValue: e.target.value })}
+                                    placeholder="8850000000000"
+                                    style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12 }} />
+                            </div>
+                        )}
+                        {selectedEl.type === 'qrcode' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <label style={{ fontSize: 10, color: C.sub }}>ข้อมูล QR Code</label>
+                                <input type="text" value={selectedEl.qrValue || ''} onChange={e => updateElement(activePanel.id, selectedEl.id, { qrValue: e.target.value })}
+                                    placeholder="URL หรือข้อมูล"
+                                    style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12 }} />
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* === Save / Export Buttons === */}
+                <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button onClick={handleSave} disabled={isSaving}
+                        style={{ padding: '10px 0', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: isSaving ? 'wait' : 'pointer' }}>
+                        {isSaving ? '💾 กำลังบันทึก...' : '💾 บันทึก'}
+                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={handleExportPng} disabled={isExporting}
+                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
+                            🖼 PNG
+                        </button>
+                        <button onClick={handleExportPdf} disabled={isExporting}
+                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
+                            📄 PDF
+                        </button>
+                        <button onClick={handleExportAi} disabled={isExporting}
+                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
+                            🎨 AI
+                        </button>
+                    </div>
+                    <div style={{ fontSize: 10, color: C.sub, textAlign: 'center' }}>PDF/AI = print-ready, crop marks, fold lines</div>
+                    {saveMsg && <div style={{ fontSize: 12, color: '#16a34a', textAlign: 'center' }}>{saveMsg}</div>}
+                    {saveStatus && !saveMsg && <div style={{ fontSize: 11, color: saveStatus.includes('ไม่') ? '#dc2626' : '#16a34a', textAlign: 'center' }}>{saveStatus}</div>}
+                </div>
+            </div>
+
+            {/* === CANVAS AREA === */}
+            <div style={{ flex: 1, background: C.bgPage, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 20, overflow: 'auto', position: 'relative' }}>
+                {/* Mini Map */}
+                <DielineMiniMap panels={panels} activePanelIdx={activePanelIdx} onClickPanel={idx => { setActivePanelIdx(idx); setSelectedElId(null); }}
+                    materialData={materialData} panelDesigns={panelDesigns} aiDielineBgImg={aiDielineBgImg} />
+
+                {/* Panel info */}
+                <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button onClick={() => { const prev = (activePanelIdx - 1 + panels.length) % panels.length; setActivePanelIdx(prev); setSelectedElId(null); }}
+                        style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14 }}>◀</button>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
+                        {activePanel?.label} ({activePanel?.w_mm} × {activePanel?.h_mm} mm)
+                    </span>
+                    <button onClick={() => { const next = (activePanelIdx + 1) % panels.length; setActivePanelIdx(next); setSelectedElId(null); }}
+                        style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14 }}>▶</button>
+                </div>
+
+                {/* Konva Stage */}
+                <div style={{ background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 2 }}>
+                    <Stage ref={stageRef} width={canvasW} height={canvasH} onClick={handleStageClick}>
+                        <Layer>
+                            {/* Background */}
+                            <PanelBackground design={currentDesign} width={canvasW} height={canvasH}
+                                panel={activePanel} panels={panels} materialData={materialData}
+                                aiDielineBgImg={aiDielineBgImg} />
+
+                            {/* Elements */}
+                            {currentDesign?.elements?.map(el => (
+                                <PanelElement key={el.id} el={el} isSelected={el.id === selectedElId}
+                                    onSelect={() => setSelectedElId(el.id)}
+                                    onChange={(updates) => updateElement(activePanel.id, el.id, updates)} />
+                            ))}
+
+                            <Transformer ref={trRef}
+                                boundBoxFunc={(oldB, newB) => newB.width < 10 ? oldB : newB}
+                                rotateEnabled={true} keepRatio={false} />
+                        </Layer>
+                    </Stage>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// === Panel Background Renderer ===
+function PanelBackground({ design, width, height, panel, panels, materialData, aiDielineBgImg }) {
+    const [bgImg, setBgImg] = useState(null);
+
+    useEffect(() => {
+        if (design?.bg_mode === 'dalle' && aiDielineBgImg && panel && materialData) {
+            // Crop the AI die-line image for this panel
+            const dW = parseFloat(materialData.dieline_width_mm);
+            const dH = parseFloat(materialData.dieline_height_mm);
+            const imgW = aiDielineBgImg.naturalWidth || aiDielineBgImg.width;
+            const imgH = aiDielineBgImg.naturalHeight || aiDielineBgImg.height;
+            const scaleX = imgW / dW;
+            const scaleY = imgH / dH;
+
+            const offscreen = document.createElement('canvas');
+            offscreen.width = Math.round(panel.w_mm * scaleX);
+            offscreen.height = Math.round(panel.h_mm * scaleY);
+            const ctx = offscreen.getContext('2d');
+            ctx.drawImage(aiDielineBgImg,
+                panel.x_mm * scaleX, panel.y_mm * scaleY,
+                panel.w_mm * scaleX, panel.h_mm * scaleY,
+                0, 0, offscreen.width, offscreen.height);
+            const cropImg = new window.Image();
+            cropImg.src = offscreen.toDataURL();
+            cropImg.onload = () => setBgImg(cropImg);
+        } else if (design?.bg_mode === 'upload' && design?.bg_image_url) {
+            const img = new window.Image();
+            img.crossOrigin = 'anonymous';
+            img.src = design.bg_image_url;
+            img.onload = () => setBgImg(img);
+            img.onerror = () => setBgImg(null);
+        } else {
+            setBgImg(null);
+        }
+    }, [design?.bg_mode, design?.bg_image_url, aiDielineBgImg, panel?.id]);
+
+    return (
+        <>
+            <KRect name="bg" x={0} y={0} width={width} height={height}
+                fill={design?.bg_color || '#FFFFFF'} listening={true} />
+            {bgImg && (
+                <KImg image={bgImg} x={0} y={0} width={width} height={height}
+                    opacity={design?.bg_opacity ?? 1} listening={false} />
+            )}
+        </>
+    );
+}
+
+// === Panel Element Renderer ===
+function PanelElement({ el, isSelected, onSelect, onChange }) {
+    const [img, setImg] = useState(null);
+
+    useEffect(() => {
+        if (el.type === 'image' && el.src) {
+            const i = new window.Image();
+            i.crossOrigin = 'anonymous';
+            i.src = el.src;
+            i.onload = () => setImg(i);
+        }
+    }, [el.src]);
+
+    useEffect(() => {
+        if (el.type === 'barcode' && el.barcodeValue) {
+            try {
+                const val = el.barcodeValue.replace(/\D/g, '');
+                // Auto-detect format: EAN-13 if exactly 13 digits, otherwise CODE128
+                let format = 'CODE128';
+                if (val.length === 13) format = 'EAN13';
+                else if (val.length === 8) format = 'EAN8';
+                else if (val.length === 12) format = 'UPC';
+
+                const canvas = document.createElement('canvas');
+                JsBarcode(canvas, val || '0000000000000', {
+                    format, width: 2, height: 60, fontSize: 14, margin: 4,
+                    displayValue: true, background: '#ffffff'
+                });
+                const i = new window.Image();
+                i.src = canvas.toDataURL();
+                i.onload = () => setImg(i);
+            } catch (e) {
+                // Fallback: try CODE128 which accepts any string
+                try {
+                    const canvas = document.createElement('canvas');
+                    JsBarcode(canvas, el.barcodeValue, {
+                        format: 'CODE128', width: 2, height: 60, fontSize: 12, margin: 4,
+                        displayValue: true, background: '#ffffff'
+                    });
+                    const i = new window.Image();
+                    i.src = canvas.toDataURL();
+                    i.onload = () => setImg(i);
+                } catch (e2) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 160; canvas.height = 50;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 160, 50);
+                    ctx.fillStyle = '#c00'; ctx.font = '11px sans-serif';
+                    ctx.fillText('Invalid Barcode', 30, 30);
+                    const i = new window.Image();
+                    i.src = canvas.toDataURL();
+                    i.onload = () => setImg(i);
+                }
+            }
+        }
+    }, [el.type, el.barcodeValue, el.barcodeFormat]);
+
+    useEffect(() => {
+        if (el.type === 'qrcode' && el.qrValue) {
+            const canvas = document.createElement('canvas');
+            QRCode.toCanvas(canvas, el.qrValue, { width: 200, margin: 2, errorCorrectionLevel: 'M' }, (err) => {
+                if (err) { console.error('QR render error:', err); return; }
+                const i = new window.Image();
+                i.src = canvas.toDataURL('image/png');
+                i.onload = () => setImg(i);
+            });
+        }
+    }, [el.type, el.qrValue]);
+
+    const handleDragEnd = (e) => {
+        onChange({ x: e.target.x(), y: e.target.y() });
+    };
+    const handleTransformEnd = (e) => {
+        const node = e.target;
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({
+            x: node.x(), y: node.y(),
+            w: Math.max(10, node.width() * scaleX),
+            h: Math.max(10, node.height() * scaleY),
+            rotation: node.rotation()
+        });
+    };
+
+    const common = { id: el.id, draggable: true, onClick: onSelect, onTap: onSelect, onDragEnd: handleDragEnd, onTransformEnd: handleTransformEnd };
+
+    if (el.type === 'text') {
+        return <KText {...common} x={el.x} y={el.y} width={el.w} text={el.data || ''} fontSize={el.fontSize || 20} fill={el.fill || '#222'} fontFamily={el.fontFamily || 'Sarabun'} rotation={el.rotation || 0} />;
+    }
+    if (el.type === 'shape') {
+        return <KRect {...common} x={el.x} y={el.y} width={el.w} height={el.h} fill={el.fill || '#ccc'} rotation={el.rotation || 0} cornerRadius={4} />;
+    }
+    if (el.type === 'circle') {
+        return <KCircle {...common} x={el.x} y={el.y} radius={el.radius || 30} fill={el.fill || '#ccc'} />;
+    }
+    if (el.type === 'image' && img) {
+        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} />;
+    }
+    if (el.type === 'barcode' && img) {
+        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} />;
+    }
+    if (el.type === 'qrcode' && img) {
+        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} />;
+    }
+    return null;
+}
+
+// === Die-line Mini Map ===
+function DielineMiniMap({ panels, activePanelIdx, onClickPanel, materialData, panelDesigns, aiDielineBgImg }) {
+    if (!materialData) return null;
+    const dW = parseFloat(materialData.dieline_width_mm);
+    const dH = parseFloat(materialData.dieline_height_mm);
+    const maxW = 260, maxH = 120;
+    const scale = Math.min(maxW / dW, maxH / dH);
+    const mapW = dW * scale, mapH = dH * scale;
+
+    return (
+        <div style={{ marginBottom: 14, background: '#fff', borderRadius: 8, padding: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'inline-block' }}>
+            <div style={{ fontSize: 10, color: C.sub, marginBottom: 4, textAlign: 'center' }}>
+                Die-line ({dW} × {dH} mm)
+            </div>
+            <svg width={mapW} height={mapH} viewBox={`0 0 ${dW} ${dH}`} style={{ display: 'block' }}>
+                <rect x={0} y={0} width={dW} height={dH} fill="#f9fafb" stroke="#e5e7eb" strokeWidth={0.5} />
+                {panels.map((p, idx) => {
+                    const d = panelDesigns[p.id];
+                    const isActive = idx === activePanelIdx;
+                    return (
+                        <g key={p.id} onClick={() => onClickPanel(idx)} style={{ cursor: 'pointer' }}>
+                            <rect x={p.x_mm} y={p.y_mm} width={p.w_mm} height={p.h_mm}
+                                fill={d?.bg_mode === 'dalle' ? '#dbeafe' : (d?.bg_color || '#fff')}
+                                stroke={isActive ? '#2563eb' : '#9ca3af'}
+                                strokeWidth={isActive ? 1.5 : 0.5}
+                                rx={0.5} />
+                            <text x={p.x_mm + p.w_mm / 2} y={p.y_mm + p.h_mm / 2}
+                                textAnchor="middle" dominantBaseline="middle"
+                                fontSize={Math.min(p.w_mm, p.h_mm) * 0.18}
+                                fill={isActive ? '#2563eb' : '#6b7280'} fontWeight={isActive ? 'bold' : 'normal'}>
+                                {p.label}
+                            </text>
+                        </g>
+                    );
+                })}
+            </svg>
+        </div>
+    );
+}
+
+// === Label Part Button ===
+function LabelPartBtn({ label, detail, available, onClick }) {
+    return (
+        <button onClick={available ? onClick : undefined}
+            style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+                width: '100%', padding: '6px 10px', border: `1px solid ${available ? '#fbbf24' : C.border}`,
+                borderRadius: 6, fontSize: 11, cursor: available ? 'pointer' : 'not-allowed',
+                background: available ? '#fffbeb' : '#f9fafb', color: available ? '#92400e' : '#9ca3af',
+                opacity: available ? 1 : 0.5, textAlign: 'left'
+            }}>
+            <span style={{ fontWeight: 500 }}>{label}</span>
+            {detail && <span style={{ fontSize: 10, color: '#a16207', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail}</span>}
+            {available && <span style={{ fontSize: 10, color: '#d97706' }}>+</span>}
+        </button>
+    );
+}
+
+// === Sidebar Accordion Section ===
+function SidebarSection({ title, open, onToggle, children }) {
+    return (
+        <div style={{ marginBottom: 8, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+            <button onClick={onToggle}
+                style={{ width: '100%', padding: '8px 12px', background: open ? '#f8fafc' : '#fff', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, fontWeight: 600, color: C.text }}>
+                {title}
+                <iconify-icon icon={open ? 'mdi:chevron-up' : 'mdi:chevron-down'} style={{ fontSize: 16 }}></iconify-icon>
+            </button>
+            {open && <div style={{ padding: '8px 12px 12px' }}>{children}</div>}
+        </div>
+    );
+}
+
 // === Mode Selector ===
-function ModeSelector({ onPick, onBack, productName }) {
+function ModeSelector({ onPick, onBack, productName, hasPanels }) {
     return (
         <div style={{ padding: 24 }}>
             <button onClick={onBack} style={{
@@ -274,30 +1369,39 @@ function ModeSelector({ onPick, onBack, productName }) {
                 สำหรับสินค้า "{productName}" — เลือกวิธีที่เหมาะกับงานของคุณ
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
                 <ModeCard iconName="mdi:sticker-outline" title="ติดสติ๊กเกอร์ฉลาก"
                     desc="วางฉลากที่ออกแบบไว้ลงบนภาพบรรจุภัณฑ์ ปรับตำแหน่ง ขนาด หรือหมุน บันทึกเป็น PNG ฟรี"
                     badge="แนะนำ" badgeColor={C.label} onClick={() => onPick('sticker')} />
-                <ModeCard iconName="mdi:auto-fix" title="AI สร้างภาพถ่ายผลิตภัณฑ์"
-                    desc="ให้ DALL-E สร้างภาพ Realistic Photography คุณภาพสูง พร้อมฉลากบนสินค้าจริง สำหรับโปรโมต"
+                <ModeCard iconName="mdi:cube-unfolded" title="ออกแบบบรรจุภัณฑ์ทั้งชิ้น"
+                    desc="ออกแบบกราฟิกลงบนพื้นผิวบรรจุภัณฑ์ทุกด้าน ใช้ AI สร้างลวดลาย หรือออกแบบเอง ส่งออกเป็น PDF"
+                    badge="ใหม่" badgeColor="#2563eb"
+                    disabled={!hasPanels}
+                    disabledMsg="บรรจุภัณฑ์นี้ยังไม่รองรับการออกแบบทั้งชิ้น"
+                    onClick={() => onPick('package_design')} />
+                <ModeCard iconName="mdi:image-auto-adjust" title="AI สร้าง Mockup จากรูปจริง"
+                    desc="ส่งรูปฉลากและบรรจุภัณฑ์จริงให้ Gemini AI สร้างภาพ Mockup สมจริง พร้อมเลือกสไตล์พื้นหลังได้"
                     badge="ใช้ Credit" badgeColor={C.primaryDark} onClick={() => onPick('aimockup')} />
             </div>
         </div>
     );
 }
 
-function ModeCard({ iconName, title, desc, badge, badgeColor, onClick }) {
+function ModeCard({ iconName, title, desc, badge, badgeColor, onClick, disabled, disabledMsg }) {
     const [hover, setHover] = useState(false);
     return (
-        <button onClick={onClick}
-                onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-                style={{
-            background: '#fff', border: `2px solid ${hover ? badgeColor : C.border}`, borderRadius: 14, padding: 28,
-            textAlign: 'left', cursor: 'pointer', position: 'relative', fontFamily: 'inherit',
-            transform: hover ? 'translateY(-2px)' : 'none',
-            boxShadow: hover ? '0 12px 32px rgba(0,0,0,0.1)' : '0 4px 16px rgba(0,0,0,0.04)',
-            transition: 'all 0.2s ease'
-        }}>
+        <button onClick={disabled ? undefined : onClick}
+            onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+            title={disabled ? disabledMsg : ''}
+            style={{
+                background: disabled ? '#f9fafb' : '#fff',
+                border: `2px solid ${!disabled && hover ? badgeColor : C.border}`, borderRadius: 14, padding: 28,
+                textAlign: 'left', cursor: disabled ? 'not-allowed' : 'pointer', position: 'relative', fontFamily: 'inherit',
+                transform: !disabled && hover ? 'translateY(-2px)' : 'none',
+                boxShadow: !disabled && hover ? '0 12px 32px rgba(0,0,0,0.1)' : '0 4px 16px rgba(0,0,0,0.04)',
+                transition: 'all 0.2s ease',
+                opacity: disabled ? 0.5 : 1
+            }}>
             <div style={{
                 position: 'absolute', top: 14, right: 14, background: badgeColor, color: '#fff',
                 padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 600
@@ -313,8 +1417,63 @@ function ModeCard({ iconName, title, desc, badge, badgeColor, onClick }) {
     );
 }
 
-// === AI Mockup View ===
-function AIMockupView({ packageImageUrl, labelImageUrl, labelData, onGenerate, isGenerating, generatedUrl, onBack }) {
+// === AI Mockup View (ส่งรูปจริงให้ Gemini + แสดงประวัติ + SSE progress) ===
+function AIMockupView({ projectId, packageImageUrl, labelImageUrl, labelData, onGenerate, isGenerating, progressInfo, onBack }) {
+    const [history, setHistory] = useState([]);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+    const [selectedImg, setSelectedImg] = useState(null);
+    const hasLabel = !!(labelData?.final_label_url || labelImageUrl);
+    const hasPackage = !!packageImageUrl;
+    const canGenerate = hasLabel || hasPackage;
+
+    const fetchHistory = async () => {
+        try {
+            const res = await fetch(`${API}/api/mockup/history/${projectId}`);
+            const data = await res.json();
+            if (data.status === 'success') {
+                setHistory(data.data);
+                if (data.data.length > 0 && !selectedImg) {
+                    setSelectedImg(`${API}${data.data[0].image_url}`);
+                }
+            }
+        } catch (e) { console.error(e); }
+        finally { setIsLoadingHistory(false); }
+    };
+
+    useEffect(() => { fetchHistory(); }, [projectId]);
+
+    const handleGenerate = async () => {
+        await onGenerate();
+        await fetchHistory();
+    };
+
+    const handleDownload = async (url) => {
+        try {
+            const resp = await fetch(url);
+            const blob = await resp.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = `mockup_ai_${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+        } catch (e) { alert('ดาวน์โหลดไม่สำเร็จ: ' + e.message); }
+    };
+
+    const handleDelete = async (historyId) => {
+        if (!confirm('ต้องการลบภาพนี้?')) return;
+        try {
+            await fetch(`${API}/api/mockup/history/${historyId}`, { method: 'DELETE' });
+            const updated = history.filter(h => h.history_id !== historyId);
+            setHistory(updated);
+            if (selectedImg && history.find(h => h.history_id === historyId)) {
+                setSelectedImg(updated.length > 0 ? `${API}${updated[0].image_url}` : null);
+            }
+        } catch (e) { console.error(e); }
+    };
+
     return (
         <div style={{ padding: 24 }}>
             <button onClick={onBack} style={{
@@ -325,66 +1484,152 @@ function AIMockupView({ packageImageUrl, labelImageUrl, labelData, onGenerate, i
                 เปลี่ยนสินค้า / โหมด
             </button>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-                <div style={{ background: '#fff', padding: 20, borderRadius: 14, boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
-                    <h4 style={{ margin: '0 0 12px', color: C.primaryDark, fontSize: 14, fontWeight: 600 }}>
-                        บรรจุภัณฑ์ที่เลือก
-                    </h4>
-                    {packageImageUrl ? (
-                        <img src={packageImageUrl} style={{ width: '100%', borderRadius: 8 }} alt="package" />
-                    ) : <div style={{ padding: 40, textAlign: 'center', color: C.border }}>ไม่มีภาพ</div>}
+            <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+                {/* คอลัมน์ซ้าย: ตั้งค่า + สร้าง */}
+                <div style={{ flex: '0 0 320px' }}>
+                    {/* รูป label + package preview */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                        <div style={{ background: '#fff', padding: 10, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
+                                <iconify-icon icon="mdi:package-variant" style={{ marginRight: 4 }}></iconify-icon>
+                                บรรจุภัณฑ์
+                            </div>
+                            {hasPackage ? (
+                                <img src={packageImageUrl} style={{ width: '100%', borderRadius: 6, maxHeight: 120, objectFit: 'contain' }} alt="pkg" />
+                            ) : <div style={{ padding: 20, textAlign: 'center', color: C.border, fontSize: 11 }}>ไม่มีภาพ</div>}
+                        </div>
+                        <div style={{ background: '#fff', padding: 10, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
+                                <iconify-icon icon="mdi:label-outline" style={{ marginRight: 4 }}></iconify-icon>
+                                ฉลาก
+                            </div>
+                            {hasLabel ? (
+                                <img src={labelImageUrl} style={{ width: '100%', borderRadius: 6, maxHeight: 120, objectFit: 'contain' }} alt="lbl" />
+                            ) : <div style={{ padding: 20, textAlign: 'center', color: '#b45309', fontSize: 11, background: '#fffbeb', borderRadius: 6 }}>ยังไม่มีฉลาก</div>}
+                        </div>
+                    </div>
+
+                    {/* ปุ่มสร้าง */}
+                    <button onClick={handleGenerate} disabled={isGenerating || !canGenerate} style={{
+                        width: '100%', padding: '14px 20px',
+                        background: (isGenerating || !canGenerate) ? '#ccc' : C.primaryDark,
+                        color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600,
+                        cursor: (isGenerating || !canGenerate) ? 'not-allowed' : 'pointer',
+                        fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        marginBottom: 16
+                    }}>
+                        <iconify-icon icon="mdi:image-auto-adjust"></iconify-icon>
+                        {isGenerating ? 'AI กำลังสร้าง... (30-60 วินาที)' : 'สร้าง Mockup ใหม่'}
+                    </button>
+
+                    {/* Gallery ประวัติ */}
+                    <div style={{ background: '#fff', padding: 14, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span>
+                                <iconify-icon icon="mdi:history" style={{ marginRight: 4 }}></iconify-icon>
+                                ประวัติที่สร้าง ({history.length})
+                            </span>
+                        </div>
+                        {isLoadingHistory ? (
+                            <div style={{ textAlign: 'center', padding: 20, color: C.sub, fontSize: 12 }}>กำลังโหลด...</div>
+                        ) : history.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: 20, color: C.sub, fontSize: 12, lineHeight: 1.6 }}>
+                                ยังไม่มีภาพ Mockup<br />กดปุ่มด้านบนเพื่อสร้าง
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
+                                {history.map(h => {
+                                    const url = `${API}${h.image_url}`;
+                                    const isActive = selectedImg === url;
+                                    return (
+                                        <div key={h.history_id} style={{
+                                            position: 'relative', borderRadius: 8, overflow: 'hidden',
+                                            border: isActive ? `3px solid ${C.primaryDark}` : '2px solid transparent',
+                                            cursor: 'pointer', transition: 'all 0.15s',
+                                            boxShadow: isActive ? '0 4px 12px rgba(143,29,29,0.25)' : '0 1px 4px rgba(0,0,0,0.08)'
+                                        }}>
+                                            <img src={url} onClick={() => setSelectedImg(url)}
+                                                style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} alt="mockup" />
+                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(h.history_id); }} style={{
+                                                position: 'absolute', top: 4, right: 4, width: 22, height: 22,
+                                                background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%',
+                                                cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                padding: 0, lineHeight: 1
+                                            }}>
+                                                <iconify-icon icon="mdi:close" style={{ fontSize: 14 }}></iconify-icon>
+                                            </button>
+                                            <div style={{
+                                                position: 'absolute', bottom: 0, left: 0, right: 0, padding: '3px 6px',
+                                                background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 9, textAlign: 'center'
+                                            }}>
+                                                {new Date(h.created_at).toLocaleString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <div style={{ background: '#fff', padding: 20, borderRadius: 14, boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
-                    <h4 style={{ margin: '0 0 12px', color: C.primaryDark, fontSize: 14, fontWeight: 600 }}>
-                        ฉลากที่ออกแบบไว้
-                    </h4>
-                    {labelImageUrl ? (
-                        <img src={labelImageUrl} style={{ width: '100%', borderRadius: 8 }} alt="label" />
-                    ) : <div style={{ padding: 40, textAlign: 'center', color: C.border }}>ยังไม่ได้ทำฉลาก</div>}
+
+                {/* คอลัมน์ขวา: รูปขยายใหญ่ */}
+                <div style={{ flex: 1, background: '#fff', borderRadius: 14, padding: 24, minHeight: 500,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+                    {isGenerating ? (
+                        <div style={{ textAlign: 'center', width: '100%', maxWidth: 320 }}>
+                            <div style={{ fontSize: 48, color: C.primaryDark, marginBottom: 16 }}>
+                                <iconify-icon icon="mdi:loading" style={{ animation: 'spin 1s linear infinite' }}></iconify-icon>
+                            </div>
+                            <p style={{ color: C.text, fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                                {progressInfo?.message || 'กำลังเริ่มต้น...'}
+                            </p>
+                            {progressInfo?.step && progressInfo?.total && (
+                                <>
+                                    <div style={{
+                                        width: '100%', height: 8, background: '#e5e7eb', borderRadius: 99,
+                                        overflow: 'hidden', marginBottom: 8
+                                    }}>
+                                        <div style={{
+                                            width: `${(progressInfo.step / progressInfo.total) * 100}%`,
+                                            height: '100%', background: C.primaryDark, borderRadius: 99,
+                                            transition: 'width 0.5s ease'
+                                        }} />
+                                    </div>
+                                    <p style={{ color: C.sub, fontSize: 12 }}>
+                                        ขั้นตอน {progressInfo.step} / {progressInfo.total}
+                                    </p>
+                                </>
+                            )}
+                        </div>
+                    ) : selectedImg ? (
+                        <>
+                            <img src={selectedImg} style={{
+                                maxWidth: '100%', maxHeight: 500, borderRadius: 10,
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
+                            }} alt="mockup preview" />
+                            <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
+                                <button onClick={() => handleDownload(selectedImg)} style={{
+                                    padding: '10px 20px', background: '#22c55e', color: '#fff',
+                                    border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer',
+                                    fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6
+                                }}>
+                                    <iconify-icon icon="mdi:download"></iconify-icon>
+                                    ดาวน์โหลดรูปนี้
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 64, color: C.border, marginBottom: 16 }}>
+                                <iconify-icon icon="mdi:image-plus-outline"></iconify-icon>
+                            </div>
+                            <p style={{ color: C.sub, fontSize: 14, fontWeight: 600 }}>ยังไม่มีภาพ Mockup</p>
+                            <p style={{ color: C.sub, fontSize: 12 }}>กดปุ่มสร้างเพื่อให้ AI สร้างภาพ Mockup</p>
+                        </div>
+                    )}
                 </div>
             </div>
-
-            {!generatedUrl ? (
-                <div style={{ background: '#fff', padding: 32, borderRadius: 14, textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
-                    <div style={{ fontSize: 48, color: C.primaryDark, marginBottom: 12 }}>
-                        <iconify-icon icon="mdi:auto-fix"></iconify-icon>
-                    </div>
-                    <p style={{ color: C.sub, marginBottom: 20, fontSize: 14, lineHeight: 1.6 }}>
-                        AI จะสร้างภาพ Realistic Studio Product Photography โดยใช้ข้อมูลชื่อแบรนด์<br/>
-                        ชื่อสินค้า สีแบรนด์ และประเภทบรรจุภัณฑ์
-                    </p>
-                    <button onClick={onGenerate} disabled={isGenerating} style={{
-                        padding: '14px 36px', background: C.primaryDark, color: '#fff', border: 'none',
-                        borderRadius: 10, fontWeight: 600, cursor: 'pointer', fontSize: 15,
-                        display: 'inline-flex', alignItems: 'center', gap: 8
-                    }}>
-                        <iconify-icon icon="mdi:auto-fix"></iconify-icon>
-                        {isGenerating ? 'AI กำลังสร้าง... (20-40 วินาที)' : 'Generate AI Mockup'}
-                    </button>
-                </div>
-            ) : (
-                <div style={{ background: '#fff', padding: 24, borderRadius: 14, textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
-                    <h3 style={{ color: C.primaryDark, marginTop: 0 }}>ผลลัพธ์ AI Mockup</h3>
-                    <img src={generatedUrl} style={{ maxWidth: '100%', maxHeight: 600, borderRadius: 10, marginTop: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }} alt="ai mockup" />
-                    <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'center' }}>
-                        <a href={generatedUrl} download={'mockup_ai.png'} style={{
-                            padding: '12px 24px', background: C.text, color: '#fff', textDecoration: 'none',
-                            borderRadius: 8, fontWeight: 600, fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 6
-                        }}>
-                            <iconify-icon icon="mdi:download"></iconify-icon>
-                            ดาวน์โหลด
-                        </a>
-                        <button onClick={onGenerate} disabled={isGenerating} style={{
-                            padding: '12px 24px', background: C.primaryDark, color: '#fff', border: 'none',
-                            borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 14,
-                            display: 'inline-flex', alignItems: 'center', gap: 6
-                        }}>
-                            <iconify-icon icon="mdi:refresh"></iconify-icon>
-                            สร้างใหม่
-                        </button>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
@@ -405,8 +1650,8 @@ function MiniLabelPreview({ labelData, brandAssets }) {
         }}>
             {brandAssets?.logoUrl && (
                 <img src={brandAssets.logoUrl} alt="logo" crossOrigin="anonymous"
-                     style={{ width: 28, height: 28, objectFit: 'contain', marginBottom: 4 }}
-                     onError={e => e.target.style.display = 'none'} />
+                    style={{ width: 28, height: 28, objectFit: 'contain', marginBottom: 4 }}
+                    onError={e => e.target.style.display = 'none'} />
             )}
             <div style={{ fontSize: 10, fontWeight: 800, textAlign: 'center', lineHeight: 1.1, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {labelData.product_name || ''}
@@ -482,8 +1727,8 @@ function ProductCard({ product, brandAssets, onSelect }) {
             }}>
                 {productImg ? (
                     <img src={productImg} alt={product.name_product}
-                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                         onError={e => { e.target.style.display = 'none'; }} />
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={e => { e.target.style.display = 'none'; }} />
                 ) : (
                     <div style={{ color: C.border, fontSize: 64 }}>
                         <iconify-icon icon="mdi:image-outline"></iconify-icon>
@@ -546,9 +1791,9 @@ function ProductCard({ product, brandAssets, onSelect }) {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
                     <StatusLine ok={product.has_package} okText={`บรรจุภัณฑ์: ${product.name_package || ''}`}
-                                noText="ยังไม่ได้เลือกบรรจุภัณฑ์" />
+                        noText="ยังไม่ได้เลือกบรรจุภัณฑ์" />
                     <StatusLine ok={hasLabel} okText={`ฉลาก: ${labelData?.product_name || 'ออกแบบแล้ว'}`}
-                                noText="ยังไม่ได้ออกแบบฉลาก" />
+                        noText="ยังไม่ได้ออกแบบฉลาก" />
                 </div>
 
                 <button onClick={() => onSelect(statusType, labelData)} style={{
@@ -565,28 +1810,6 @@ function ProductCard({ product, brandAssets, onSelect }) {
     );
 }
 
-function Thumbnail({ label, image, fallbackIcon, hasContent }) {
-    return (
-        <div style={{ flex: 1 }}>
-            <div style={{
-                width: '100%', aspectRatio: '1',
-                background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                position: 'relative'
-            }}>
-                {image ? (
-                    <img src={image} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                ) : (
-                    <div style={{ color: C.border, fontSize: 28 }}>
-                        <iconify-icon icon={fallbackIcon}></iconify-icon>
-                    </div>
-                )}
-            </div>
-            <div style={{ fontSize: 10, color: C.sub, textAlign: 'center', marginTop: 4 }}>{label}</div>
-        </div>
-    );
-}
-
 function StatusLine({ ok, okText, noText }) {
     return (
         <div style={{
@@ -594,7 +1817,7 @@ function StatusLine({ ok, okText, noText }) {
             fontSize: 12, color: ok ? '#5a7020' : '#9a5e15'
         }}>
             <iconify-icon icon={ok ? "mdi:check-circle" : "mdi:alert-circle-outline"}
-                          style={{ fontSize: 14 }}></iconify-icon>
+                style={{ fontSize: 14 }}></iconify-icon>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {ok ? okText : noText}
             </span>
@@ -642,8 +1865,8 @@ function ProductPickerView({ products, isLoading, brandAssets, onSelectProduct, 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
                 {products.map(p => (
                     <ProductCard key={p.product_id} product={p}
-                                 brandAssets={brandAssets}
-                                 onSelect={(statusType, labelData) => onSelectProduct(p, statusType, labelData)} />
+                        brandAssets={brandAssets}
+                        onSelect={(statusType, labelData) => onSelectProduct(p, statusType, labelData)} />
                 ))}
             </div>
         </div>
@@ -665,6 +1888,7 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
     const [isExporting, setIsExporting] = useState(false);
     const [isAIGen, setIsAIGen] = useState(false);
     const [aiMockupUrl, setAiMockupUrl] = useState(null);
+    const [aiProgress, setAiProgress] = useState(null);
 
     useEffect(() => {
         fetchProducts();
@@ -720,8 +1944,15 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
         }
 
         setSelectedProduct(product);
-        setSelectedLabelData(labelData);  // ใช้ label ที่ ProductCard fetch มาแล้ว
+        setSelectedLabelData(labelData);
         console.log('[Mockup] Selected product:', product.name_product, 'with label:', labelData?.product_name);
+
+        // ใช้รูป label snapshot ที่ถ่ายไว้ตอน save (สมบูรณ์ 100%)
+        if (labelData?.final_label_url) {
+            setLabelImageUrl(`${API}${labelData.final_label_url}`);
+        } else {
+            setLabelImageUrl(null); // fallback ให้ LabelImageRenderer จัดการ
+        }
 
         const matId = product.materials?.[0]?.id;
         if (matId) {
@@ -756,39 +1987,86 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
         } finally { setIsExporting(false); }
     };
 
-    const handleAIMockup = async () => {
+    const handleAIMockup = async (bgStyle = 'white') => {
         if (!selectedProduct) return;
         setIsAIGen(true);
         setAiMockupUrl(null);
+        setAiProgress({ step: 0, total: 4, message: 'กำลังเริ่มต้น...' });
+
         try {
+            const mat = selectedProduct.materials?.[0];
             const res = await fetch(`${API}/api/mockup/generate-ai-image`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     project_id: projectId,
                     user_id: userId,
-                    product_id: selectedProduct.product_id,
-                    package_name: selectedProduct.name_package,
-                    package_material: selectedProduct.materials?.[0]?.material_name || '',
-                    label_data: {
-                        product_name: selectedLabelData?.product_name || selectedProduct.name_product,
-                        tagline: selectedLabelData?.tagline,
-                        colors: brandAssets?.colors?.slice(0, 3).join(', ') || ''
-                    },
-                    project_name: projectName
+                    label_image_url: selectedLabelData?.final_label_url || null,
+                    package_image_url: packageImageUrl || null,
+                    package_name: selectedProduct.name_package || selectedProduct.name || '',
+                    package_material: mat?.material_name || '',
+                    package_type: mat?.package_type || '',
+                    product_name: selectedLabelData?.product_name || selectedProduct.name_product,
+                    bg_style: bgStyle,
+                    label_width_px: selectedLabelData?.label_width || 380,
+                    label_height_px: selectedLabelData?.label_height || 500,
+                    dieline_width_mm: mat?.dieline_width_mm || null,
+                    dieline_height_mm: mat?.dieline_height_mm || null
                 })
             });
-            const data = await res.json();
-            if (data.status === 'success') {
-                setAiMockupUrl(`${API}${data.image_url}`);
-            } else alert('AI สร้างไม่สำเร็จ: ' + data.message);
-        } catch (err) { alert('Error: ' + err.message); }
-        finally { setIsAIGen(false); }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let finalResult = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                let currentEvent = null;
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) {
+                        currentEvent = line.slice(7).trim();
+                    } else if (line.startsWith('data: ') && currentEvent) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (currentEvent === 'progress') {
+                                setAiProgress(data);
+                            } else if (currentEvent === 'done') {
+                                finalResult = data;
+                            } else if (currentEvent === 'error') {
+                                throw new Error(data.message);
+                            }
+                        } catch (e) {
+                            if (e.message && !e.message.includes('JSON')) throw e;
+                        }
+                        currentEvent = null;
+                    }
+                }
+            }
+
+            if (finalResult?.status === 'success') {
+                setAiMockupUrl(`${API}${finalResult.image_url}`);
+            } else if (!finalResult) {
+                alert('AI สร้างไม่สำเร็จ: ไม่ได้รับผลลัพธ์');
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+            console.error(err);
+        } finally {
+            setIsAIGen(false);
+            setAiProgress(null);
+        }
     };
 
     return (
         <>
-            {/* Render label เป็น image เฉพาะ label ของสินค้าที่เลือก */}
-            {selectedLabelData && brandAssets && (
+            {/* Render label เป็น image — ใช้เฉพาะกรณี label เก่าที่ยังไม่มี final_label_url */}
+            {selectedLabelData && brandAssets && !selectedLabelData.final_label_url && (
                 <LabelImageRenderer labelData={selectedLabelData} brandAssets={brandAssets} onReady={setLabelImageUrl} />
             )}
 
@@ -803,7 +2081,8 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
 
             {view === 'mode' && selectedProduct && (
                 <ModeSelector onPick={handlePickMode} onBack={handleBackToPicker}
-                              productName={selectedProduct.name_product} />
+                    productName={selectedProduct.name_product}
+                    hasPanels={!!(selectedProduct.materials?.[0]?.panels_json || selectedProduct.materials?.[0]?.dieline_width_mm)} />
             )}
 
             {view === 'sticker' && (
@@ -831,14 +2110,28 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
                 </div>
             )}
 
-            {view === 'aimockup' && (
+            {view === 'package_design' && selectedProduct && (
+                <PackageDesignEditor
+                    projectId={projectId}
+                    userId={userId}
+                    projectName={projectName}
+                    product={selectedProduct}
+                    brandAssets={brandAssets}
+                    labelData={selectedLabelData}
+                    labelImageUrl={labelImageUrl}
+                    onBack={handleBackToMode}
+                />
+            )}
+
+                                    {view === 'aimockup' && (
                 <AIMockupView
+                    projectId={projectId}
                     packageImageUrl={packageImageUrl}
                     labelImageUrl={labelImageUrl}
                     labelData={selectedLabelData}
                     onGenerate={handleAIMockup}
                     isGenerating={isAIGen}
-                    generatedUrl={aiMockupUrl}
+                    progressInfo={aiProgress}
                     onBack={handleBackToMode}
                 />
             )}
