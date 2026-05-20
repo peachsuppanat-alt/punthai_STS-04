@@ -218,11 +218,12 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
         } catch (e) { console.error('[PkgDesign] fetch AI history:', e); }
     };
 
-    useEffect(() => { if (projectId) { fetchAiBgHistory(); fetchMockupHistory(); } }, [projectId]);
+    useEffect(() => { if (projectId) { fetchAiBgHistory(); fetchMockupHistory(); } }, [projectId, product?.product_id]);
 
     const fetchMockupHistory = async () => {
         try {
-            const r = await fetch(`${API}/api/mockup/package-mockup-history/${projectId}`);
+            const pid = product?.product_id;
+            const r = await fetch(`${API}/api/mockup/package-mockup-history/${projectId}${pid ? `?product_id=${pid}` : ''}`);
             const d = await r.json();
             if (d.status === 'success') setMockupHistory(d.data || []);
         } catch (e) { console.error('[PkgDesign] fetch mockup history:', e); }
@@ -713,6 +714,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 body: JSON.stringify({
                     project_id: projectId,
                     user_id: userId,
+                    product_id: product.product_id,
                     package_image_url: packageImageUrl,
                     panel_images: panelImages,
                     package_type: product.materials?.[0]?.package_type || product.materials?.[0]?.name,

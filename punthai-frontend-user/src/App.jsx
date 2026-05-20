@@ -15,7 +15,7 @@ import Result from './project_feature/Result';
 import { Profile } from './Profile';
 import { EditProfile } from './EditProfile';
 import MarketPlanning from './MarketPlanning';
-
+import ContentOnline from './ContentOnline';
 
 // หน้าชั่วคราว
 const Shopping = () => <h2 style={{marginTop: '100px', textAlign: 'center'}}>Shopping Page</h2>;
@@ -64,6 +64,7 @@ function App() {
         <Route path="/profile" element={<Profile user={user} />} />
         <Route path="/edit_profile" element={<EditProfile user={user} setUser={setUser} />} />
         <Route path="/market-planning" element={<MarketPlanning user={user} />} />
+        <Route path="/content-online" element={<ContentOnline user={user} />} />
         {/* <Route path="/shopping" element={<Shopping />} />
         <Route path="/about" element={<About />} /> */}
       </Routes>

@@ -1896,7 +1896,7 @@ app.post('/api/mockup/generate-dieline-bg', async (req, res) => {
              WHERE cc.project_id = ? AND cc.is_selected = 1 LIMIT 1`, [project_id]);
         const palette = colorRows[0]
             ? [colorRows[0].color_code_1, colorRows[0].color_code_2, colorRows[0].color_code_3,
-               colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
+            colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
             : '#F5E6D3, #C9A678, #8B6F47';
         conn.release(); conn = null;
 
@@ -1958,7 +1958,7 @@ app.get('/api/mockup/dieline-bg-history/:projectId', async (req, res) => {
 // ----- 6c) POST generate AI package mockup preview (design → realistic photo) -----
 app.post('/api/mockup/generate-package-mockup', async (req, res) => {
     const {
-        project_id, user_id,
+        project_id, user_id, product_id,
         package_image_url,
         panel_images, // [{label, image_base64, w_mm, h_mm}] — only visible panels
         package_type, package_material, product_name,
@@ -2164,8 +2164,8 @@ PHOTOGRAPHY: Professional studio photo, soft lighting, shadow under product, sha
                 `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
                 [finalUserId, project_id, 'GENERATE_PACKAGE_MOCKUP', prompt.substring(0, 2000), imageUrl]);
             await c2.query(
-                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
-                [project_id, finalUserId, 'PACKAGE_MOCKUP', imageUrl, prompt.substring(0, 2000)]);
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, product_id) VALUES (?, ?, ?, ?, ?, 0, ?)`,
+                [project_id, finalUserId, 'PACKAGE_MOCKUP', imageUrl, prompt.substring(0, 2000), product_id || null]);
             c2.release();
         } catch (e) { console.warn('log warning', e.message); }
 
@@ -2178,17 +2178,27 @@ PHOTOGRAPHY: Professional studio photo, soft lighting, shadow under product, sha
     }
 });
 
-// ----- 6d) GET package mockup history -----
+// ----- 6d) GET package mockup history (by product_id) -----
 app.get('/api/mockup/package-mockup-history/:projectId', async (req, res) => {
     const { projectId } = req.params;
+    const { product_id } = req.query;
     try {
         const conn = await pool.getConnection();
-        const [rows] = await conn.query(
-            `SELECT history_id, image_url, prompt, created_at
-             FROM generated_history
-             WHERE project_id = ? AND generation_type = 'PACKAGE_MOCKUP'
-             ORDER BY history_id DESC LIMIT 20`,
-            [projectId]);
+        let query, params;
+        if (product_id) {
+            query = `SELECT history_id, image_url, prompt, created_at
+                     FROM generated_history
+                     WHERE project_id = ? AND generation_type = 'PACKAGE_MOCKUP' AND product_id = ?
+                     ORDER BY history_id DESC LIMIT 20`;
+            params = [projectId, product_id];
+        } else {
+            query = `SELECT history_id, image_url, prompt, created_at
+                     FROM generated_history
+                     WHERE project_id = ? AND generation_type = 'PACKAGE_MOCKUP'
+                     ORDER BY history_id DESC LIMIT 20`;
+            params = [projectId];
+        }
+        const [rows] = await conn.query(query, params);
         conn.release();
         res.json({ status: 'success', data: rows });
     } catch (err) {
@@ -2987,6 +2997,296 @@ app.delete('/api/mockup/history/:historyId', async (req, res) => {
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
+
+// ================= API Content Online =================
+
+// 4.1 GET ad-templates
+app.get('/api/ad-templates', async (req, res) => {
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query('SELECT * FROM ad_template WHERE is_active = 1 ORDER BY sort_order ASC');
+        conn.release();
+        res.json({ status: 'success', templates: rows });
+    } catch (err) {
+        console.error('Get ad-templates error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// 4.2 GET available images for a product (real + mockup)
+app.get('/api/content-online/images/:projectId/:productId', async (req, res) => {
+    const { projectId, productId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+
+        // รูปสินค้าจริงจาก brand_product
+        const [products] = await conn.query(
+            'SELECT product_id, name_product, image_product FROM brand_product WHERE product_id = ? AND project_id = ?',
+            [productId, projectId]
+        );
+        const productImages = products
+            .filter(p => p.image_product)
+            .map(p => ({ type: 'product', url: `/uploads/${p.image_product}`, label: p.name_product }));
+
+        // รูป mockup จาก generated_history
+        const [mockups] = await conn.query(
+            `SELECT history_id, image_url, generation_type, prompt, created_at
+             FROM generated_history
+             WHERE project_id = ? AND generation_type IN ('MOCKUP_AI','PACKAGE_MOCKUP')
+               AND (product_id = ? OR product_id IS NULL)
+             ORDER BY created_at DESC`,
+            [projectId, productId]
+        );
+        const mockupImages = mockups.map(m => ({
+            type: 'mockup',
+            url: m.image_url,
+            label: m.generation_type === 'PACKAGE_MOCKUP' ? 'Package Mockup' : 'AI Mockup',
+            history_id: m.history_id,
+            created_at: m.created_at
+        }));
+
+        conn.release();
+        res.json({ status: 'success', product_images: productImages, mockup_images: mockupImages });
+    } catch (err) {
+        console.error('Content-online images error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// 4.3 POST generate ad content (SSE) — supports mode: both | image_only | caption_only
+app.post('/api/content-online/generate', async (req, res) => {
+    const {
+        project_id, product_id, user_id, template_id, platform,
+        product_name, price, slogan, additional_details,
+        source_image_url, source_image_type,
+        mode = 'both', existing_image_url
+    } = req.body;
+
+    // SSE headers
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+    });
+    const sendEvent = (event, data) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+        const conn = await pool.getConnection();
+
+        // Step 1: ดึง template
+        sendEvent('progress', { step: 1, total: 5, message: 'กำลังเตรียม template...' });
+        const [templates] = await conn.query('SELECT * FROM ad_template WHERE template_id = ?', [template_id]);
+        if (templates.length === 0) {
+            conn.release();
+            sendEvent('error', { message: 'ไม่พบ template ที่เลือก' });
+            return res.end();
+        }
+        const template = templates[0];
+
+        // กำหนด aspect ratio ตาม platform
+        const platformSizes = {
+            'facebook': { w: 1200, h: 630, ratio: '1200x630 landscape (1.91:1)' },
+            'ig_feed': { w: 1080, h: 1080, ratio: '1080x1080 square (1:1)' },
+            'ig_story': { w: 1080, h: 1920, ratio: '1080x1920 vertical (9:16)' },
+            'line': { w: 1040, h: 1040, ratio: '1040x1040 square (1:1)' },
+            'tiktok': { w: 1080, h: 1920, ratio: '1080x1920 vertical (9:16)' }
+        };
+        const pSize = platformSizes[platform] || platformSizes['ig_feed'];
+
+        // Interpolate prompt placeholders
+        const sloganLine = slogan ? `Slogan: "${slogan}".` : '';
+        const detailsLine = additional_details ? `Additional details: ${additional_details}.` : '';
+
+        let finalImageUrl = existing_image_url || null;
+        let finalCaptionTh = null;
+        let finalCaptionEn = null;
+
+        // Step 2: Generate Image (ถ้า mode ไม่ใช่ caption_only)
+        if (mode === 'both' || mode === 'image_only') {
+            sendEvent('progress', { step: 2, total: 5, message: 'AI กำลังสร้างภาพโฆษณา...' });
+
+            const imagePrompt = template.image_prompt_template
+                .replace(/\{product_name\}/g, product_name || '')
+                .replace(/\{price\}/g, price || '')
+                .replace(/\{slogan\}/g, slogan || '')
+                .replace(/\{aspect_ratio\}/g, pSize.ratio);
+
+            // Load source image
+            let imageParts = [];
+            if (source_image_url) {
+                try {
+                    let imgPath;
+                    if (source_image_url.startsWith('/uploads/')) {
+                        imgPath = path.join(process.cwd(), source_image_url);
+                    } else {
+                        imgPath = path.join(process.cwd(), 'uploads', source_image_url);
+                    }
+
+                    if (fs.existsSync(imgPath)) {
+                        const imgBuffer = await sharp(imgPath)
+                            .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+                            .jpeg({ quality: 85 })
+                            .toBuffer();
+                        imageParts.push({
+                            inlineData: {
+                                mimeType: 'image/jpeg',
+                                data: imgBuffer.toString('base64')
+                            }
+                        });
+                    }
+                } catch (imgErr) {
+                    console.warn('Could not load source image:', imgErr.message);
+                }
+            }
+
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const model = genAI.getGenerativeModel(
+                { model: 'gemini-3.1-flash-image-preview', generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } }
+            );
+
+            const contentParts = [...imageParts, { text: imagePrompt }];
+            let result;
+            try {
+                result = await model.generateContent(contentParts);
+            } catch (firstErr) {
+                console.warn('Image gen attempt 1 failed, retrying...', firstErr.message);
+                await new Promise(r => setTimeout(r, 5000));
+                result = await model.generateContent(contentParts);
+            }
+
+            const parts = result.response.candidates?.[0]?.content?.parts;
+            let imgBase64 = null;
+            let mimeType = 'image/png';
+            if (parts) {
+                for (const p of parts) {
+                    if (p.inlineData) {
+                        imgBase64 = p.inlineData.data;
+                        mimeType = p.inlineData.mimeType || 'image/png';
+                        break;
+                    }
+                }
+            }
+
+            if (!imgBase64) {
+                conn.release();
+                sendEvent('error', { message: 'AI ไม่สามารถสร้างภาพได้ กรุณาลองใหม่' });
+                return res.end();
+            }
+
+            const ext = mimeType.includes('jpeg') ? 'jpg' : 'png';
+            const fileName = `content_ad_${Date.now()}.${ext}`;
+            const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
+            fs.writeFileSync(filePath, Buffer.from(imgBase64, 'base64'));
+            finalImageUrl = `/uploads/generated/${fileName}`;
+        }
+
+        // Step 3: Generate Caption (ถ้า mode ไม่ใช่ image_only)
+        if (mode === 'both' || mode === 'caption_only') {
+            sendEvent('progress', { step: 3, total: 5, message: 'AI กำลังคิดแคปชั่น...' });
+
+            const captionPrompt = template.caption_prompt_template
+                .replace(/\{product_name\}/g, product_name || '')
+                .replace(/\{price\}/g, price || '')
+                .replace(/\{slogan_line\}/g, slogan ? `Slogan: "${slogan}".` : '')
+                .replace(/\{details_line\}/g, additional_details ? `Details: ${additional_details}.` : '');
+
+            const genAI2 = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+            const textModel = genAI2.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            const captionResult = await textModel.generateContent(captionPrompt);
+            const captionRaw = captionResult.response.text();
+
+            try {
+                const cleaned = captionRaw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                const parsed = JSON.parse(cleaned);
+                finalCaptionTh = parsed.caption_th || '';
+                finalCaptionEn = parsed.caption_en || '';
+            } catch (parseErr) {
+                finalCaptionTh = captionRaw;
+                finalCaptionEn = '';
+            }
+        }
+
+        // Step 4: บันทึกลง DB
+        sendEvent('progress', { step: 4, total: 5, message: 'กำลังบันทึกผลลัพธ์...' });
+
+        await conn.query(
+            `INSERT INTO marketing_content
+             (project_id, user_id, product_id, template_id, product_name_display, price, slogan,
+              additional_details, source_image_url, source_image_type, platform,
+              image_content, caption_th, caption_en, ai_model_image, ai_model_text)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [project_id, user_id, product_id, template_id, product_name, price, slogan,
+                additional_details, source_image_url, source_image_type, platform,
+                finalImageUrl, finalCaptionTh, finalCaptionEn,
+                mode !== 'caption_only' ? 'gemini-3.1-flash-image-preview' : null,
+                mode !== 'image_only' ? 'gemini-2.5-flash' : null]
+        );
+
+        if (finalImageUrl && mode !== 'caption_only') {
+            await conn.query(
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, product_id)
+                 VALUES (?, ?, 'CONTENT_ONLINE', ?, ?, 0, ?)`,
+                [project_id, user_id, finalImageUrl, `Content Online: ${product_name}`, product_id]
+            );
+        }
+
+        conn.release();
+
+        // Step 5: ส่งผลลัพธ์
+        sendEvent('progress', { step: 5, total: 5, message: 'เสร็จสิ้น!' });
+        sendEvent('done', {
+            image_url: finalImageUrl,
+            caption_th: finalCaptionTh,
+            caption_en: finalCaptionEn,
+            platform: platform,
+            template_name: template.template_name_th
+        });
+        res.end();
+
+    } catch (err) {
+        console.error('Content-online generate error:', err);
+        sendEvent('error', { message: err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่' });
+        res.end();
+    }
+});
+
+// 4.4 POST upload custom image
+app.post('/api/content-online/upload-image', upload.single('image'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ status: 'error', message: 'ไม่พบไฟล์รูปภาพ' });
+    }
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ status: 'success', image_url: imageUrl });
+});
+
+// 4.5 GET history by project + product
+app.get('/api/content-online/history/:projectId/:productId', async (req, res) => {
+    const { projectId, productId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT mc.*, at.template_name_th, at.template_name
+             FROM marketing_content mc
+             LEFT JOIN ad_template at ON mc.template_id = at.template_id
+             WHERE mc.project_id = ? AND mc.product_id = ?
+             ORDER BY mc.created_at DESC`,
+            [projectId, productId]
+        );
+        conn.release();
+        res.json({ status: 'success', history: rows });
+    } catch (err) {
+        console.error('Content-online history error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ================= END Content Online =================
+
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
