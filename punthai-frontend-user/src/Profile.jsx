@@ -4,14 +4,19 @@ import './Profile.css';
 
 // อิมพอร์ตรูปภาพ
 import logoImg from './assets/logo.png';
-import helpImg from './assets/help.png';
 
-export const Profile = ({ user }) => {
+export const Profile = ({ user, setUser }) => {
   const navigate = useNavigate();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const [userData, setUserData] = useState({});
   const [projects, setProjects] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([
+    { id: 1, message: 'ยินดีต้อนรับสู่ Punthai!', time: 'เมื่อสักครู่', read: false },
+    { id: 2, message: 'โปรเจกต์ของคุณถูกสร้างสำเร็จ', time: '5 นาทีที่แล้ว', read: false },
+    { id: 3, message: 'อัปเดตระบบใหม่พร้อมใช้งาน', time: '1 ชั่วโมงที่แล้ว', read: true },
+  ]);
 
   // ดึงข้อมูล User และ Projects
   useEffect(() => {
@@ -62,9 +67,21 @@ export const Profile = ({ user }) => {
   // 🟢 ฟังก์ชันช่วยเช็ค URL รูปโปรไฟล์ (ใช้ซ้ำได้หลายจุด)
   const getProfileImage = (imagePath) => {
     if (!imagePath || imagePath === 'null') return null;
-    return imagePath.startsWith('http') 
-      ? imagePath 
+    return imagePath.startsWith('http')
+      ? imagePath
       : `http://localhost:3000/uploads/${imagePath}`;
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    if (setUser) setUser(null);
+    navigate('/');
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const markAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
   return (
@@ -80,11 +97,36 @@ export const Profile = ({ user }) => {
           <button className="pf-btn-world">
             <iconify-icon icon="iconamoon:search-light"></iconify-icon>
           </button>
-          <button className="pf-btn-world">
-            <iconify-icon icon="ph:bell-ringing-light"></iconify-icon>
-          </button>
-          
-          {/* 🟢 แก้ไขปุ่ม User ใน Navbar ให้โชว์รูปโปรไฟล์ 🟢 */}
+          <div className="pf-notif-wrapper">
+            <button className="pf-btn-world pf-notif-btn" onClick={() => setShowNotifications(!showNotifications)}>
+              <iconify-icon icon="ph:bell-ringing-light"></iconify-icon>
+              {unreadCount > 0 && <span className="pf-notif-badge">{unreadCount}</span>}
+            </button>
+            {showNotifications && (
+              <div className="pf-notif-dropdown">
+                <div className="pf-notif-header">
+                  <span className="pf-notif-title">การแจ้งเตือน</span>
+                  {unreadCount > 0 && (
+                    <button className="pf-notif-mark-read" onClick={markAllRead}>อ่านทั้งหมด</button>
+                  )}
+                </div>
+                <div className="pf-notif-list">
+                  {notifications.map(notif => (
+                    <div key={notif.id} className={`pf-notif-item ${!notif.read ? 'pf-notif-unread' : ''}`}>
+                      <div className="pf-notif-dot-wrap">
+                        {!notif.read && <span className="pf-notif-dot"></span>}
+                      </div>
+                      <div className="pf-notif-content">
+                        <p className="pf-notif-msg">{notif.message}</p>
+                        <span className="pf-notif-time">{notif.time}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button className="pf-btn-users" style={{ overflow: 'hidden', padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             {getProfileImage(userData.image_profile) ? (
                 <img 
@@ -121,10 +163,11 @@ export const Profile = ({ user }) => {
               <span className="pf-text">Settings</span>
             </li>
           </ul>
-          <div className="pf-help">
-            <img src={helpImg} className="pf-help-img" alt="help" />
-            <p className="pf-help-text">Having trouble?</p>
-            <a href="#" className="pf-contact-link">Contact Us</a>
+          <div className="pf-sidebar-logout">
+            <button className="pf-btn-logout" onClick={handleLogout}>
+              <iconify-icon icon="solar:logout-2-linear"></iconify-icon>
+              <span className="pf-text">ออกจากระบบ</span>
+            </button>
           </div>
         </aside>
 
@@ -170,7 +213,7 @@ export const Profile = ({ user }) => {
             </div>
             
             <div className="pf-profile-actions">
-              <button className="pf-btn-primary" onClick={() => navigate('/edit_profile')}>
+              <button className="pf-btn-primary" onClick={() => navigate('/settings', { state: { editProfile: true } })}>
                 <iconify-icon icon="mdi:account-edit-outline"></iconify-icon>
                 Edit Profile
               </button>

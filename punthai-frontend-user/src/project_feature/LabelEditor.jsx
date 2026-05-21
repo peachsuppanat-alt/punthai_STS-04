@@ -8,6 +8,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import Barcode from 'react-barcode';
 import { loadLogoTransparent } from './logoUtils';
 import { PACKAGES, CATEGORIES } from './PackageCatalog';
+import { getUserFromStorage, isProUser } from '../utils/subscriptionGuard';
+import ProUpgradeModal from '../components/ProUpgradeModal';
 
 const API = 'http://localhost:3000';
 
@@ -514,6 +516,7 @@ export default function LabelEditor({ projectId, userId }) {
     const [dalleDensity, setDalleDensity] = useState('medium');
 
     // ====== UI State ======
+    const [showProModal, setShowProModal] = useState(false);
     const [isLabelAILoading, setIsLabelAILoading] = useState(false);
     const [isSavingLabel, setIsSavingLabel] = useState(false);
     const [labelDimensions, setLabelDimensions] = useState({ width: 380, height: 500 });
@@ -1673,11 +1676,13 @@ export default function LabelEditor({ projectId, userId }) {
                 <button onClick={handleDownloadLabel} style={{ width: '100%', padding: 10, background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, cursor: 'pointer', marginBottom: 8, fontSize: 12 }}>
                     ดาวน์โหลด Preview (PNG)
                 </button>
-                <button onClick={handleExportPrintReady} style={{ width: '100%', padding: 10, background: '#2d5016', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', marginBottom: 8, fontSize: 12 }}>
+                <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportPrintReady(); }} style={{ width: '100%', padding: 10, background: isProUser(getUserFromStorage()) ? '#2d5016' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', marginBottom: 8, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                     ดาวน์โหลด Print-Ready (300 DPI)
+                    {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="14"></iconify-icon>}
                 </button>
-                <button onClick={handleExportLabelPDF} style={{ width: '100%', padding: 10, background: '#8f1d1d', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 12 }}>
+                <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportLabelPDF(); }} style={{ width: '100%', padding: 10, background: isProUser(getUserFromStorage()) ? '#8f1d1d' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                     ส่งออก PDF พร้อมพิมพ์ (แนะนำ)
+                    {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="14"></iconify-icon>}
                 </button>
             </div>
         </div>
@@ -1799,6 +1804,8 @@ export default function LabelEditor({ projectId, userId }) {
                     </form>
                 </div>
             )}
+
+            <ProUpgradeModal isOpen={showProModal} onClose={() => setShowProModal(false)} feature="download" />
         </>
     );
 }

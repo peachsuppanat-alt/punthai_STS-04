@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './CreateLogo.css';
+import { fetchSubscriptionStatus } from '../utils/subscriptionGuard';
+import ProUpgradeModal from '../components/ProUpgradeModal';
 
-// นำเข้ารูปภาพ (ปรับ Path ให้ตรงกับโปรเจกต์ของคุณ)
 import logoImg from '../assets/logo.png';
 import helpImg from '../assets/help.png';
 //import createLogoImg from './assets/create logo.png';
@@ -37,6 +38,16 @@ export const CreateLogo = () => {
 
   const [useImportedColor, setUseImportedColor] = useState(false);
   const [useImportedFont, setUseImportedFont] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
+  const [usageInfo, setUsageInfo] = useState(null);
+
+  useEffect(() => {
+    if (userId) {
+      fetchSubscriptionStatus(userId).then(data => {
+        if (data) setUsageInfo(data);
+      });
+    }
+  }, [userId]);
   
   // ================= 🚨 เพิ่มฟังก์ชันตรวจสอบรูปภาพอัตโนมัติ =================
   useEffect(() => {
@@ -135,6 +146,16 @@ export const CreateLogo = () => {
     if (!brandName.trim()) return alert("กรุณาระบุชื่อแบรนด์");
     if (selectedStyles.length === 0) return alert("กรุณาเลือกสไตล์อย่างน้อย 1 อย่าง");
 
+    try {
+      const status = await fetchSubscriptionStatus(userId);
+      if (status && !status.generation.allowed) {
+        setUsageInfo(status);
+        setShowProModal(true);
+        return;
+      }
+      if (status) setUsageInfo(status);
+    } catch (e) { /* continue — backend guard will catch */ }
+
     setIsLoading(true);
     try {
       const payload = {
@@ -158,11 +179,15 @@ export const CreateLogo = () => {
 
       const data = await res.json();
 
+      if (res.status === 403 && data.status === 'limit_reached') {
+        setShowProModal(true);
+        return;
+      }
+
       if (data.status === 'success') {
         resetModal();
         setIsModalOpen(false);
-        // ไปหน้าโชว์ผลลัพธ์
-        navigate('/result-logo', { state: { projectId } }); 
+        navigate('/result-logo', { state: { projectId } });
       } else {
         alert("เกิดข้อผิดพลาด: " + data.message);
       }
@@ -370,6 +395,14 @@ export const CreateLogo = () => {
                 </label>
             </div>
 
+            {usageInfo && (
+              <div style={{ textAlign: 'center', margin: '8px 0', fontSize: 13, color: usageInfo.generation.remaining <= 1 ? '#e53e3e' : '#888' }}>
+                <iconify-icon icon="mdi:image-auto-adjust" style={{ verticalAlign: 'middle', marginRight: 4 }}></iconify-icon>
+                ใช้ไป {usageInfo.generation.used}/{usageInfo.generation.limit} ครั้ง
+                {usageInfo.generation.period === 'lifetime' ? ' (ตลอดชีพ)' : ' (เดือนนี้)'}
+              </div>
+            )}
+
             {/* Actions */}
             <div className="clg-modal-actions" style={{borderTop:'1px solid #eee', paddingTop:'20px', marginTop:'20px'}}>
               <button className="clg-cancel" onClick={handleCloseModal}>ยกเลิก</button>
@@ -392,6 +425,7 @@ export const CreateLogo = () => {
         </div>
       )}
 
+      <ProUpgradeModal isOpen={showProModal} onClose={() => setShowProModal(false)} feature="generation" />
     </div>
   );
 };

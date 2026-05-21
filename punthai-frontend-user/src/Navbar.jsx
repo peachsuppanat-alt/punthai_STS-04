@@ -46,7 +46,7 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                                 {user.subscription_status || 'STANDARD'}
                             </span>
                         </span>
-                        <button className="btn-outline" onClick={onLogout} style={{ fontSize: '12px', height: '35px', padding: '0 15px' }}>Logout</button>
+                        
                     </div>
                 )}
 
@@ -78,13 +78,18 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                 </button>
 
 
-                <button
-                    className="btn-primary"
-                    style={{ marginLeft: '10px', background: 'linear-gradient(45deg, #d3542b, #f09060)', border: 'none' }}
-                    onClick={() => alert('เตรียมพบกับหน้าระบบสมาชิกเร็วๆ นี้!')}
-                >
-                    รับสิทธิระดับ Pro
-                </button>
+                {(!user || user.subscription_status !== 'PRO') && (
+                    <button
+                        className="btn-primary"
+                        style={{ marginLeft: '10px', background: 'linear-gradient(45deg, #d3542b, #f09060)', border: 'none' }}
+                        onClick={() => {
+                            if (!user) { onOpenLogin(); return; }
+                            navigate('/subscription');
+                        }}
+                    >
+                        รับสิทธิระดับ Pro
+                    </button>
+                )}
             </div>
         </nav>
     );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+/* import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import './Profile.css';
 
@@ -9,7 +9,7 @@ export const EditProfile = ({ user, setUser }) => {
   const navigate = useNavigate();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  // State สำหรับจัดการฟอร์มแก้ไข
+  
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -23,7 +23,7 @@ export const EditProfile = ({ user, setUser }) => {
   const [newImageFile, setNewImageFile] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
   
-  // State สำหรับแจ้งเตือน (แทน Alert)
+  
   const [alertMsg, setAlertMsg] = useState({ type: '', text: '' });
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export const EditProfile = ({ user, setUser }) => {
     const file = e.target.files[0];
     if (file) {
       setNewImageFile(file);
-      setPreviewImage(URL.createObjectURL(file)); // สร้าง URL จำลองเพื่อให้ผู้ใช้เห็นรูปทันที
+      setPreviewImage(URL.createObjectURL(file)); 
     }
   };
 
@@ -70,7 +70,7 @@ export const EditProfile = ({ user, setUser }) => {
     e.preventDefault();
     setAlertMsg({ type: '', text: '' });
 
-    // ตรวจสอบรหัสผ่าน 2 ช่อง
+    
     if (formData.password && formData.password !== formData.confirm_password) {
       return setAlertMsg({ type: 'error', text: 'รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน' });
     }
@@ -90,16 +90,16 @@ export const EditProfile = ({ user, setUser }) => {
       const data = await res.json();
 
       if (data.status === 'success') {
-        // อัปเดตข้อมูลใน LocalStorage และ State ของ React
+       
         localStorage.setItem('user', JSON.stringify(data.user));
         if (setUser) setUser(data.user);
         setUserData(data.user);
         
-        // เคลียร์ช่องรหัสผ่าน
+       
         setFormData({ ...formData, password: '', confirm_password: '' });
         setAlertMsg({ type: 'success', text: 'บันทึกข้อมูลโปรไฟล์เรียบร้อยแล้ว' });
         
-        // ลบข้อความแจ้งเตือนอัตโนมัติหลังจาก 3 วินาที
+       
         setTimeout(() => setAlertMsg({ type: '', text: '' }), 3000);
       } else {
         setAlertMsg({ type: 'error', text: data.message });
@@ -109,7 +109,7 @@ export const EditProfile = ({ user, setUser }) => {
     }
   };
 
-  // แหล่งที่มาของรูปที่จะแสดง (รูปพรีวิวจากการเลือกไฟล์ หรือ รูปเดิม)
+  
   const displayImage = previewImage || getProfileImage(userData.image_profile);
 
   return (
@@ -176,7 +176,7 @@ export const EditProfile = ({ user, setUser }) => {
             )}
 
             <form onSubmit={handleSubmit} className="edit-form-container">
-                {/* อัปโหลดรูปภาพ */}
+               
                 <div className="edit-avatar-section">
                     <div className="edit-avatar-wrapper">
                         {displayImage ? (
@@ -193,14 +193,15 @@ export const EditProfile = ({ user, setUser }) => {
                     </div>
                     <div className="edit-avatar-text">
                         <h3>Profile Picture</h3>
-                        <p>ไฟล์ PNG, JPG ขนาดไม่เกิน 5MB</p>
-                        <label htmlFor="upload-photo" className="btn-upload-text">Upload new photo</label>
+                        
+                        
+                        <label htmlFor="upload-photo" className="btn-upload-text" >เปลี่ยนรูปโปรไฟล์</label>
                     </div>
                 </div>
 
                 <hr className="edit-divider" />
 
-                {/* ข้อมูลทั่วไป */}
+               
                 <h3 className="edit-section-title">Personal Information</h3>
                 <div className="edit-form-row">
                     <div className="edit-form-group">
@@ -226,7 +227,7 @@ export const EditProfile = ({ user, setUser }) => {
 
                 <hr className="edit-divider" />
 
-                {/* ข้อมูลรหัสผ่าน */}
+              
                 <h3 className="edit-section-title">Change Password</h3>
                 <p style={{ color: '#888', fontSize: '14px', marginBottom: '20px' }}>หากไม่ต้องการเปลี่ยนรหัสผ่าน ให้เว้นว่างไว้</p>
                 <div className="edit-form-row">
@@ -240,7 +241,7 @@ export const EditProfile = ({ user, setUser }) => {
                     </div>
                 </div>
 
-                {/* ปุ่ม Action */}
+               
                 <div className="edit-action-buttons">
                     <button type="button" className="btn-cancel" onClick={() => navigate('/profile')}>Cancel</button>
                     <button type="submit" className="btn-save">
@@ -255,4 +256,4 @@ export const EditProfile = ({ user, setUser }) => {
       </div>
     </div>
   );
-};
+}; */

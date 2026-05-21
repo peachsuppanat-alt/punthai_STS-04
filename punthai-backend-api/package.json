@@ -63,6 +63,7 @@
     "negotiator": "^1.0.0",
     "object-assign": "^4.1.1",
     "object-inspect": "^1.13.4",
+    "omise": "^1.1.0",
     "on-finished": "^2.4.1",
     "once": "^1.4.0",
     "openai": "^6.33.0",

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { downloadLogo } from './logoUtils';
-import './MyProject.css'; 
-import './ResultLogo.css'; 
+import './MyProject.css';
+import './ResultLogo.css';
+import { getUserFromStorage, isFormatAllowed } from '../utils/subscriptionGuard';
+import ProUpgradeModal from '../components/ProUpgradeModal';
 
 import logoImg from '../assets/logo.png';
 import helpImg from '../assets/help.png';
@@ -33,6 +35,7 @@ export const ResultLogo = () => {
 
     const [downloadMenuOpen, setDownloadMenuOpen] = useState(null);
     const [downloading, setDownloading] = useState(null);
+    const [showProModal, setShowProModal] = useState(false);
 
     // 🟢 กำหนดรูปแบบสไตล์ทั้ง 6 แบบ พร้อมไอคอน
     const styleOptions = [
@@ -255,14 +258,18 @@ export const ResultLogo = () => {
                                                     position: 'absolute', top: '100%', right: 0, marginTop: 6, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 6, zIndex: 100, minWidth: 180
                                                 }}>
                                                     <div style={{ fontSize: 11, color: '#6b7280', padding: '6px 10px', borderBottom: '1px solid #f3f4f6', marginBottom: 4 }}>เลือกรูปแบบไฟล์ดาวน์โหลด</div>
-                                                    {[{ ext: 'png', label: 'PNG' }, { ext: 'svg', label: 'SVG' }, { ext: 'eps', label: 'EPS' }, { ext: 'jpg', label: 'JPG' }, { ext: 'pdf', label: 'PDF' }].map(opt => (
-                                                        <button key={opt.ext}
-                                                            onClick={(e) => { e.stopPropagation(); handleDownload(img.url, img.id, opt.ext); }}
-                                                            disabled={downloading === `${img.id}_${opt.ext}`}
-                                                            style={{ display: 'flex', justifyContent: 'space-between', width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, color: '#374151' }}>
-                                                            <span style={{ fontWeight: 600 }}>{opt.label}</span>
-                                                        </button>
-                                                    ))}
+                                                    {[{ ext: 'png', label: 'PNG' }, { ext: 'svg', label: 'SVG' }, { ext: 'eps', label: 'EPS' }, { ext: 'jpg', label: 'JPG' }, { ext: 'pdf', label: 'PDF' }].map(opt => {
+                                                        const allowed = isFormatAllowed('resultLogo', opt.ext, getUserFromStorage());
+                                                        return (
+                                                            <button key={opt.ext}
+                                                                onClick={(e) => { e.stopPropagation(); if (!allowed) { setDownloadMenuOpen(null); setShowProModal(true); return; } handleDownload(img.url, img.id, opt.ext); }}
+                                                                disabled={downloading === `${img.id}_${opt.ext}`}
+                                                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, color: allowed ? '#374151' : '#c0c0c0' }}>
+                                                                <span style={{ fontWeight: 600 }}>{opt.label}</span>
+                                                                {!allowed && <iconify-icon icon="solar:lock-keyhole-linear" width="14" style={{ color: '#d35325' }}></iconify-icon>}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
@@ -401,6 +408,8 @@ export const ResultLogo = () => {
                     <p style={{color:'#666', marginTop:'10px'}}>อาจใช้เวลาประมาณ 10 - 20 วินาที กรุณารอสักครู่</p>
                 </div>
             )}
+
+            <ProUpgradeModal isOpen={showProModal} onClose={() => setShowProModal(false)} feature="download" />
         </>
     );
 };

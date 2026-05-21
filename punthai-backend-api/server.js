@@ -12,6 +12,7 @@ import axios from 'axios';
 import sharp from 'sharp';
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
+import Omise from 'omise';
 
 // สร้าง Client สำหรับตรวจสอบ Token จาก Google
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -34,6 +35,11 @@ const openai = new OpenAI({
 const googleImagen = new OpenAI({
     apiKey: process.env.GEMINI_API_KEY,
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
+});
+
+const omise = Omise({
+    publicKey: process.env.OMISE_PUBLIC_KEY,
+    secretKey: process.env.OMISE_SECRET_KEY,
 });
 
 // สร้าง Connection Pool Database
@@ -1050,11 +1056,24 @@ const downloadImage = async (url, filepath) => {
     });
 };
 
-/// create logo 
+/// create logo
 app.post('/api/generate-logo', async (req, res) => {
     const { project_id, user_id, brand_name, brand_value, products, styles, details, negative_prompt, use_imported_color, use_imported_font, target_audience } = req.body;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'Project ID is required' });
     const finalUserId = (!user_id || user_id === 0) ? null : user_id;
+
+    if (finalUserId) {
+        const genCheck = await checkGenerationLimit(finalUserId);
+        if (!genCheck.allowed) {
+            return res.status(403).json({
+                status: 'limit_reached',
+                message: genCheck.isPro
+                    ? 'คุณใช้สิทธิ์สร้างรูปภาพครบ 50 ครั้งในเดือนนี้แล้ว'
+                    : 'คุณใช้สิทธิ์สร้างรูปภาพฟรีครบ 6 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO',
+                ...genCheck
+            });
+        }
+    }
 
     try {
         const connection = await pool.getConnection();
@@ -1188,6 +1207,8 @@ app.post('/api/generate-logo', async (req, res) => {
             [project_id, finalUserId, 'LOGO', imageUrl, prompt]
         );
         conn2.release();
+
+        if (finalUserId) await trackGeneration(finalUserId, 'logo', project_id);
 
         res.json({ status: 'success', image_url: imageUrl, prompt: prompt });
     } catch (err) {
@@ -1432,6 +1453,20 @@ app.post('/api/generate-label-background', async (req, res) => {
     const { project_id, user_id, style = 'minimal', tone = 'auto', density = 'medium' } = req.body;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'project_id is required' });
 
+    const finalUserId2 = (!user_id || user_id === 0) ? null : user_id;
+    if (finalUserId2) {
+        const genCheck = await checkGenerationLimit(finalUserId2);
+        if (!genCheck.allowed) {
+            return res.status(403).json({
+                status: 'limit_reached',
+                message: genCheck.isPro
+                    ? 'คุณใช้สิทธิ์สร้างรูปภาพครบ 50 ครั้งในเดือนนี้แล้ว'
+                    : 'คุณใช้สิทธิ์สร้างรูปภาพฟรีครบ 6 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO',
+                ...genCheck
+            });
+        }
+    }
+
     let connection;
     try {
         connection = await pool.getConnection();
@@ -1512,6 +1547,7 @@ ${toneMap[tone] ? 'TONE: ' + toneMap[tone] : ''}
                 [project_id, finalUserId, 'LABEL_BG', imageUrl, prompt]
             );
             logConn.release();
+            if (finalUserId) await trackGeneration(finalUserId, 'label_bg', project_id);
         } catch (logErr) {
             console.warn("Log warning (label-bg):", logErr.message);
         }
@@ -1807,6 +1843,14 @@ app.post('/api/admin/upload-pattern', patternUpload.single('pattern_image'), asy
 app.post('/api/generate-mockup-pattern', async (req, res) => {
     const { project_id, user_id, style = 'thai_traditional' } = req.body;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'project_id required' });
+
+    if (user_id) {
+        const genCheck = await checkGenerationLimit(user_id);
+        if (!genCheck.allowed) {
+            return res.status(403).json({ status: 'limit_reached', message: genCheck.isPro ? 'คุณใช้สิทธิ์สร้างรูปภาพครบ 50 ครั้งในเดือนนี้แล้ว' : 'คุณใช้สิทธิ์สร้างรูปภาพฟรีครบ 6 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO', ...genCheck });
+        }
+    }
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -1857,6 +1901,7 @@ STRICT RULES:
             `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
             [project_id, user_id || null, 'MOCKUP_PATTERN', imageUrl, prompt]);
         c2.release();
+        if (user_id) await trackGeneration(user_id, 'mockup_pattern', project_id);
         res.json({ status: 'success', data: { image_url: imageUrl, pattern_id: r.insertId } });
     } catch (err) {
         if (conn) conn.release();
@@ -1887,6 +1932,14 @@ app.post('/api/mockup/upload-pattern', patternUpload.single('pattern_image'), as
 app.post('/api/mockup/generate-dieline-bg', async (req, res) => {
     const { project_id, user_id, user_prompt, dieline_width_mm, dieline_height_mm, panels_json, package_type, product_name } = req.body;
     if (!project_id || !user_prompt) return res.status(400).json({ status: 'error', message: 'project_id and user_prompt required' });
+
+    if (user_id) {
+        const genCheck = await checkGenerationLimit(user_id);
+        if (!genCheck.allowed) {
+            return res.status(403).json({ status: 'limit_reached', message: genCheck.isPro ? 'คุณใช้สิทธิ์สร้างรูปภาพครบ 50 ครั้งในเดือนนี้แล้ว' : 'คุณใช้สิทธิ์สร้างรูปภาพฟรีครบ 6 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO', ...genCheck });
+        }
+    }
+
     let conn;
     try {
         conn = await pool.getConnection();
@@ -1928,6 +1981,7 @@ STRICT RULES:
             `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
             [project_id, user_id || null, 'DIELINE_BG', imageUrl, prompt]);
         c2.release();
+        if (user_id) await trackGeneration(user_id, 'dieline_bg', project_id);
         res.json({ status: 'success', data: { image_url: imageUrl } });
     } catch (err) {
         if (conn) conn.release();
@@ -1960,13 +2014,20 @@ app.post('/api/mockup/generate-package-mockup', async (req, res) => {
     const {
         project_id, user_id, product_id,
         package_image_url,
-        panel_images, // [{label, image_base64, w_mm, h_mm}] — only visible panels
+        panel_images,
         package_type, package_material, product_name,
         bg_style = 'white'
     } = req.body;
 
     if (!project_id || !panel_images?.length) {
         return res.status(400).json({ status: 'error', message: 'project_id and panel_images required' });
+    }
+
+    if (user_id) {
+        const genCheck = await checkGenerationLimit(user_id);
+        if (!genCheck.allowed) {
+            return res.status(403).json({ status: 'limit_reached', message: genCheck.isPro ? 'คุณใช้สิทธิ์สร้างรูปภาพครบ 50 ครั้งในเดือนนี้แล้ว' : 'คุณใช้สิทธิ์สร้างรูปภาพฟรีครบ 6 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO', ...genCheck });
+        }
     }
 
     res.writeHead(200, {
@@ -2167,6 +2228,7 @@ PHOTOGRAPHY: Professional studio photo, soft lighting, shadow under product, sha
                 `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, product_id) VALUES (?, ?, ?, ?, ?, 0, ?)`,
                 [project_id, finalUserId, 'PACKAGE_MOCKUP', imageUrl, prompt.substring(0, 2000), product_id || null]);
             c2.release();
+            if (finalUserId) await trackGeneration(finalUserId, 'package_mockup', project_id);
         } catch (e) { console.warn('log warning', e.message); }
 
         sendEvent('done', { status: 'success', image_url: imageUrl });
@@ -2543,6 +2605,13 @@ app.post('/api/mockup/generate-ai-image', async (req, res) => {
 
     if (!project_id) return res.status(400).json({ status: 'error', message: 'project_id required' });
 
+    if (user_id) {
+        const genCheck = await checkGenerationLimit(user_id);
+        if (!genCheck.allowed) {
+            return res.status(403).json({ status: 'limit_reached', message: genCheck.isPro ? 'คุณใช้สิทธิ์สร้างรูปภาพครบ 50 ครั้งในเดือนนี้แล้ว' : 'คุณใช้สิทธิ์สร้างรูปภาพฟรีครบ 6 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO', ...genCheck });
+        }
+    }
+
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -2752,6 +2821,7 @@ Professional studio photography, white background, soft lighting, no people/hand
                 `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
                 [project_id, finalUserId, 'MOCKUP_AI', imageUrl, prompt.substring(0, 2000)]);
             c2.release();
+            if (finalUserId) await trackGeneration(finalUserId, 'mockup_ai', project_id);
         } catch (e) { console.warn('log warning', e.message); }
 
         sendEvent('done', { status: 'success', image_url: imageUrl });
@@ -3063,6 +3133,19 @@ app.post('/api/content-online/generate', async (req, res) => {
         mode = 'both', existing_image_url
     } = req.body;
 
+    if (user_id && mode !== 'caption_only') {
+        const genCheck = await checkGenerationLimit(user_id);
+        if (!genCheck.allowed) {
+            return res.status(403).json({
+                status: 'limit_reached',
+                message: genCheck.isPro
+                    ? 'คุณใช้สิทธิ์สร้างรูปภาพครบ 50 ครั้งในเดือนนี้แล้ว'
+                    : 'คุณใช้สิทธิ์สร้างรูปภาพฟรีครบ 6 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO',
+                ...genCheck
+            });
+        }
+    }
+
     // SSE headers
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -3232,6 +3315,7 @@ app.post('/api/content-online/generate', async (req, res) => {
                  VALUES (?, ?, 'CONTENT_ONLINE', ?, ?, 0, ?)`,
                 [project_id, user_id, finalImageUrl, `Content Online: ${product_name}`, product_id]
             );
+            if (user_id) await trackGeneration(user_id, 'content_online', project_id);
         }
 
         conn.release();
@@ -3286,6 +3370,431 @@ app.get('/api/content-online/history/:projectId/:productId', async (req, res) =>
 
 // ================= END Content Online =================
 
+
+// ================= SUBSCRIPTION & PAYMENT (Omise) =================
+
+async function checkGenerationLimit(userId) {
+    const conn = await pool.getConnection();
+    try {
+        const [userRows] = await conn.query(
+            'SELECT subscription_status, subscription_start_date, subscription_end_date FROM user_profile WHERE user_id = ?',
+            [userId]
+        );
+        if (!userRows.length) return { allowed: false, reason: 'user_not_found' };
+
+        const user = userRows[0];
+        const isPro = user.subscription_status === 'PRO' && user.subscription_end_date && new Date(user.subscription_end_date) > new Date();
+
+        let countQuery, countParams, limit, period;
+        if (isPro) {
+            limit = 50;
+            period = 'monthly';
+            countQuery = 'SELECT COUNT(*) as cnt FROM generation_usage WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)';
+            countParams = [userId];
+        } else {
+            limit = 6;
+            period = 'lifetime';
+            countQuery = 'SELECT COUNT(*) as cnt FROM generation_usage WHERE user_id = ?';
+            countParams = [userId];
+        }
+
+        const [countRows] = await conn.query(countQuery, countParams);
+        const used = countRows[0].cnt;
+
+        return {
+            allowed: used < limit,
+            used,
+            limit,
+            remaining: Math.max(0, limit - used),
+            period,
+            isPro,
+            subscription_status: user.subscription_status
+        };
+    } finally {
+        conn.release();
+    }
+}
+
+async function trackGeneration(userId, feature, projectId) {
+    const conn = await pool.getConnection();
+    try {
+        await conn.query(
+            'INSERT INTO generation_usage (user_id, feature, project_id) VALUES (?, ?, ?)',
+            [userId, feature, projectId || null]
+        );
+    } finally {
+        conn.release();
+    }
+}
+
+// 1. GET subscription status
+app.get('/api/subscription/status/:userId', async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    if (!userId) return res.status(400).json({ status: 'error', message: 'Invalid user ID' });
+
+    try {
+        const conn = await pool.getConnection();
+        const [userRows] = await conn.query(
+            'SELECT subscription_status, subscription_start_date, subscription_end_date, omise_customer_id FROM user_profile WHERE user_id = ?',
+            [userId]
+        );
+        if (!userRows.length) {
+            conn.release();
+            return res.status(404).json({ status: 'error', message: 'User not found' });
+        }
+
+        const user = userRows[0];
+        const isPro = user.subscription_status === 'PRO' && user.subscription_end_date && new Date(user.subscription_end_date) > new Date();
+
+        let countQuery, countParams;
+        if (isPro) {
+            countQuery = 'SELECT COUNT(*) as cnt FROM generation_usage WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)';
+            countParams = [userId];
+        } else {
+            countQuery = 'SELECT COUNT(*) as cnt FROM generation_usage WHERE user_id = ?';
+            countParams = [userId];
+        }
+        const [countRows] = await conn.query(countQuery, countParams);
+
+        const [paymentRows] = await conn.query(
+            'SELECT payment_id, amount_paid, payment_method, status, created_at FROM payment_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 5',
+            [userId]
+        );
+
+        conn.release();
+
+        const limit = isPro ? 50 : 6;
+        const used = countRows[0].cnt;
+
+        res.json({
+            status: 'success',
+            subscription: {
+                subscription_status: isPro ? 'PRO' : user.subscription_status,
+                subscription_start_date: user.subscription_start_date,
+                subscription_end_date: user.subscription_end_date,
+                has_omise_customer: !!user.omise_customer_id,
+                generation_used: used,
+                generation_limit: limit,
+                generation_remaining: Math.max(0, limit - used),
+                generation_period: isPro ? 'monthly' : 'lifetime',
+                recent_payments: paymentRows
+            }
+        });
+    } catch (err) {
+        console.error('Subscription status error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// 2. POST create charge (Omise)
+app.post('/api/subscription/create-charge', async (req, res) => {
+    const { user_id, token, source } = req.body;
+    if (!user_id) return res.status(400).json({ status: 'error', message: 'user_id is required' });
+    if (!token && !source) return res.status(400).json({ status: 'error', message: 'token or source is required' });
+
+    const conn = await pool.getConnection();
+    try {
+        const [userRows] = await conn.query('SELECT * FROM user_profile WHERE user_id = ?', [user_id]);
+        if (!userRows.length) {
+            conn.release();
+            return res.status(404).json({ status: 'error', message: 'User not found' });
+        }
+        const user = userRows[0];
+        const amount = 12900; //129 บาท
+        const returnUri = `http://localhost:5173/subscription?payment=pending&user_id=${user_id}`;
+
+        const chargeParams = {
+            amount,
+            currency: 'thb',
+            metadata: { user_id: String(user_id), plan: 'PRO_MONTHLY' }
+        };
+
+        // สร้าง/อัปเดต Omise Customer (เก็บบัตรไว้สำหรับ recurring)
+        if (token) {
+            let customerId = user.omise_customer_id;
+            if (!customerId) {
+                const customer = await omise.customers.create({
+                    email: user.email,
+                    description: `Punthai User: ${user.user_name}`,
+                    card: token
+                });
+                customerId = customer.id;
+                await conn.query('UPDATE user_profile SET omise_customer_id = ? WHERE user_id = ?', [customerId, user_id]);
+            } else {
+                await omise.customers.update(customerId, { card: token });
+            }
+            chargeParams.customer = customerId;
+        } else if (source) {
+            chargeParams.source = source;
+            chargeParams.return_uri = returnUri;
+        }
+
+        const charge = await omise.charges.create(chargeParams);
+        const paymentMethod = charge.source?.type || 'credit_card';
+
+        if (charge.status === 'successful' || (charge.authorized && !charge.authorize_uri)) {
+            const now = new Date();
+            const endDate = new Date(now);
+            endDate.setMonth(endDate.getMonth() + 1);
+            const nextBilling = new Date(endDate);
+
+            await conn.query(
+                `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
+                [now, endDate, nextBilling, user_id]
+            );
+            await conn.query(
+                `INSERT INTO payment_logs (user_id, omise_charge_id, amount_paid, package_selected, status, payment_method) VALUES (?, ?, ?, ?, ?, ?)`,
+                [user_id, charge.id, 129.00, 'PRO_MONTHLY', 'successful', paymentMethod]
+            );
+            await conn.query(
+                `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [user_id, charge.id, 129.00, now, endDate, 'successful', paymentMethod]
+            );
+
+            // สร้าง Omise Schedule สำหรับ recurring (เฉพาะบัตรเครดิต)
+            if (token && user.omise_customer_id || chargeParams.customer) {
+                try {
+                    const scheduleEnd = new Date();
+                    scheduleEnd.setFullYear(scheduleEnd.getFullYear() + 10);
+
+                    const schedule = await omise.schedules.create({
+                        every: 1,
+                        period: 'month',
+                        start_date: endDate.toISOString().split('T')[0],
+                        end_date: scheduleEnd.toISOString().split('T')[0],
+                        charge: {
+                            amount: amount,
+                            currency: 'thb',
+                            customer: chargeParams.customer,
+                            metadata: { user_id: String(user_id), plan: 'PRO_MONTHLY' }
+                        }
+                    });
+                    await conn.query('UPDATE user_profile SET omise_schedule_id = ? WHERE user_id = ?', [schedule.id, user_id]);
+                } catch (schedErr) {
+                    console.error('Schedule creation failed (non-blocking):', schedErr.message);
+                }
+            }
+
+            const [updatedUser] = await conn.query('SELECT * FROM user_profile WHERE user_id = ?', [user_id]);
+            conn.release();
+            return res.json({ status: 'success', charge_id: charge.id, user: updatedUser[0] });
+        }
+
+        if (charge.authorize_uri) {
+            await conn.query(
+                `INSERT INTO payment_logs (user_id, omise_charge_id, amount_paid, package_selected, status, payment_method) VALUES (?, ?, ?, ?, ?, ?)`,
+                [user_id, charge.id, 129.00, 'PRO_MONTHLY', 'pending', paymentMethod]
+            );
+            conn.release();
+            return res.json({ status: 'redirect', authorize_uri: charge.authorize_uri, charge_id: charge.id });
+        }
+
+        await conn.query(
+            `INSERT INTO payment_logs (user_id, omise_charge_id, amount_paid, package_selected, status, payment_method) VALUES (?, ?, ?, ?, ?, ?)`,
+            [user_id, charge.id, 129.00, 'PRO_MONTHLY', charge.status, paymentMethod]
+        );
+        conn.release();
+        return res.status(400).json({ status: 'error', message: 'การชำระเงินไม่สำเร็จ', failure_code: charge.failure_code });
+    } catch (err) {
+        conn.release();
+        console.error('Create charge error:', err);
+        res.status(500).json({ status: 'error', message: err.message || 'Payment processing failed' });
+    }
+});
+// 3. POST Omise Webhook
+app.post('/api/webhook/omise', async (req, res) => {
+    const event = req.body;
+    if (!event || !event.data) return res.status(200).send('OK');
+
+    const conn = await pool.getConnection();
+    try {
+        // บันทึกทุก event ลง omise_webhook_logs
+        await conn.query(
+            `INSERT INTO omise_webhook_logs (event_key, event_id, object_id, data) VALUES (?, ?, ?, ?)`,
+            [event.key || '', event.id || null, event.data?.id || null, JSON.stringify(event)]
+        );
+
+        if (event.key === 'charge.complete') {
+            const charge = event.data;
+            const chargeId = charge.id;
+            const userId = charge.metadata?.user_id;
+
+            // อัปเดต payment_logs ถ้ามี
+            const [logRows] = await conn.query('SELECT * FROM payment_logs WHERE omise_charge_id = ?', [chargeId]);
+
+            if (charge.status === 'successful') {
+                if (logRows.length) {
+                    await conn.query('UPDATE payment_logs SET status = ? WHERE omise_charge_id = ?', ['successful', chargeId]);
+                }
+
+                // หา user_id จาก payment_logs หรือ metadata
+                const targetUserId = logRows.length ? logRows[0].user_id : (userId ? parseInt(userId) : null);
+
+                if (targetUserId) {
+                    const now = new Date();
+                    const endDate = new Date(now);
+                    endDate.setMonth(endDate.getMonth() + 1);
+                    const nextBilling = new Date(endDate);
+
+                    await conn.query(
+                        `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
+                        [now, endDate, nextBilling, targetUserId]
+                    );
+
+                    // บันทึกลง subscription_history
+                    await conn.query(
+                        `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [targetUserId, chargeId, 129.00, now, endDate, 'successful', charge.source?.type || 'credit_card']
+                    );
+
+                    // ถ้าเป็น recurring charge จาก schedule แต่ไม่มี payment_logs → เพิ่มให้
+                    if (!logRows.length) {
+                        await conn.query(
+                            `INSERT INTO payment_logs (user_id, omise_charge_id, amount_paid, package_selected, status, payment_method) VALUES (?, ?, ?, ?, ?, ?)`,
+                            [targetUserId, chargeId, 129.00, 'PRO_MONTHLY', 'successful', charge.source?.type || 'credit_card']
+                        );
+                    }
+                }
+            } else if (charge.status === 'failed') {
+                if (logRows.length) {
+                    await conn.query('UPDATE payment_logs SET status = ? WHERE omise_charge_id = ?', ['failed', chargeId]);
+                }
+                // ถ้า recurring charge fail → บันทึกไว้
+                const targetUserId = logRows.length ? logRows[0].user_id : (userId ? parseInt(userId) : null);
+                if (targetUserId) {
+                    const now = new Date();
+                    const endDate = new Date(now);
+                    endDate.setMonth(endDate.getMonth() + 1);
+                    await conn.query(
+                        `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [targetUserId, chargeId, 129.00, now, endDate, 'failed', charge.source?.type || 'credit_card']
+                    );
+                }
+            }
+        }
+
+        conn.release();
+        res.status(200).send('OK');
+    } catch (err) {
+        conn.release();
+        console.error('Webhook error:', err);
+        res.status(200).send('OK');
+    }
+});
+
+// 4. GET check payment status (for polling after redirect)
+app.get('/api/subscription/check-payment/:chargeId', async (req, res) => {
+    const { chargeId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query('SELECT * FROM payment_logs WHERE omise_charge_id = ?', [chargeId]);
+        if (!rows.length) {
+            conn.release();
+            return res.status(404).json({ status: 'error', message: 'Payment not found' });
+        }
+
+        const log = rows[0];
+        if (log.status === 'successful') {
+            const [userRows] = await conn.query('SELECT * FROM user_profile WHERE user_id = ?', [log.user_id]);
+            conn.release();
+            return res.json({ status: 'success', payment_status: 'successful', user: userRows[0] });
+        }
+
+        const charge = await omise.charges.retrieve(chargeId);
+        if (charge.status === 'successful' && log.status !== 'successful') {
+            const now = new Date();
+            const endDate = new Date(now);
+            endDate.setMonth(endDate.getMonth() + 1);
+
+            await conn.query('UPDATE payment_logs SET status = ? WHERE omise_charge_id = ?', ['successful', chargeId]);
+            await conn.query(
+                `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ? WHERE user_id = ?`,
+                [now, endDate, log.user_id]
+            );
+
+            const [updatedUser] = await conn.query('SELECT * FROM user_profile WHERE user_id = ?', [log.user_id]);
+            conn.release();
+            return res.json({ status: 'success', payment_status: 'successful', user: updatedUser[0] });
+        }
+
+        conn.release();
+        res.json({ status: 'success', payment_status: charge.status, failure_code: charge.failure_code });
+    } catch (err) {
+        console.error('Check payment error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+
+
+// ดูประวัติ subscription ทุกรอบบิล
+app.get('/api/subscription/history/:userId', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            'SELECT * FROM subscription_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 24',
+            [userId]
+        );
+        conn.release();
+        res.json({ status: 'success', history: rows });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ยกเลิก subscription (หยุด recurring + เปลี่ยนสถานะเมื่อหมดรอบ)
+app.post('/api/subscription/cancel', async (req, res) => {
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ status: 'error', message: 'user_id is required' });
+
+    const conn = await pool.getConnection();
+    try {
+        const [userRows] = await conn.query('SELECT * FROM user_profile WHERE user_id = ?', [user_id]);
+        if (!userRows.length) { conn.release(); return res.status(404).json({ status: 'error', message: 'User not found' }); }
+        const user = userRows[0];
+
+        // ยกเลิก Omise Schedule ถ้ามี
+        if (user.omise_schedule_id) {
+            try {
+                await omise.schedules.destroy(user.omise_schedule_id);
+            } catch (e) {
+                console.error('Destroy schedule error (non-blocking):', e.message);
+            }
+        }
+
+        // ไม่เปลี่ยนเป็น STANDARD ทันที — ให้ใช้ได้จนหมดรอบ
+        await conn.query(
+            'UPDATE user_profile SET omise_schedule_id = NULL, next_billing_date = NULL WHERE user_id = ?',
+            [user_id]
+        );
+
+        conn.release();
+        res.json({
+            status: 'success',
+            message: 'ยกเลิกการต่ออายุอัตโนมัติแล้ว ยังใช้ PRO ได้ถึง ' + (user.subscription_end_date ? new Date(user.subscription_end_date).toLocaleDateString('th-TH') : 'สิ้นรอบปัจจุบัน')
+        });
+    } catch (err) {
+        conn.release();
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// Daily check: ปรับ user ที่หมดอายุแล้วไม่ได้ต่อกลับเป็น STANDARD (เรียกผ่าน cron หรือ manual)
+app.post('/api/subscription/check-expired', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        const [expired] = await conn.query(
+            `UPDATE user_profile SET subscription_status = 'STANDARD' WHERE subscription_status = 'PRO' AND subscription_end_date < NOW() AND omise_schedule_id IS NULL`
+        );
+        conn.release();
+        res.json({ status: 'success', updated: expired.affectedRows });
+    } catch (err) {
+        conn.release();
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+// ================= END SUBSCRIPTION & PAYMENT =================
 
 
 const PORT = process.env.PORT || 3000;

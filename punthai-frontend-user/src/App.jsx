@@ -16,6 +16,8 @@ import { Profile } from './Profile';
 import { EditProfile } from './EditProfile';
 import MarketPlanning from './MarketPlanning';
 import ContentOnline from './ContentOnline';
+import Subscription from './Subscription';
+import { Settings } from './Settings';
 
 // หน้าชั่วคราว
 const Shopping = () => <h2 style={{marginTop: '100px', textAlign: 'center'}}>Shopping Page</h2>;
@@ -36,7 +38,9 @@ function App() {
                       location.pathname === '/create-logo' ||
                       location.pathname === '/result'||
                       location.pathname === '/result-logo'||
-                      location.pathname === '/profile';
+                      location.pathname === '/profile' ||
+                      location.pathname === '/edit_profile' ||
+                      location.pathname === '/settings';
 
 
 
@@ -48,7 +52,7 @@ function App() {
         <Navbar 
           user={user} 
           onOpenLogin={() => setShowAuth(true)} 
-          onLogout={() => setUser(null)}
+          onLogout={() => { setUser(null); localStorage.removeItem('user'); }}
         />
       )}
 
@@ -61,10 +65,12 @@ function App() {
         <Route path="/result-logo" element={<ResultLogo />} />
         <Route path="/result" element={<Result />} />
         <Route path="/product" element={<Product />} /> 
-        <Route path="/profile" element={<Profile user={user} />} />
+        <Route path="/profile" element={<Profile user={user} setUser={setUser} />} />
         <Route path="/edit_profile" element={<EditProfile user={user} setUser={setUser} />} />
         <Route path="/market-planning" element={<MarketPlanning user={user} />} />
         <Route path="/content-online" element={<ContentOnline user={user} />} />
+        <Route path="/subscription" element={<Subscription user={user} setUser={setUser} />} />
+        <Route path="/settings" element={<Settings user={user} setUser={setUser} />} />
         {/* <Route path="/shopping" element={<Shopping />} />
         <Route path="/about" element={<About />} /> */}
       </Routes>
@@ -72,7 +78,7 @@ function App() {
       {/* แสดง Popup เมื่อ showAuth เป็น true */}
       {showAuth && (
         <Auth 
-          onLoginSuccess={(userData) => setUser(userData)} 
+          onLoginSuccess={(userData) => { setUser(userData); localStorage.setItem('user', JSON.stringify(userData)); }}
           onClose={() => setShowAuth(false)} 
         />
       )}

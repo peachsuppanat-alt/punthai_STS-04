@@ -1,0 +1,142 @@
+.pro-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: proModalFadeIn 0.2s ease;
+}
+
+@keyframes proModalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.pro-modal-content {
+    background: #fff;
+    border-radius: 16px;
+    padding: 36px 32px;
+    max-width: 420px;
+    width: 90%;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    animation: proModalSlideUp 0.3s ease;
+}
+
+@keyframes proModalSlideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.pro-modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #9ca3af;
+    transition: color 0.2s;
+}
+
+.pro-modal-close:hover {
+    color: #374151;
+}
+
+.pro-modal-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fff3ed, #ffe4d6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    color: #d35325;
+}
+
+.pro-modal-title {
+    font-family: 'Bai Jamjuree', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 8px;
+}
+
+.pro-modal-desc {
+    font-family: 'Bai Jamjuree', sans-serif;
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0 0 24px;
+    line-height: 1.5;
+}
+
+.pro-modal-benefits {
+    background: #fafafa;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    text-align: left;
+}
+
+.pro-modal-benefit-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-family: 'Bai Jamjuree', sans-serif;
+    font-size: 13px;
+    color: #374151;
+}
+
+.pro-modal-benefit-item iconify-icon {
+    color: #d35325;
+    flex-shrink: 0;
+}
+
+.pro-modal-upgrade-btn {
+    width: 100%;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #d35325, #f09060);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Bai Jamjuree', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.pro-modal-upgrade-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(211, 83, 37, 0.35);
+}
+
+.pro-modal-cancel-btn {
+    width: 100%;
+    padding: 10px;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-family: 'Bai Jamjuree', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: color 0.2s;
+}
+
+.pro-modal-cancel-btn:hover {
+    color: #6b7280;
+}

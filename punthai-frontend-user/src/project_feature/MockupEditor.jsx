@@ -5,6 +5,8 @@ import html2canvas from 'html2canvas';
 import { loadLogoTransparent } from './logoUtils';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
+import { getUserFromStorage, isProUser } from '../utils/subscriptionGuard';
+import ProUpgradeModal from '../components/ProUpgradeModal';
 
 const API = 'http://localhost:3000';
 
@@ -117,6 +119,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     const [isExporting, setIsExporting] = useState(false);
     const [savedMockupId, setSavedMockupId] = useState(null);
     const [saveMsg, setSaveMsg] = useState('');
+    const [showProModal, setShowProModal] = useState(false);
 
     // AI background state
     const [aiPrompt, setAiPrompt] = useState('');
@@ -1040,13 +1043,15 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                             style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
                             <iconify-icon icon="mdi:image-outline" style={{verticalAlign:'middle'}}></iconify-icon> PNG
                         </button>
-                        <button onClick={handleExportPdf} disabled={isExporting}
-                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
+                        <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportPdf(); }} disabled={isExporting}
+                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: isProUser(getUserFromStorage()) ? C.text : '#ccc' }}>
                             <iconify-icon icon="mdi:file-pdf-box" style={{verticalAlign:'middle'}}></iconify-icon> PDF
+                            {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="12" style={{verticalAlign:'middle', marginLeft: 2, color: '#d35325'}}></iconify-icon>}
                         </button>
-                        <button onClick={handleExportAi} disabled={isExporting}
-                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
+                        <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportAi(); }} disabled={isExporting}
+                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: isProUser(getUserFromStorage()) ? C.text : '#ccc' }}>
                             <iconify-icon icon="mdi:adobe" style={{verticalAlign:'middle'}}></iconify-icon> AI
+                            {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="12" style={{verticalAlign:'middle', marginLeft: 2, color: '#d35325'}}></iconify-icon>}
                         </button>
                     </div>
                     <div style={{ fontSize: 10, color: C.sub, textAlign: 'center' }}>PDF/AI = print-ready, crop marks, fold lines</div>
@@ -1266,6 +1271,8 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                     </div>
                 </div>
             )}
+
+            <ProUpgradeModal isOpen={showProModal} onClose={() => setShowProModal(false)} feature="download" />
         </div>
     );
 }
