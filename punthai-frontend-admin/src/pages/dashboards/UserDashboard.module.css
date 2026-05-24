@@ -1,0 +1,39 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.full {
+  grid-column: 1 / -1;
+}
+
+.quotaLegend {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: #fdf8f0;
+  border-radius: var(--radius-md);
+  border: 1px solid #f0e6d4;
+}
+
+.quotaInfo {
+  display: flex;
+  gap: var(--spacing-lg);
+  font-size: 13px;
+  color: #666;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .quotaLegend {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+}

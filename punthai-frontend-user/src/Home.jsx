@@ -21,6 +21,7 @@ const Home = ({ user }) => {
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [editProjectId, setEditProjectId] = useState(null);
   const [editProjectName, setEditProjectName] = useState('');
+  const [completions, setCompletions] = useState({});
 
   useEffect(() => {
     if (user) {
@@ -32,8 +33,20 @@ const Home = ({ user }) => {
           }
         })
         .catch(err => console.error("Fetch projects error:", err));
+
+      fetch(`http://localhost:3000/api/users/${user.user_id}/completions`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success') {
+            const map = {};
+            data.projects.forEach(p => { map[p.project_id] = p.percentage; });
+            setCompletions(map);
+          }
+        })
+        .catch(err => console.error("Fetch completions error:", err));
     } else {
-      setProjects([]); 
+      setProjects([]);
+      setCompletions({});
     }
   }, [user]);
 
@@ -214,9 +227,23 @@ return (
                 </div>
 
                 <h3>{proj.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ'}</h3>
-                <span className={`status-badge ${proj.status === 'ยังไม่ได้เริ่ม' ? 'pending' : 'active'}`}>
-                  {proj.status || 'ยังไม่ได้เริ่ม'}
-                </span>
+                <div style={{ width: '100%', padding: '0 15px', marginTop: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#888' }}>ความสำเร็จ</span>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: (completions[proj.project_id] || 0) >= 75 ? '#4CAF50' : '#d75a2a' }}>
+                      {completions[proj.project_id] || 0}%
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: '#f0f0f0', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${completions[proj.project_id] || 0}%`,
+                      height: '100%',
+                      background: (completions[proj.project_id] || 0) >= 75 ? '#4CAF50' : (completions[proj.project_id] || 0) >= 40 ? '#FF9800' : '#d75a2a',
+                      borderRadius: '3px',
+                      transition: 'width 0.8s ease-in-out'
+                    }} />
+                  </div>
+                </div>
               </div>
             ))}
           </div>

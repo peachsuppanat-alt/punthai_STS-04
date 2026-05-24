@@ -28,6 +28,25 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/uploads', express.static('uploads'));
 
+// Middleware: track last_active_at สำหรับทุก request ที่มี user_id
+const activeUserCache = new Map(); // เก็บ cache ไม่ให้ UPDATE ถี่เกินไป
+app.use((req, res, next) => {
+    const userId = req.body?.user_id || req.params?.user_id;
+    if (userId && !isNaN(userId) && parseInt(userId) > 0 && !req.path.startsWith('/api/admin')) {
+        const now = Date.now();
+        const lastUpdate = activeUserCache.get(parseInt(userId)) || 0;
+        if (now - lastUpdate > 60000) { // update ไม่เกิน 1 ครั้ง/นาที/user
+            activeUserCache.set(parseInt(userId), now);
+            pool.getConnection().then(conn => {
+                conn.query('UPDATE user_profile SET last_active_at = NOW() WHERE user_id = ?', [userId])
+                    .catch(() => {}) // ignore if column doesn't exist yet
+                    .finally(() => conn.release());
+            }).catch(() => {});
+        }
+    }
+    next();
+});
+
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
@@ -149,6 +168,12 @@ app.post('/api/login', async (req, res) => {
                 }
             }
 
+            if (validPassword) {
+                // อัปเดต last_active_at เมื่อ login สำเร็จ
+                try {
+                    await connection.query('UPDATE user_profile SET last_active_at = NOW() WHERE user_id = ?', [user.user_id]);
+                } catch (e) { /* column อาจยังไม่มี */ }
+            }
             connection.release();
 
             if (validPassword) {
@@ -183,8 +208,12 @@ app.post('/api/auth/google', async (req, res) => {
         const [users] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
 
         if (users.length > 0) {
-            // 🟢 ถ้ามีบัญชีอยู่แล้ว ให้ อัปเดต รูปโปรไฟล์จาก Google เข้าไปใหม่
-            await connection.query('UPDATE user_profile SET google_id = ?, image_profile = ? WHERE email = ?', [googleId, picture, email]);
+            // 🟢 ถ้ามีบัญชีอยู่แล้ว ให้ อัปเดต รูปโปรไฟล์จาก Google + last_active_at
+            try {
+                await connection.query('UPDATE user_profile SET google_id = ?, image_profile = ?, last_active_at = NOW() WHERE email = ?', [googleId, picture, email]);
+            } catch (e) {
+                await connection.query('UPDATE user_profile SET google_id = ?, image_profile = ? WHERE email = ?', [googleId, picture, email]);
+            }
             const [updatedUser] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
             connection.release();
             return res.json({ status: 'success', message: 'เข้าสู่ระบบด้วย Google สำเร็จ', user: updatedUser[0] });
@@ -358,6 +387,96 @@ app.get('/api/projects/:projectId/selected-assets', async (req, res) => {
     }
 });
 
+// ================= PROJECT COMPLETION % =================
+
+app.get('/api/projects/:projectId/completion', async (req, res) => {
+    const { projectId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        const [projRows] = await connection.query('SELECT brand_name, color_id, font_id, image_logo FROM project WHERE project_id = ?', [projectId]);
+        if (projRows.length === 0) {
+            connection.release();
+            return res.status(404).json({ status: 'error', message: 'Project not found' });
+        }
+        const proj = projRows[0];
+
+        const [productRows] = await connection.query('SELECT product_id, package_id FROM brand_product WHERE project_id = ?', [projectId]);
+        const [labelRows] = await connection.query('SELECT label_id FROM label_design WHERE project_id = ? LIMIT 1', [projectId]);
+        const [mockupRows] = await connection.query("SELECT mockup_id FROM mockup_design WHERE project_id = ? AND status = 'exported' LIMIT 1", [projectId]);
+        connection.release();
+
+        const hasName = !!(proj.brand_name && proj.brand_name.trim() !== '');
+        const hasColor = !!proj.color_id;
+        const hasFont = !!proj.font_id;
+        const hasLogo = !!(proj.image_logo && proj.image_logo.trim() !== '');
+        const hasProduct = productRows.length > 0;
+        const hasPackaging = productRows.some(p => p.package_id != null);
+        const hasLabel = labelRows.length > 0;
+        const hasMockupExport = mockupRows.length > 0;
+
+        let percentage = 0;
+        if (hasName) percentage += 15;
+        if (hasColor) percentage += 15;
+        if (hasFont) percentage += 15;
+        if (hasLogo) percentage += 30;
+        if (hasProduct) percentage += 10;
+        if (hasPackaging) percentage += 5;
+        if (hasLabel) percentage += 5;
+        if (hasMockupExport) percentage += 5;
+
+        res.json({ status: 'success', percentage, details: { hasName, hasColor, hasFont, hasLogo, hasProduct, hasPackaging, hasLabel, hasMockupExport } });
+    } catch (err) {
+        console.error("Completion calc error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+app.get('/api/users/:userId/completions', async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        const [projects] = await connection.query(`
+            SELECT p.project_id, p.brand_name, p.color_id, p.font_id, p.image_logo,
+                (SELECT COUNT(*) FROM brand_product bp WHERE bp.project_id = p.project_id) AS product_count,
+                (SELECT COUNT(*) FROM brand_product bp WHERE bp.project_id = p.project_id AND bp.package_id IS NOT NULL) AS packaging_count,
+                (SELECT COUNT(*) FROM label_design ld WHERE ld.project_id = p.project_id) AS label_count,
+                (SELECT COUNT(*) FROM mockup_design md WHERE md.project_id = p.project_id AND md.status = 'exported') AS mockup_export_count
+            FROM project p
+            WHERE p.user_id = ?
+            ORDER BY p.project_id DESC
+        `, [userId]);
+        connection.release();
+
+        const result = projects.map(proj => {
+            const hasName = !!(proj.brand_name && proj.brand_name.trim() !== '');
+            const hasColor = !!proj.color_id;
+            const hasFont = !!proj.font_id;
+            const hasLogo = !!(proj.image_logo && proj.image_logo.trim() !== '');
+            const hasProduct = proj.product_count > 0;
+            const hasPackaging = proj.packaging_count > 0;
+            const hasLabel = proj.label_count > 0;
+            const hasMockupExport = proj.mockup_export_count > 0;
+
+            let percentage = 0;
+            if (hasName) percentage += 15;
+            if (hasColor) percentage += 15;
+            if (hasFont) percentage += 15;
+            if (hasLogo) percentage += 30;
+            if (hasProduct) percentage += 10;
+            if (hasPackaging) percentage += 5;
+            if (hasLabel) percentage += 5;
+            if (hasMockupExport) percentage += 5;
+
+            return { project_id: proj.project_id, percentage, details: { hasName, hasColor, hasFont, hasLogo, hasProduct, hasPackaging, hasLabel, hasMockupExport } };
+        });
+
+        res.json({ status: 'success', projects: result });
+    } catch (err) {
+        console.error("User completions error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
 app.delete('/api/projects/:id', async (req, res) => {
     const projectId = req.params.id;
     try {
@@ -407,6 +526,19 @@ app.post('/api/brand_product', upload.single('image_product'), async (req, res) 
 app.post('/api/generate-brand-dna', async (req, res) => {
     const { project_id, user_id, business_type, archetype, audience_data } = req.body;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'Missing project_id' });
+
+    if (user_id) {
+        const genCheck = await checkGenerationLimit(user_id, 'text');
+        if (!genCheck.allowed) {
+            return res.status(403).json({
+                status: 'limit_reached',
+                message: genCheck.isPro
+                    ? 'คุณใช้สิทธิ์สร้างข้อความครบ 80 ครั้งในเดือนนี้แล้ว'
+                    : 'คุณใช้สิทธิ์สร้างข้อความฟรีครบ 20 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO',
+                ...genCheck
+            });
+        }
+    }
 
     try {
         const connection = await pool.getConnection();
@@ -502,6 +634,9 @@ ${productsText}
             [user_id || 0, project_id, 'GENERATE_BRAND_DNA_FULL', prompt, cleanedText]);
 
         connection.release();
+
+        if (user_id) await trackGeneration(user_id, 'brand_dna', project_id, 'text');
+        logGeminiUsage({ userId: user_id, projectId: project_id, endpoint: '/api/generate-brand-dna', usageType: 'text', modelName: 'gemini-2.5-flash', feature: 'brand_dna', promptSent: prompt, responseSummary: cleanedText?.substring(0, 500) });
 
         res.json({
             status: 'success',
@@ -636,6 +771,7 @@ app.get('/api/recommend-assets/:projectId', async (req, res) => {
         }
 
         connection.release();
+        logGeminiUsage({ userId: null, projectId: projectId, endpoint: '/api/recommend-assets', usageType: 'text', modelName: 'gemini-2.5-flash', feature: 'recommend_assets', promptSent: prompt, responseSummary: cleanedText?.substring(0, 500) });
         res.json({
             status: 'success', cached: false,
             color: { id: color_concept_id, color_id, ...c },
@@ -696,6 +832,20 @@ app.get('/api/brand-dna-full/:projectId', async (req, res) => {
 // ================= API Create Concept (Brand Name) =================
 app.post('/api/generate-brand-names', async (req, res) => {
     const { project_id, user_id, product, category, benefit, target, tags, special, use_dna } = req.body;
+
+    if (user_id) {
+        const genCheck = await checkGenerationLimit(user_id, 'text');
+        if (!genCheck.allowed) {
+            return res.status(403).json({
+                status: 'limit_reached',
+                message: genCheck.isPro
+                    ? 'คุณใช้สิทธิ์สร้างข้อความครบ 80 ครั้งในเดือนนี้แล้ว'
+                    : 'คุณใช้สิทธิ์สร้างข้อความฟรีครบ 20 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO',
+                ...genCheck
+            });
+        }
+    }
+
     try {
         const connection = await pool.getConnection();
         let finalTarget = target;
@@ -733,6 +883,8 @@ app.post('/api/generate-brand-names', async (req, res) => {
             [project_id, 'BRAND_NAME', prompt, cleanedText, 'gemini-2.5-flash']
         );
         connection.release();
+        if (user_id) await trackGeneration(user_id, 'brand_names', project_id, 'text');
+        logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/generate-brand-names', usageType: 'text', modelName: 'gemini-2.5-flash', feature: 'brand_names', promptSent: prompt, responseSummary: cleanedText?.substring(0, 500) });
         res.json({ status: 'success', message: 'สร้างชื่อสำเร็จ' });
     } catch (err) {
         console.error("Generate Name Error:", err);
@@ -773,9 +925,25 @@ app.put('/api/brand-names/select/:conceptId', async (req, res) => {
         const connection = await pool.getConnection();
         await connection.query("UPDATE name_concept SET is_selected = FALSE WHERE project_id = ?", [project_id]);
         await connection.query("UPDATE name_concept SET is_selected = TRUE WHERE concept_id = ?", [concept_id]);
-        await connection.query("UPDATE project SET name_concept_id = ? WHERE project_id = ?", [concept_id, project_id]);
+        const [rows] = await connection.query("SELECT brand_name FROM name_concept WHERE concept_id = ?", [concept_id]);
+        const selectedName = rows[0]?.brand_name || '';
+        await connection.query("UPDATE project SET name_concept_id = ?, brand_name = ? WHERE project_id = ?", [concept_id, selectedName, project_id]);
         connection.release();
         res.json({ status: 'success' });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+app.put('/api/projects/:projectId/brand-name', async (req, res) => {
+    const { brand_name } = req.body;
+    const projectId = req.params.projectId;
+    if (!brand_name || !brand_name.trim()) return res.status(400).json({ status: 'error', message: 'กรุณาระบุชื่อแบรนด์' });
+    try {
+        const connection = await pool.getConnection();
+        await connection.query("UPDATE project SET brand_name = ? WHERE project_id = ?", [brand_name.trim(), projectId]);
+        connection.release();
+        res.json({ status: 'success', brand_name: brand_name.trim() });
     } catch (err) {
         res.status(500).json({ status: 'error', message: 'Database error' });
     }
@@ -1056,11 +1224,11 @@ const downloadImage = async (url, filepath) => {
     });
 };
 
-/// create logo
-app.post('/api/generate-logo', async (req, res) => {
-    const { project_id, user_id, brand_name, brand_value, products, styles, details, negative_prompt, use_imported_color, use_imported_font, target_audience } = req.body;
+/// create logo (SSE streaming + retry)
+app.get('/api/generate-logo', async (req, res) => {
+    const { project_id, user_id, brand_name, brand_value, products, styles, details, negative_prompt, use_imported_color, use_imported_font, target_audience } = req.query;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'Project ID is required' });
-    const finalUserId = (!user_id || user_id === 0) ? null : user_id;
+    const finalUserId = (!user_id || Number(user_id) === 0) ? null : Number(user_id);
 
     if (finalUserId) {
         const genCheck = await checkGenerationLimit(finalUserId);
@@ -1075,11 +1243,23 @@ app.post('/api/generate-logo', async (req, res) => {
         }
     }
 
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    });
+    const sendEvent = (event, data) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
     try {
+        sendEvent('progress', { step: 'preparing', message: 'กำลังเตรียมข้อมูลแบรนด์...' });
+
         const connection = await pool.getConnection();
         let colorText = "";
         let fontText = "";
-        if (use_imported_color) {
+        if (use_imported_color === 'true' || use_imported_color === true) {
             const [colorRows] = await connection.query(`
                 SELECT c.* FROM color_concept cc
                 JOIN color c ON cc.color_id = c.color_id
@@ -1091,7 +1271,7 @@ app.post('/api/generate-logo', async (req, res) => {
                 colorText = `STRICT COLOR PALETTE: You MUST strictly use ONLY these exact color hex codes: ${hexColors}.`;
             }
         }
-        if (use_imported_font) {
+        if (use_imported_font === 'true' || use_imported_font === true) {
             const [fontRows] = await connection.query(`
                 SELECT f.* FROM font_concept fc
                 JOIN font f ON fc.font_id = f.font_id
@@ -1103,18 +1283,14 @@ app.post('/api/generate-logo', async (req, res) => {
         }
         connection.release();
 
-        // รับค่า style แบบ String (ค่าเดียว) จาก Frontend
-        const selectedStyle = styles;
+        sendEvent('progress', { step: 'prompt', message: 'กำลังสร้าง prompt สำหรับ AI...' });
 
-        // ============================================================================
-        // ADVANCED PROMPT ENGINEERING (Dynamic Style Injection)
-        // ============================================================================
+        const selectedStyle = styles;
 
         let styleDirective = "";
         let typographyDirective = `The logo MUST clearly display the exact text: "${brand_name}". Understand the exact structure, anatomy, and spelling of the word "${brand_name}" and render the characters perfectly.`;
         let specificNegative = "";
 
-        // กำหนดกฎการวาดภาพตามสไตล์ที่ผู้ใช้เลือก
         switch (selectedStyle) {
             case 'wordmark':
                 styleDirective = "Format: Wordmark / Logotype. The logo consists EXCLUSIVELY of typography. NO standalone icons, NO mascots, NO complex graphics. Focus entirely on custom, beautiful, readable font design representing the brand.";
@@ -1144,49 +1320,62 @@ app.post('/api/generate-logo', async (req, res) => {
         }
 
         let prompt = `You are a Master Brand Strategist and Expert Logo Designer. Your task is to deeply understand the brand's context and conceptualize a logo.\n\n`;
-
         prompt += `[BRAND CONTEXT & CONCEPT]\n`;
         prompt += `- Brand Name: EXACTLY "${brand_name}"\n`;
         if (brand_value) prompt += `- Core Value / Mission: ${brand_value}\n`;
         if (products) prompt += `- Product Type: ${products}\n`;
         if (details) prompt += `- Key Elements & Symbolism: ${details}\n`;
-
         prompt += `\n[VISUAL EXECUTION RULES]\n`;
         prompt += `- ${styleDirective}\n`;
         prompt += `- Background: Pure solid white background #FFFFFF ONLY. No gradients or transparent backgrounds.\n`;
-
         if (colorText) prompt += `- ${colorText}\n`;
         if (fontText) prompt += `- ${fontText}\n`;
-
         prompt += `\n[STRICT TYPOGRAPHY RULES]\n`;
         prompt += `${typographyDirective} DO NOT add any other words, slogans, random letters, or gibberish. The typography must blend seamlessly with the logo mark.\n`;
 
         let defaultNegative = `realistic photo, 3D render, drop shadows, gradients, color palettes, design tools, chaotic, messy, extra words, misspelled text, gibberish`;
-
         let finalNegative = negative_prompt
             ? `${negative_prompt}, ${defaultNegative}, ${specificNegative}`
             : `${defaultNegative}, ${specificNegative}`;
-
         prompt += `\n[NEGATIVE PROMPT - DO NOT DRAW]: ${finalNegative}`;
-        // ============================================================================
-        // ============================================================================
 
+        sendEvent('progress', { step: 'generating', message: 'AI กำลังวาดโลโก้ให้คุณ... อาจใช้เวลา 10-30 วินาที' });
 
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        // 🟢 เปลี่ยนชื่อโมเดลโดยเติม -preview ต่อท้ายครับ
-        const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image-preview" });
+        const model = genAI.getGenerativeModel(
+            { model: "gemini-3.1-flash-image-preview", generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } },
+            { timeout: 300000 }
+        );
 
-        // ใช้คำสั่ง generateContent สำหรับโมเดล Multi-modal
-        const result = await model.generateContent(prompt);
-
-        // ดึงไฟล์ Base64 ออกมาจาก Response ของ Gemini
         let base64Data = "";
-        const parts = result.response.candidates?.[0]?.content?.parts;
-        if (parts) {
-            for (const part of parts) {
-                if (part.inlineData && part.inlineData.data) {
-                    base64Data = part.inlineData.data;
-                    break;
+        let attempts = 0;
+        const maxAttempts = 2;
+
+        while (attempts < maxAttempts) {
+            attempts++;
+            try {
+                const result = await model.generateContent(prompt);
+                const parts = result.response.candidates?.[0]?.content?.parts;
+                if (parts) {
+                    for (const part of parts) {
+                        if (part.inlineData && part.inlineData.data) {
+                            base64Data = part.inlineData.data;
+                            break;
+                        }
+                    }
+                }
+                if (base64Data) break;
+                if (attempts < maxAttempts) {
+                    sendEvent('progress', { step: 'retrying', message: 'AI ไม่ส่งรูปกลับมา กำลังลองใหม่...' });
+                    await new Promise(r => setTimeout(r, 3000));
+                }
+            } catch (genErr) {
+                console.error(`Logo generation attempt ${attempts} failed:`, genErr.message);
+                if (attempts < maxAttempts) {
+                    sendEvent('progress', { step: 'retrying', message: 'เกิดข้อผิดพลาด กำลังลองใหม่อีกครั้ง...' });
+                    await new Promise(r => setTimeout(r, 3000));
+                } else {
+                    throw genErr;
                 }
             }
         }
@@ -1195,7 +1384,8 @@ app.post('/api/generate-logo', async (req, res) => {
             throw new Error("ระบบ AI ไม่ส่งรูปภาพกลับมา");
         }
 
-        // เซฟรูปลงโฟลเดอร์ uploads/generated/
+        sendEvent('progress', { step: 'saving', message: 'เกือบเสร็จแล้ว! กำลังบันทึกรูปภาพ...' });
+
         const fileName = `logo_${Date.now()}.png`;
         const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
         fs.writeFileSync(filePath, base64Data, 'base64');
@@ -1203,17 +1393,20 @@ app.post('/api/generate-logo', async (req, res) => {
 
         const conn2 = await pool.getConnection();
         await conn2.query(
-            "INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)",
-            [project_id, finalUserId, 'LOGO', imageUrl, prompt]
+            "INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, model_name) VALUES (?, ?, ?, ?, ?, 0, ?)",
+            [project_id, finalUserId, 'LOGO', imageUrl, prompt, 'gemini-2.5-flash']
         );
         conn2.release();
 
         if (finalUserId) await trackGeneration(finalUserId, 'logo', project_id);
+        logGeminiUsage({ userId: finalUserId, projectId: project_id, endpoint: '/api/generate-logo', usageType: 'image', modelName: 'gemini-2.5-flash', feature: 'logo', promptSent: prompt?.substring(0, 10000), responseSummary: imageUrl });
 
-        res.json({ status: 'success', image_url: imageUrl, prompt: prompt });
+        sendEvent('done', { status: 'success', image_url: imageUrl });
+        res.end();
     } catch (err) {
-        console.error("Generate Logo Error (Gemini 3.1 Flash Image):", err);
-        res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการ Generate รูปภาพด้วย Gemini 3.1' });
+        console.error("Generate Logo Error:", err);
+        sendEvent('error', { status: 'error', message: 'เกิดข้อผิดพลาดในการสร้างโลโก้: ' + (err.message || 'Unknown error') });
+        res.end();
     }
 });
 
@@ -1386,17 +1579,760 @@ app.get('/api/admin/stats/api-usage', async (req, res) => {
             GROUP BY DATE(created_at) ORDER BY date ASC
         `, [days]);
         connection.release();
-        // ส่งทั้ง 2 keys: image (ใหม่) + dalle (เก่า เพื่อ backward compat กับ frontend เดิม)
         res.json({
             status: 'success',
             gemini: geminiStats,
             image: imageStats,
-            dalle: imageStats  // 👈 alias เก่า ถ้า frontend ยังใช้ key 'dalle' อยู่
+            dalle: imageStats
         });
-        connection.release();
-        res.json({ status: 'success', gemini: geminiStats, dalle: dalleStats });
     } catch (err) {
         console.error("API Stats Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// ================= ADMIN DASHBOARD - Extended Endpoints =================
+
+// จำนวนผู้ใช้ที่ active (มี activity ใน 30 นาทีล่าสุด)
+app.get('/api/admin/users/active', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        let rows;
+        try {
+            [rows] = await connection.query(`
+                SELECT COUNT(*) as activeUsers
+                FROM user_profile
+                WHERE last_active_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+            `);
+        } catch (colErr) {
+            // fallback ถ้ายังไม่มีคอลัมน์ last_active_at
+            [rows] = await connection.query(`
+                SELECT COUNT(DISTINCT user_id) as activeUsers
+                FROM api_logs
+                WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+            `);
+        }
+        connection.release();
+        res.json({ status: 'success', active: rows[0].activeUsers });
+    } catch (err) {
+        console.error("Active Users Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// จำนวนผู้ใช้ PRO
+app.get('/api/admin/users/pro-count', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(
+            "SELECT COUNT(*) as proUsers FROM user_profile WHERE subscription_status = 'PRO'"
+        );
+        connection.release();
+        res.json({ status: 'success', proUsers: rows[0].proUsers });
+    } catch (err) {
+        console.error("Pro Count Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Token usage รวม (จาก api_logs)
+app.get('/api/admin/stats/token-usage', async (req, res) => {
+    const days = parseInt(req.query.days) || 7;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT DATE(created_at) as date, COUNT(*) as count
+            FROM api_logs
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at) ORDER BY date ASC
+        `, [days]);
+        const [totalRow] = await connection.query(`
+            SELECT COUNT(*) as total FROM api_logs
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows, total: totalRow[0].total });
+    } catch (err) {
+        console.error("Token Usage Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Text generation rate (generation_usage ที่เป็นข้อความ)
+app.get('/api/admin/stats/text-generation', async (req, res) => {
+    const days = parseInt(req.query.days) || 7;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT DATE(created_at) as date, COUNT(*) as count
+            FROM generation_usage
+            WHERE feature NOT LIKE '%image%' AND feature NOT LIKE '%dalle%' AND feature NOT LIKE '%logo%'
+              AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at) ORDER BY date ASC
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Text Gen Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Image generation rate แยกตาม model/feature
+app.get('/api/admin/stats/image-generation', async (req, res) => {
+    const days = parseInt(req.query.days) || 7;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT DATE(created_at) as date, feature, COUNT(*) as count
+            FROM generation_usage
+            WHERE (feature LIKE '%image%' OR feature LIKE '%dalle%' OR feature LIKE '%logo%')
+              AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at), feature ORDER BY date ASC
+        `, [days]);
+        connection.release();
+        const features = [...new Set(rows.map(r => r.feature))];
+        const byDate = {};
+        rows.forEach(r => {
+            const d = r.date;
+            if (!byDate[d]) byDate[d] = { date: d };
+            byDate[d][r.feature] = r.count;
+        });
+        res.json({ status: 'success', data: Object.values(byDate), features });
+    } catch (err) {
+        console.error("Image Gen Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// User analytics (สำหรับ User Dashboard tab)
+app.get('/api/admin/users/analytics', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        const [regTrend] = await connection.query(`
+            SELECT DATE_FORMAT(MIN(created_at), '%Y-%m') as month, COUNT(*) as count
+            FROM (SELECT user_id, MIN(created_at) as created_at FROM api_logs GROUP BY user_id) as first_activity
+            GROUP BY DATE_FORMAT(created_at, '%Y-%m') ORDER BY month ASC LIMIT 12
+        `);
+        const [subBreakdown] = await connection.query(`
+            SELECT subscription_status as status, COUNT(*) as count
+            FROM user_profile GROUP BY subscription_status
+        `);
+        const [topUsers] = await connection.query(`
+            SELECT u.user_id, u.user_name, u.email, u.subscription_status, COUNT(g.id) as usage_count
+            FROM user_profile u
+            LEFT JOIN generation_usage g ON u.user_id = g.user_id
+            GROUP BY u.user_id ORDER BY usage_count DESC LIMIT 10
+        `);
+        connection.release();
+        res.json({ status: 'success', regTrend, subBreakdown, topUsers });
+    } catch (err) {
+        console.error("User Analytics Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// รายชื่อ user ทั้งหมด (paginated)
+app.get('/api/admin/users', async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
+    const offset = (page - 1) * limit;
+    try {
+        const connection = await pool.getConnection();
+        let where = '';
+        const params = [];
+        if (search) {
+            where = "WHERE user_name LIKE ? OR email LIKE ?";
+            params.push(`%${search}%`, `%${search}%`);
+        }
+        const [countRows] = await connection.query(`SELECT COUNT(*) as total FROM user_profile ${where}`, params);
+        let rows;
+        try {
+            [rows] = await connection.query(
+                `SELECT user_id, user_name, email, image_profile, subscription_status, google_id,
+                        subscription_start_date, subscription_end_date,
+                        image_used, text_used, quota_reset_at
+                 FROM user_profile ${where} ORDER BY user_id DESC LIMIT ? OFFSET ?`,
+                [...params, limit, offset]
+            );
+        } catch (colErr) {
+            [rows] = await connection.query(
+                `SELECT user_id, user_name, email, image_profile, subscription_status, google_id,
+                        subscription_start_date, subscription_end_date
+                 FROM user_profile ${where} ORDER BY user_id DESC LIMIT ? OFFSET ?`,
+                [...params, limit, offset]
+            );
+        }
+        connection.release();
+        const limits = QUOTA_LIMITS;
+        const data = rows.map(u => {
+            const tier = (u.subscription_status === 'PRO' && (!u.subscription_end_date || new Date(u.subscription_end_date) > new Date())) ? 'PRO' : 'STANDARD';
+            const tl = limits[tier];
+            return {
+                ...u,
+                image_used: u.image_used || 0,
+                text_used: u.text_used || 0,
+                image_limit: tl.image,
+                text_limit: tl.text,
+                image_remaining: Math.max(0, tl.image - (u.image_used || 0)),
+                text_remaining: Math.max(0, tl.text - (u.text_used || 0)),
+                quota_period: tl.period,
+            };
+        });
+        res.json({ status: 'success', data, total: countRows[0].total, page, limit });
+    } catch (err) {
+        console.error("Users List Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+app.get('/api/admin/users/quota-summary', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        let rows;
+        try {
+            [rows] = await connection.query(`
+                SELECT user_id, user_name, email, subscription_status,
+                       subscription_end_date, image_used, text_used, quota_reset_at
+                FROM user_profile ORDER BY (image_used + text_used) DESC
+            `);
+        } catch (colErr) {
+            [rows] = await connection.query(`
+                SELECT user_id, user_name, email, subscription_status, subscription_end_date
+                FROM user_profile ORDER BY user_id DESC
+            `);
+        }
+        connection.release();
+        const limits = QUOTA_LIMITS;
+        const data = rows.map(u => {
+            const isPro = u.subscription_status === 'PRO' && (!u.subscription_end_date || new Date(u.subscription_end_date) > new Date());
+            const tier = isPro ? 'PRO' : 'STANDARD';
+            const tl = limits[tier];
+            return {
+                ...u,
+                image_used: u.image_used || 0,
+                text_used: u.text_used || 0,
+                tier,
+                image_limit: tl.image,
+                text_limit: tl.text,
+                image_remaining: Math.max(0, tl.image - (u.image_used || 0)),
+                text_remaining: Math.max(0, tl.text - (u.text_used || 0)),
+                quota_period: tl.period,
+            };
+        });
+        res.json({ status: 'success', data });
+    } catch (err) {
+        console.error("Quota Summary Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// API calls by action_type
+app.get('/api/admin/stats/api-calls', async (req, res) => {
+    const days = parseInt(req.query.days) || 7;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT action_type, COUNT(*) as count
+            FROM api_logs
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY action_type ORDER BY count DESC
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("API Calls Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Credit consumption trend
+app.get('/api/admin/stats/credit-consumption', async (req, res) => {
+    const days = parseInt(req.query.days) || 7;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT DATE(created_at) as date, action_type, COUNT(*) as count
+            FROM credit_transaction
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at), action_type ORDER BY date ASC
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Credit Consumption Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Top consumers (users ที่ใช้ API มากที่สุด)
+app.get('/api/admin/stats/top-consumers', async (req, res) => {
+    const limit = parseInt(req.query.limit) || 10;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT u.user_id, u.user_name, u.email, u.subscription_status, COUNT(a.log_id) as api_calls
+            FROM user_profile u
+            LEFT JOIN api_logs a ON u.user_id = a.user_id
+            GROUP BY u.user_id ORDER BY api_calls DESC LIMIT ?
+        `, [limit]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Top Consumers Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Feature usage breakdown
+app.get('/api/admin/stats/feature-usage', async (req, res) => {
+    const days = parseInt(req.query.days) || 7;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT feature, COUNT(*) as count
+            FROM generation_usage
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY feature ORDER BY count DESC
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Feature Usage Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// ==================== Gemini Usage Logs ====================
+// UNION query ดึงข้อมูลจาก 3 ตาราง: gemini_usage_logs, generated_history, generated_text_history
+
+const GEMINI_UNION_VIEW = `(
+    SELECT 'gemini_log' as source, user_id, endpoint, usage_type, model_name, feature, prompt_sent, response_summary, status, created_at
+    FROM gemini_usage_logs
+    UNION ALL
+    SELECT 'gen_history' as source, user_id, generation_type as endpoint, 'image' as usage_type,
+           COALESCE(model_name, 'gemini (unknown)') as model_name, generation_type as feature,
+           prompt as prompt_sent, image_url as response_summary, 'success' as status, created_at
+    FROM generated_history WHERE generation_type != 'LABEL_BG_UPLOAD'
+    UNION ALL
+    SELECT 'gen_text' as source, NULL as user_id, generation_type as endpoint, 'text' as usage_type,
+           COALESCE(model_name, 'gemini (unknown)') as model_name, generation_type as feature,
+           prompt as prompt_sent, text_result as response_summary, 'success' as status, created_at
+    FROM generated_text_history
+) combined`;
+
+// Gemini usage timeline (by day, split by usage_type)
+app.get('/api/admin/gemini/usage-timeline', async (req, res) => {
+    const days = parseInt(req.query.days) || 7;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT DATE(created_at) as date, usage_type, COUNT(*) as count
+            FROM ${GEMINI_UNION_VIEW}
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at), usage_type ORDER BY date ASC
+        `, [days]);
+        connection.release();
+        const grouped = {};
+        rows.forEach(r => {
+            const d = r.date;
+            if (!grouped[d]) grouped[d] = { date: d, text: 0, image: 0 };
+            grouped[d][r.usage_type] = r.count;
+        });
+        res.json({ status: 'success', data: Object.values(grouped) });
+    } catch (err) {
+        console.error("Gemini Timeline Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Gemini usage by model
+app.get('/api/admin/gemini/by-model', async (req, res) => {
+    const days = parseInt(req.query.days) || 30;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT model_name, usage_type, COUNT(*) as count
+            FROM ${GEMINI_UNION_VIEW}
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY model_name, usage_type ORDER BY count DESC
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Gemini By Model Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Gemini usage by feature
+app.get('/api/admin/gemini/by-feature', async (req, res) => {
+    const days = parseInt(req.query.days) || 30;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT feature, usage_type, COUNT(*) as count
+            FROM ${GEMINI_UNION_VIEW}
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY feature, usage_type ORDER BY count DESC
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Gemini By Feature Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Gemini recent logs (paginated)
+app.get('/api/admin/gemini/recent-logs', async (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT combined.user_id, u.user_name, combined.endpoint, combined.usage_type, combined.model_name,
+                   combined.feature, combined.prompt_sent, combined.response_summary, combined.status, combined.created_at, combined.source
+            FROM ${GEMINI_UNION_VIEW}
+            LEFT JOIN user_profile u ON combined.user_id = u.user_id
+            ORDER BY combined.created_at DESC LIMIT ? OFFSET ?
+        `, [limit, offset]);
+        const [countRow] = await connection.query(`SELECT COUNT(*) as total FROM ${GEMINI_UNION_VIEW}`);
+        connection.release();
+        res.json({ status: 'success', data: rows, total: countRow[0].total });
+    } catch (err) {
+        console.error("Gemini Recent Logs Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Gemini summary stats
+app.get('/api/admin/gemini/summary', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        const [total] = await connection.query(`SELECT COUNT(*) as count FROM ${GEMINI_UNION_VIEW}`);
+        const [today] = await connection.query(`SELECT COUNT(*) as count FROM ${GEMINI_UNION_VIEW} WHERE DATE(created_at) = CURDATE()`);
+        const [byType] = await connection.query(`SELECT usage_type, COUNT(*) as count FROM ${GEMINI_UNION_VIEW} GROUP BY usage_type`);
+        const [failed] = await connection.query(`SELECT COUNT(*) as count FROM ${GEMINI_UNION_VIEW} WHERE status = 'failed'`);
+        connection.release();
+        const typeMap = {};
+        byType.forEach(r => { typeMap[r.usage_type] = r.count; });
+        res.json({
+            status: 'success',
+            data: {
+                total: total[0].count,
+                today: today[0].count,
+                text: typeMap.text || 0,
+                image: typeMap.image || 0,
+                failed: failed[0].count
+            }
+        });
+    } catch (err) {
+        console.error("Gemini Summary Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Subscription signups over time
+app.get('/api/admin/subscriptions/signups', async (req, res) => {
+    const days = parseInt(req.query.days) || 30;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT DATE(created_at) as date, COUNT(*) as count
+            FROM subscription_history
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at) ORDER BY date ASC
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Signups Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Revenue
+app.get('/api/admin/subscriptions/revenue', async (req, res) => {
+    const days = parseInt(req.query.days) || 30;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT DATE(created_at) as date, SUM(amount) as revenue, COUNT(*) as transactions
+            FROM subscription_history
+            WHERE status = 'successful' AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at) ORDER BY date ASC
+        `, [days]);
+        const [totalRow] = await connection.query(`
+            SELECT COALESCE(SUM(amount), 0) as totalRevenue
+            FROM subscription_history
+            WHERE status = 'successful' AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows, totalRevenue: totalRow[0].totalRevenue });
+    } catch (err) {
+        console.error("Revenue Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Payment logs (paginated)
+app.get('/api/admin/payments', async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const status = req.query.status || '';
+    const search = req.query.search || '';
+    const offset = (page - 1) * limit;
+    try {
+        const connection = await pool.getConnection();
+        let where = [];
+        const params = [];
+        if (status) { where.push("p.status = ?"); params.push(status); }
+        if (search) { where.push("(u.user_name LIKE ? OR u.email LIKE ?)"); params.push(`%${search}%`, `%${search}%`); }
+        const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+        const [countRows] = await connection.query(
+            `SELECT COUNT(*) as total FROM payment_logs p LEFT JOIN user_profile u ON p.user_id = u.user_id ${whereClause}`, params
+        );
+        const [rows] = await connection.query(
+            `SELECT p.*, u.user_name, u.email
+             FROM payment_logs p LEFT JOIN user_profile u ON p.user_id = u.user_id
+             ${whereClause} ORDER BY p.created_at DESC LIMIT ? OFFSET ?`,
+            [...params, limit, offset]
+        );
+        connection.release();
+        res.json({ status: 'success', data: rows, total: countRows[0].total, page, limit });
+    } catch (err) {
+        console.error("Payments Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Omise webhook logs (paginated)
+app.get('/api/admin/webhooks', async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+    try {
+        const connection = await pool.getConnection();
+        const [countRows] = await connection.query("SELECT COUNT(*) as total FROM omise_webhook_logs");
+        const [rows] = await connection.query(
+            "SELECT * FROM omise_webhook_logs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            [limit, offset]
+        );
+        connection.release();
+        res.json({ status: 'success', data: rows, total: countRows[0].total, page, limit });
+    } catch (err) {
+        console.error("Webhooks Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Notifications - ส่งแจ้งเตือน
+app.post('/api/admin/notifications', async (req, res) => {
+    const { title, message, channel, target } = req.body;
+    const adminId = req.headers['x-admin-id'];
+    if (!title || !message) return res.status(400).json({ status: 'error', message: 'กรุณากรอก title และ message' });
+    try {
+        const connection = await pool.getConnection();
+        // นับ + ดึง user_id ที่จะส่ง
+        let userWhere = '';
+        if (target === 'pro') userWhere = "WHERE subscription_status = 'PRO'";
+        else if (target === 'standard') userWhere = "WHERE subscription_status = 'STANDARD'";
+        const [targetUsers] = await connection.query(`SELECT user_id FROM user_profile ${userWhere}`);
+        // บันทึก admin_notifications
+        const [result] = await connection.query(
+            `INSERT INTO admin_notifications (admin_id, title, message, channel, target, status, sent_count, sent_at)
+             VALUES (?, ?, ?, ?, ?, 'sent', ?, NOW())`,
+            [adminId || null, title, message, channel || 'web', target || 'all', targetUsers.length]
+        );
+        const notifId = result.insertId;
+        // Insert notification สำหรับแต่ละ user
+        if (targetUsers.length > 0) {
+            const values = targetUsers.map(u => [u.user_id, notifId, title, message]);
+            await connection.query(
+                `INSERT INTO user_notifications (user_id, notification_id, title, message) VALUES ?`,
+                [values]
+            );
+        }
+        connection.release();
+        res.json({ status: 'success', message: 'ส่งแจ้งเตือนสำเร็จ', notificationId: notifId, sentTo: targetUsers.length });
+    } catch (err) {
+        console.error("Notification Error:", err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// Notifications - ดูประวัติ
+app.get('/api/admin/notifications', async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+    try {
+        const connection = await pool.getConnection();
+        // ตรวจว่าตารางมีอยู่ไหม
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS admin_notifications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                admin_id INT,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                channel ENUM('web','email','both') DEFAULT 'web',
+                target ENUM('all','pro','standard') DEFAULT 'all',
+                status ENUM('draft','sent','failed') DEFAULT 'draft',
+                sent_count INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                sent_at TIMESTAMP NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `);
+        const [countRows] = await connection.query("SELECT COUNT(*) as total FROM admin_notifications");
+        const [rows] = await connection.query(
+            "SELECT * FROM admin_notifications ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            [limit, offset]
+        );
+        connection.release();
+        res.json({ status: 'success', data: rows, total: countRows[0].total, page, limit });
+    } catch (err) {
+        console.error("Get Notifications Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Package Management - รายการ packages
+app.get('/api/admin/packages', async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
+    const offset = (page - 1) * limit;
+    try {
+        const connection = await pool.getConnection();
+        let where = '';
+        const params = [];
+        if (search) { where = "WHERE p.name LIKE ? OR p.type LIKE ?"; params.push(`%${search}%`, `%${search}%`); }
+        const [countRows] = await connection.query(`SELECT COUNT(*) as total FROM packages p ${where}`, params);
+        const [rows] = await connection.query(`
+            SELECT p.*, COUNT(pm.id) as material_count
+            FROM packages p
+            LEFT JOIN package_materials pm ON p.id = pm.package_id
+            ${where}
+            GROUP BY p.id
+            ORDER BY p.created_at DESC LIMIT ? OFFSET ?
+        `, [...params, limit, offset]);
+        connection.release();
+        res.json({ status: 'success', data: rows, total: countRows[0].total, page, limit });
+    } catch (err) {
+        console.error("Packages List Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Package - ดึงรายละเอียด
+app.get('/api/admin/packages/:id', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        const [pkg] = await connection.query("SELECT * FROM packages WHERE id = ?", [req.params.id]);
+        if (!pkg.length) { connection.release(); return res.status(404).json({ status: 'error', message: 'ไม่พบ package' }); }
+        const [materials] = await connection.query(
+            "SELECT * FROM package_materials WHERE package_id = ? ORDER BY sort_order", [req.params.id]
+        );
+        for (const mat of materials) {
+            const [sizes] = await connection.query(
+                "SELECT * FROM package_material_sizes WHERE material_id = ? ORDER BY sort_order", [mat.id]
+            );
+            mat.sizes = sizes;
+        }
+        connection.release();
+        res.json({ status: 'success', data: { ...pkg[0], materials } });
+    } catch (err) {
+        console.error("Package Detail Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Package - สร้างใหม่
+app.post('/api/admin/packages', async (req, res) => {
+    const { name, type, categories, thumbnail, is_active, materials } = req.body;
+    const adminId = req.headers['x-admin-id'];
+    if (!name || !type) return res.status(400).json({ status: 'error', message: 'กรุณากรอก name และ type' });
+    try {
+        const connection = await pool.getConnection();
+        const [result] = await connection.query(
+            `INSERT INTO packages (name, type, categories, thumbnail, admin_id, is_active)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [name, type, JSON.stringify(categories || []), thumbnail || '', adminId || null, is_active !== undefined ? is_active : 1]
+        );
+        const packageId = result.insertId;
+        if (materials && Array.isArray(materials)) {
+            for (let i = 0; i < materials.length; i++) {
+                const mat = materials[i];
+                const [matResult] = await connection.query(
+                    `INSERT INTO package_materials (package_id, name, detail, sort_order, package_type)
+                     VALUES (?, ?, ?, ?, ?)`,
+                    [packageId, mat.name, mat.detail || '', mat.sort_order || i, mat.package_type || 'flat']
+                );
+                if (mat.sizes && Array.isArray(mat.sizes)) {
+                    for (let j = 0; j < mat.sizes.length; j++) {
+                        await connection.query(
+                            `INSERT INTO package_material_sizes (material_id, size_label, sort_order) VALUES (?, ?, ?)`,
+                            [matResult.insertId, mat.sizes[j].size_label, mat.sizes[j].sort_order || j]
+                        );
+                    }
+                }
+            }
+        }
+        connection.release();
+        res.json({ status: 'success', message: 'สร้าง package สำเร็จ', packageId });
+    } catch (err) {
+        console.error("Create Package Error:", err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// Package - อัพเดท
+app.put('/api/admin/packages/:id', async (req, res) => {
+    const { name, type, categories, thumbnail, is_active, materials } = req.body;
+    try {
+        const connection = await pool.getConnection();
+        await connection.query(
+            `UPDATE packages SET name=?, type=?, categories=?, thumbnail=?, is_active=?, updated_at=NOW() WHERE id=?`,
+            [name, type, JSON.stringify(categories || []), thumbnail || '', is_active !== undefined ? is_active : 1, req.params.id]
+        );
+        if (materials && Array.isArray(materials)) {
+            await connection.query("DELETE FROM package_materials WHERE package_id = ?", [req.params.id]);
+            for (let i = 0; i < materials.length; i++) {
+                const mat = materials[i];
+                const [matResult] = await connection.query(
+                    `INSERT INTO package_materials (package_id, name, detail, sort_order, package_type)
+                     VALUES (?, ?, ?, ?, ?)`,
+                    [req.params.id, mat.name, mat.detail || '', mat.sort_order || i, mat.package_type || 'flat']
+                );
+                if (mat.sizes && Array.isArray(mat.sizes)) {
+                    for (let j = 0; j < mat.sizes.length; j++) {
+                        await connection.query(
+                            `INSERT INTO package_material_sizes (material_id, size_label, sort_order) VALUES (?, ?, ?)`,
+                            [matResult.insertId, mat.sizes[j].size_label, mat.sizes[j].sort_order || j]
+                        );
+                    }
+                }
+            }
+        }
+        connection.release();
+        res.json({ status: 'success', message: 'อัพเดท package สำเร็จ' });
+    } catch (err) {
+        console.error("Update Package Error:", err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// Package - ลบ (soft delete)
+app.delete('/api/admin/packages/:id', async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        await connection.query("UPDATE packages SET is_active = 0 WHERE id = ?", [req.params.id]);
+        connection.release();
+        res.json({ status: 'success', message: 'ลบ package สำเร็จ' });
+    } catch (err) {
+        console.error("Delete Package Error:", err);
         res.status(500).json({ status: 'error' });
     }
 });
@@ -1426,6 +2362,7 @@ app.post('/api/generate-label-content', async (req, res) => {
         const result = await model.generateContent(prompt);
         const cleanedText = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
         const aiData = JSON.parse(cleanedText);
+        logGeminiUsage({ userId: null, projectId: null, endpoint: '/api/generate-label-content', usageType: 'text', modelName: 'gemini-1.5-flash-8b', feature: 'label_content', promptSent: prompt, responseSummary: cleanedText?.substring(0, 500) });
         res.json({ status: 'success', data: aiData });
     } catch (err) {
         console.error("Gemini Label Error:", err);
@@ -1543,14 +2480,15 @@ ${toneMap[tone] ? 'TONE: ' + toneMap[tone] : ''}
                 [finalUserId, project_id, 'GENERATE_LABEL_BG', prompt, imageUrl]
             );
             await logConn.query(
-                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
-                [project_id, finalUserId, 'LABEL_BG', imageUrl, prompt]
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, model_name) VALUES (?, ?, ?, ?, ?, 0, ?)`,
+                [project_id, finalUserId, 'LABEL_BG', imageUrl, prompt, 'gemini-2.5-flash-image']
             );
             logConn.release();
             if (finalUserId) await trackGeneration(finalUserId, 'label_bg', project_id);
         } catch (logErr) {
             console.warn("Log warning (label-bg):", logErr.message);
         }
+        logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/generate-label-background', usageType: 'image', modelName: 'gemini-2.5-flash-image', feature: 'label_bg', promptSent: prompt?.substring(0, 10000), responseSummary: imageUrl });
 
         res.json({ status: 'success', data: { image_url: imageUrl, prompt_used: prompt } });
     } catch (err) {
@@ -1898,10 +2836,11 @@ STRICT RULES:
             `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
             [user_id || null, project_id, 'GENERATE_MOCKUP_PATTERN', prompt, imageUrl]);
         await c2.query(
-            `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
-            [project_id, user_id || null, 'MOCKUP_PATTERN', imageUrl, prompt]);
+            `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, model_name) VALUES (?, ?, ?, ?, ?, 0, ?)`,
+            [project_id, user_id || null, 'MOCKUP_PATTERN', imageUrl, prompt, 'gemini-2.5-flash-image']);
         c2.release();
         if (user_id) await trackGeneration(user_id, 'mockup_pattern', project_id);
+        logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/mockup/generate-pattern', usageType: 'image', modelName: 'gemini-2.5-flash-image', feature: 'mockup_pattern', promptSent: prompt?.substring(0, 10000), responseSummary: imageUrl });
         res.json({ status: 'success', data: { image_url: imageUrl, pattern_id: r.insertId } });
     } catch (err) {
         if (conn) conn.release();
@@ -1978,10 +2917,11 @@ STRICT RULES:
             `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
             [user_id || null, project_id, 'GENERATE_DIELINE_BG', prompt, imageUrl]);
         await c2.query(
-            `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
-            [project_id, user_id || null, 'DIELINE_BG', imageUrl, prompt]);
+            `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, model_name) VALUES (?, ?, ?, ?, ?, 0, ?)`,
+            [project_id, user_id || null, 'DIELINE_BG', imageUrl, prompt, 'gemini-2.5-flash-image']);
         c2.release();
         if (user_id) await trackGeneration(user_id, 'dieline_bg', project_id);
+        logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/mockup/generate-dieline-bg', usageType: 'image', modelName: 'gemini-2.5-flash-image', feature: 'dieline_bg', promptSent: prompt?.substring(0, 10000), responseSummary: imageUrl });
         res.json({ status: 'success', data: { image_url: imageUrl } });
     } catch (err) {
         if (conn) conn.release();
@@ -2052,7 +2992,7 @@ app.post('/api/mockup/generate-package-mockup', async (req, res) => {
         // Get brand name
         let conn = await pool.getConnection();
         const [nameRows] = await conn.query(
-            `SELECT brand_name FROM name_concept WHERE project_id = ? AND is_selected = 1 LIMIT 1`, [project_id]);
+            `SELECT brand_name FROM project WHERE project_id = ? LIMIT 1`, [project_id]);
         const brandName = nameRows[0]?.brand_name || '';
         conn.release();
 
@@ -2225,11 +3165,12 @@ PHOTOGRAPHY: Professional studio photo, soft lighting, shadow under product, sha
                 `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
                 [finalUserId, project_id, 'GENERATE_PACKAGE_MOCKUP', prompt.substring(0, 2000), imageUrl]);
             await c2.query(
-                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, product_id) VALUES (?, ?, ?, ?, ?, 0, ?)`,
-                [project_id, finalUserId, 'PACKAGE_MOCKUP', imageUrl, prompt.substring(0, 2000), product_id || null]);
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, product_id, model_name) VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+                [project_id, finalUserId, 'PACKAGE_MOCKUP', imageUrl, prompt.substring(0, 2000), product_id || null, 'gemini-3.1-flash-image-preview']);
             c2.release();
             if (finalUserId) await trackGeneration(finalUserId, 'package_mockup', project_id);
         } catch (e) { console.warn('log warning', e.message); }
+        logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/mockup/generate-package-mockup', usageType: 'image', modelName: 'gemini-3.1-flash-image-preview', feature: 'package_mockup', promptSent: prompt?.substring(0, 10000), responseSummary: imageUrl });
 
         sendEvent('done', { status: 'success', image_url: imageUrl });
         res.end();
@@ -2633,7 +3574,7 @@ app.post('/api/mockup/generate-ai-image', async (req, res) => {
 
         let conn = await pool.getConnection();
         const [nameRows] = await conn.query(
-            `SELECT brand_name FROM name_concept WHERE project_id = ? AND is_selected = 1 LIMIT 1`, [project_id]);
+            `SELECT brand_name FROM project WHERE project_id = ? LIMIT 1`, [project_id]);
         const brandName = nameRows[0]?.brand_name || '';
         conn.release();
 
@@ -2818,11 +3759,12 @@ Professional studio photography, white background, soft lighting, no people/hand
                 `INSERT INTO api_logs (user_id, project_id, action_type, prompt_sent, ai_response) VALUES (?, ?, ?, ?, ?)`,
                 [finalUserId, project_id, 'GENERATE_MOCKUP_AI', prompt.substring(0, 2000), imageUrl]);
             await c2.query(
-                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected) VALUES (?, ?, ?, ?, ?, 0)`,
-                [project_id, finalUserId, 'MOCKUP_AI', imageUrl, prompt.substring(0, 2000)]);
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, model_name) VALUES (?, ?, ?, ?, ?, 0, ?)`,
+                [project_id, finalUserId, 'MOCKUP_AI', imageUrl, prompt.substring(0, 2000), 'gemini-3.1-flash-image-preview']);
             c2.release();
             if (finalUserId) await trackGeneration(finalUserId, 'mockup_ai', project_id);
         } catch (e) { console.warn('log warning', e.message); }
+        logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/mockup/generate-ai-image', usageType: 'image', modelName: 'gemini-3.1-flash-image-preview', feature: 'mockup_ai', promptSent: prompt?.substring(0, 2000), responseSummary: imageUrl });
 
         sendEvent('done', { status: 'success', image_url: imageUrl });
         res.end();
@@ -3134,7 +4076,7 @@ app.post('/api/content-online/generate', async (req, res) => {
     } = req.body;
 
     if (user_id && mode !== 'caption_only') {
-        const genCheck = await checkGenerationLimit(user_id);
+        const genCheck = await checkGenerationLimit(user_id, 'image');
         if (!genCheck.allowed) {
             return res.status(403).json({
                 status: 'limit_reached',
@@ -3142,6 +4084,18 @@ app.post('/api/content-online/generate', async (req, res) => {
                     ? 'คุณใช้สิทธิ์สร้างรูปภาพครบ 50 ครั้งในเดือนนี้แล้ว'
                     : 'คุณใช้สิทธิ์สร้างรูปภาพฟรีครบ 6 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO',
                 ...genCheck
+            });
+        }
+    }
+    if (user_id && (mode === 'caption_only' || mode === 'both')) {
+        const textCheck = await checkGenerationLimit(user_id, 'text');
+        if (!textCheck.allowed) {
+            return res.status(403).json({
+                status: 'limit_reached',
+                message: textCheck.isPro
+                    ? 'คุณใช้สิทธิ์สร้างข้อความครบ 80 ครั้งในเดือนนี้แล้ว'
+                    : 'คุณใช้สิทธิ์สร้างข้อความฟรีครบ 20 ครั้งแล้ว กรุณาอัปเกรดเป็น PRO',
+                ...textCheck
             });
         }
     }
@@ -3265,6 +4219,7 @@ app.post('/api/content-online/generate', async (req, res) => {
             const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
             fs.writeFileSync(filePath, Buffer.from(imgBase64, 'base64'));
             finalImageUrl = `/uploads/generated/${fileName}`;
+            logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/content-online/generate', usageType: 'image', modelName: 'gemini-3.1-flash-image-preview', feature: 'content_online_image', promptSent: imagePrompt?.substring(0, 10000), responseSummary: finalImageUrl });
         }
 
         // Step 3: Generate Caption (ถ้า mode ไม่ใช่ image_only)
@@ -3291,6 +4246,8 @@ app.post('/api/content-online/generate', async (req, res) => {
                 finalCaptionTh = captionRaw;
                 finalCaptionEn = '';
             }
+            if (user_id) await trackGeneration(user_id, 'content_online_caption', project_id, 'text');
+            logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/content-online/generate', usageType: 'text', modelName: 'gemini-2.5-flash', feature: 'content_online_caption', promptSent: captionPrompt?.substring(0, 10000), responseSummary: captionRaw?.substring(0, 500) });
         }
 
         // Step 4: บันทึกลง DB
@@ -3311,9 +4268,9 @@ app.post('/api/content-online/generate', async (req, res) => {
 
         if (finalImageUrl && mode !== 'caption_only') {
             await conn.query(
-                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, product_id)
-                 VALUES (?, ?, 'CONTENT_ONLINE', ?, ?, 0, ?)`,
-                [project_id, user_id, finalImageUrl, `Content Online: ${product_name}`, product_id]
+                `INSERT INTO generated_history (project_id, user_id, generation_type, image_url, prompt, is_selected, product_id, model_name)
+                 VALUES (?, ?, 'CONTENT_ONLINE', ?, ?, 0, ?, ?)`,
+                [project_id, user_id, finalImageUrl, `Content Online: ${product_name}`, product_id, 'gemini-3.1-flash-image-preview']
             );
             if (user_id) await trackGeneration(user_id, 'content_online', project_id);
         }
@@ -3371,59 +4328,239 @@ app.get('/api/content-online/history/:projectId/:productId', async (req, res) =>
 // ================= END Content Online =================
 
 
-// ================= SUBSCRIPTION & PAYMENT (Omise) =================
-
-async function checkGenerationLimit(userId) {
-    const conn = await pool.getConnection();
+app.get('/api/user/quota/:userId', async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    if (!userId) return res.status(400).json({ status: 'error', message: 'Missing userId' });
     try {
-        const [userRows] = await conn.query(
-            'SELECT subscription_status, subscription_start_date, subscription_end_date FROM user_profile WHERE user_id = ?',
+        const imageQuota = await checkGenerationLimit(userId, 'image');
+        const textQuota = await checkGenerationLimit(userId, 'text');
+        res.json({
+            status: 'success',
+            image: { used: imageQuota.used, limit: imageQuota.limit, remaining: imageQuota.remaining },
+            text: { used: textQuota.used, limit: textQuota.limit, remaining: textQuota.remaining },
+            subscription_status: imageQuota.subscription_status,
+            isPro: imageQuota.isPro,
+            period: imageQuota.period,
+        });
+    } catch (err) {
+        console.error("Quota Check Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// ================= USER NOTIFICATIONS =================
+// ดึง notifications ของ user
+app.get('/api/user/notifications/:userId', async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    if (!userId) return res.status(400).json({ status: 'error' });
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT id, title, message, is_read, created_at
+             FROM user_notifications WHERE user_id = ?
+             ORDER BY created_at DESC LIMIT ?`,
+            [userId, limit]
+        );
+        const [unreadRow] = await conn.query(
+            `SELECT COUNT(*) as cnt FROM user_notifications WHERE user_id = ? AND is_read = 0`,
             [userId]
         );
+        conn.release();
+        res.json({ status: 'success', data: rows, unreadCount: unreadRow[0].cnt });
+    } catch (err) {
+        console.error("User Notifications Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// นับ unread notifications
+app.get('/api/user/notifications/:userId/unread-count', async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    if (!userId) return res.status(400).json({ status: 'error' });
+    try {
+        const conn = await pool.getConnection();
+        const [rows] = await conn.query(
+            `SELECT COUNT(*) as cnt FROM user_notifications WHERE user_id = ? AND is_read = 0`,
+            [userId]
+        );
+        conn.release();
+        res.json({ status: 'success', unreadCount: rows[0].cnt });
+    } catch (err) {
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Mark notification as read
+app.put('/api/user/notifications/:notifId/read', async (req, res) => {
+    const notifId = parseInt(req.params.notifId);
+    try {
+        const conn = await pool.getConnection();
+        await conn.query(
+            `UPDATE user_notifications SET is_read = 1, read_at = NOW() WHERE id = ?`,
+            [notifId]
+        );
+        conn.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Mark all notifications as read
+app.put('/api/user/notifications/:userId/read-all', async (req, res) => {
+    const userId = parseInt(req.params.userId);
+    try {
+        const conn = await pool.getConnection();
+        await conn.query(
+            `UPDATE user_notifications SET is_read = 1, read_at = NOW() WHERE user_id = ? AND is_read = 0`,
+            [userId]
+        );
+        conn.release();
+        res.json({ status: 'success' });
+    } catch (err) {
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// ================= SUBSCRIPTION & PAYMENT (Omise) =================
+
+const QUOTA_LIMITS = {
+    STANDARD: { image: 6, text: 20, period: 'lifetime' },
+    PRO:      { image: 50, text: 80, period: 'monthly' },
+};
+
+async function resetProQuotaIfNeeded(conn, user, userId) {
+    if (user.subscription_status !== 'PRO') return user;
+    if (!user.quota_reset_at || new Date(user.quota_reset_at) <= new Date()) {
+        const nextReset = user.subscription_end_date
+            ? new Date(user.subscription_end_date)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        await conn.query(
+            'UPDATE user_profile SET image_used = 0, text_used = 0, quota_reset_at = ? WHERE user_id = ?',
+            [nextReset, userId]
+        );
+        user.image_used = 0;
+        user.text_used = 0;
+        user.quota_reset_at = nextReset;
+    }
+    return user;
+}
+
+async function checkGenerationLimit(userId, usageType = 'image') {
+    const conn = await pool.getConnection();
+    try {
+        let userRows;
+        try {
+            [userRows] = await conn.query(
+                'SELECT subscription_status, subscription_start_date, subscription_end_date, image_used, text_used, quota_reset_at FROM user_profile WHERE user_id = ?',
+                [userId]
+            );
+        } catch (colErr) {
+            // fallback ถ้ายังไม่ได้รัน ALTER TABLE
+            [userRows] = await conn.query(
+                'SELECT subscription_status, subscription_start_date, subscription_end_date FROM user_profile WHERE user_id = ?',
+                [userId]
+            );
+            if (userRows.length) {
+                userRows[0].image_used = 0;
+                userRows[0].text_used = 0;
+                userRows[0].quota_reset_at = null;
+            }
+        }
         if (!userRows.length) return { allowed: false, reason: 'user_not_found' };
 
-        const user = userRows[0];
-        const isPro = user.subscription_status === 'PRO' && user.subscription_end_date && new Date(user.subscription_end_date) > new Date();
+        let user = userRows[0];
+        const isPro = user.subscription_status === 'PRO' && (!user.subscription_end_date || new Date(user.subscription_end_date) > new Date());
+        const tier = isPro ? 'PRO' : 'STANDARD';
+        const limits = QUOTA_LIMITS[tier];
 
-        let countQuery, countParams, limit, period;
-        if (isPro) {
-            limit = 50;
-            period = 'monthly';
-            countQuery = 'SELECT COUNT(*) as cnt FROM generation_usage WHERE user_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)';
-            countParams = [userId];
-        } else {
-            limit = 6;
-            period = 'lifetime';
-            countQuery = 'SELECT COUNT(*) as cnt FROM generation_usage WHERE user_id = ?';
-            countParams = [userId];
+        if (isPro && user.quota_reset_at !== undefined) {
+            try { user = await resetProQuotaIfNeeded(conn, user, userId); } catch (e) { /* columns not ready */ }
         }
 
-        const [countRows] = await conn.query(countQuery, countParams);
-        const used = countRows[0].cnt;
+        const used = usageType === 'text' ? (user.text_used || 0) : (user.image_used || 0);
+        const limit = usageType === 'text' ? limits.text : limits.image;
 
         return {
             allowed: used < limit,
             used,
             limit,
             remaining: Math.max(0, limit - used),
-            period,
+            period: limits.period,
             isPro,
-            subscription_status: user.subscription_status
+            subscription_status: user.subscription_status,
+            usageType,
+            image_used: user.image_used,
+            image_limit: limits.image,
+            text_used: user.text_used,
+            text_limit: limits.text,
         };
     } finally {
         conn.release();
     }
 }
 
-async function trackGeneration(userId, feature, projectId) {
+async function trackGeneration(userId, feature, projectId, usageType = 'image') {
     const conn = await pool.getConnection();
     try {
         await conn.query(
             'INSERT INTO generation_usage (user_id, feature, project_id) VALUES (?, ?, ?)',
             [userId, feature, projectId || null]
         );
+        const col = usageType === 'text' ? 'text_used' : 'image_used';
+        try {
+            await conn.query(`UPDATE user_profile SET ${col} = ${col} + 1 WHERE user_id = ?`, [userId]);
+        } catch (e) { /* columns not added yet */ }
     } finally {
         conn.release();
+    }
+}
+
+// ============ Gemini Usage Logger ============
+(async () => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.query(`
+            CREATE TABLE IF NOT EXISTS gemini_usage_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT DEFAULT NULL,
+                project_id INT DEFAULT NULL,
+                endpoint VARCHAR(255) NOT NULL COMMENT 'route path เช่น /api/generate-logo',
+                usage_type ENUM('text','image') NOT NULL COMMENT 'ประเภท: text หรือ image',
+                model_name VARCHAR(100) NOT NULL COMMENT 'ชื่อโมเดล เช่น gemini-2.5-flash',
+                feature VARCHAR(100) DEFAULT NULL COMMENT 'ชื่อฟีเจอร์ เช่น brand_dna, logo, mockup',
+                prompt_sent LONGTEXT DEFAULT NULL COMMENT 'prompt ที่ส่งไป',
+                response_summary TEXT DEFAULT NULL COMMENT 'สรุปผลลัพธ์ เช่น image_url หรือ text ย่อ',
+                tokens_used INT DEFAULT NULL,
+                status ENUM('success','failed') DEFAULT 'success',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_user (user_id),
+                KEY idx_type (usage_type),
+                KEY idx_model (model_name),
+                KEY idx_feature (feature),
+                KEY idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `);
+    } finally {
+        conn.release();
+    }
+})();
+
+async function logGeminiUsage({ userId, projectId, endpoint, usageType, modelName, feature, promptSent, responseSummary, status = 'success' }) {
+    try {
+        const conn = await pool.getConnection();
+        await conn.query(
+            `INSERT INTO gemini_usage_logs (user_id, project_id, endpoint, usage_type, model_name, feature, prompt_sent, response_summary, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId || null, projectId || null, endpoint, usageType, modelName, feature || null,
+             typeof promptSent === 'string' ? promptSent.substring(0, 10000) : null,
+             typeof responseSummary === 'string' ? responseSummary.substring(0, 2000) : null,
+             status]
+        );
+        conn.release();
+    } catch (err) {
+        console.warn('logGeminiUsage warning:', err.message);
     }
 }
 
@@ -3444,7 +4581,7 @@ app.get('/api/subscription/status/:userId', async (req, res) => {
         }
 
         const user = userRows[0];
-        const isPro = user.subscription_status === 'PRO' && user.subscription_end_date && new Date(user.subscription_end_date) > new Date();
+        const isPro = user.subscription_status === 'PRO' && (!user.subscription_end_date || new Date(user.subscription_end_date) > new Date());
 
         let countQuery, countParams;
         if (isPro) {

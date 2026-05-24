@@ -542,6 +542,41 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--gold); border-color: var(--gold-soft);
 }
 
+.mp-pill--distance {
+  background: linear-gradient(135deg, #E8F0F8, #D4E4F0);
+  color: #2A6CB4; border-color: #A0C4E8;
+}
+
+.mp-location-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  padding: 6px 0;
+}
+
+.mp-location-status iconify-icon {
+  font-size: 14px;
+}
+
+.mp-location-status--error {
+  color: #c0392b;
+}
+
+.mp-location-status--loading {
+  color: var(--terra);
+}
+
+@keyframes mp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mp-spin {
+  animation: mp-spin 1s linear infinite;
+  display: inline-block;
+}
+
 /* Tags */
 .mp-event-card__tags { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 6px; border-top: 1px dashed var(--border); }
 

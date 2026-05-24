@@ -475,8 +475,21 @@ const REGION_OPTIONS = [
 ];
 const SORT_OPTIONS = [
   { value: "date", label: "วันที่ใกล้ที่สุด" },
+  { value: "nearest", label: "สถานที่ใกล้ฉัน" },
   { value: "name", label: "ชื่องาน A–Z" },
 ];
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 const MONTH_MAP = {
   "มกราคม": "01", "กุมภาพันธ์": "02", "มีนาคม": "03",
@@ -503,7 +516,7 @@ const ICON_BG = {
 };
 
 // ── Event Card ───────────────────────────────────────────────────────────────
-function EventCard({ event, isSelected, onSelect, onOpenModal }) {
+function EventCard({ event, isSelected, onSelect, onOpenModal, distance }) {
   const theme = ICON_BG[event.icon] || ICON_BG["mdi:store-outline"];
   const isMarket = event.type === "ตลาดนัด";
 
@@ -542,6 +555,12 @@ function EventCard({ event, isSelected, onSelect, onOpenModal }) {
             <iconify-icon icon="mdi:clock-outline"></iconify-icon>
             {event.time}
           </span>
+          {distance != null && (
+            <span className="mp-pill mp-pill--distance">
+              <iconify-icon icon="mdi:map-marker-distance"></iconify-icon>
+              {distance < 1 ? `${Math.round(distance * 1000)} ม.` : `${distance.toFixed(1)} กม.`}
+            </span>
+          )}
         </div>
         <div className="mp-event-card__tags">
           {event.tags.slice(0, 2).map((t) => (
@@ -986,6 +1005,9 @@ export default function MarketPlanning({ user }) {
   const [selected, setSelected] = useState(null);
   const [modalEvent, setModalEvent] = useState(null);
   const [showAll, setShowAll] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
 
   // ── printer filters ──
   const [filterProvince, setFilterProvince] = useState("all");
@@ -1018,6 +1040,33 @@ export default function MarketPlanning({ user }) {
     }
   };
 
+  const requestUserLocation = useCallback(() => {
+    if (userLocation) return;
+    if (!navigator.geolocation) {
+      setLocationError("เบราว์เซอร์ไม่รองรับ Geolocation");
+      return;
+    }
+    setLocationLoading(true);
+    setLocationError("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationLoading(false);
+      },
+      () => {
+        setLocationError("ไม่สามารถเข้าถึงตำแหน่งได้");
+        setLocationLoading(false);
+        setSortBy("date");
+      },
+      { enableHighAccuracy: false, timeout: 10000 }
+    );
+  }, [userLocation]);
+
+  const handleSortChange = useCallback((val) => {
+    setSortBy(val);
+    if (val === "nearest") requestUserLocation();
+  }, [requestUserLocation]);
+
   // ── filtered events ──
   const filtered = MOCK_EVENTS.filter((e) => {
     if (activeType === "printer") return false; // printer type → show nothing in events list
@@ -1027,7 +1076,15 @@ export default function MarketPlanning({ user }) {
     const matchSearch = !q || e.name.toLowerCase().includes(q) || e.location.toLowerCase().includes(q) || e.tags.some((t) => t.toLowerCase().includes(q));
     return matchType && matchMonth && matchSearch;
   });
-  const sorted = [...filtered].sort((a, b) => sortBy === "name" ? a.name.localeCompare(b.name, "th") : a.id - b.id);
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "name") return a.name.localeCompare(b.name, "th");
+    if (sortBy === "nearest" && userLocation) {
+      const distA = haversineKm(userLocation.lat, userLocation.lng, a.lat, a.lng);
+      const distB = haversineKm(userLocation.lat, userLocation.lng, b.lat, b.lng);
+      return distA - distB;
+    }
+    return a.id - b.id;
+  });
   const displayed = showAll ? sorted : sorted.slice(0, 10);
 
   // ── filtered printers ── (uses main search bar; region maps to province)
@@ -1092,7 +1149,7 @@ export default function MarketPlanning({ user }) {
               <iconify-icon icon="mdi:sort-ascending" className="mp-searchbar__field-icon-top"></iconify-icon>
               <span className="mp-searchbar__label">เรียงตาม</span>
             </div>
-            <CustomDropdown value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
+            <CustomDropdown value={sortBy} onChange={handleSortChange} options={SORT_OPTIONS} />
           </div>
           <button className="mp-searchbar__btn">
             <iconify-icon icon="mdi:magnify" style={{ fontSize: 17 }}></iconify-icon>
@@ -1144,6 +1201,25 @@ export default function MarketPlanning({ user }) {
                 </div>
               </div>
 
+              {sortBy === "nearest" && locationLoading && (
+                <div className="mp-location-status mp-location-status--loading">
+                  <iconify-icon icon="mdi:loading" className="mp-spin"></iconify-icon>
+                  กำลังค้นหาตำแหน่งของคุณ...
+                </div>
+              )}
+              {sortBy === "nearest" && locationError && (
+                <div className="mp-location-status mp-location-status--error">
+                  <iconify-icon icon="mdi:alert-circle-outline"></iconify-icon>
+                  {locationError}
+                </div>
+              )}
+              {sortBy === "nearest" && userLocation && !locationLoading && (
+                <div className="mp-location-status">
+                  <iconify-icon icon="mdi:crosshairs-gps" style={{ color: "var(--terra)" }}></iconify-icon>
+                  เรียงตามระยะทางจากตำแหน่งของคุณ
+                </div>
+              )}
+
               <div className="mp-event-list">
                 {sorted.length === 0 ? (
                   <div className="mp-empty">
@@ -1156,7 +1232,8 @@ export default function MarketPlanning({ user }) {
                     <EventCard key={event.id} event={event}
                       isSelected={selected?.id === event.id}
                       onSelect={handleSelect}
-                      onOpenModal={setModalEvent} />
+                      onOpenModal={setModalEvent}
+                      distance={sortBy === "nearest" && userLocation ? haversineKm(userLocation.lat, userLocation.lng, event.lat, event.lng) : null} />
                   ))
                 )}
               </div>

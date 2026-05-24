@@ -12,11 +12,8 @@ export const Profile = ({ user, setUser }) => {
   const [userData, setUserData] = useState({});
   const [projects, setProjects] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, message: 'ยินดีต้อนรับสู่ Punthai!', time: 'เมื่อสักครู่', read: false },
-    { id: 2, message: 'โปรเจกต์ของคุณถูกสร้างสำเร็จ', time: '5 นาทีที่แล้ว', read: false },
-    { id: 3, message: 'อัปเดตระบบใหม่พร้อมใช้งาน', time: '1 ชั่วโมงที่แล้ว', read: true },
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [completions, setCompletions] = useState({});
 
   // ดึงข้อมูล User และ Projects
   useEffect(() => {
@@ -28,7 +25,7 @@ export const Profile = ({ user, setUser }) => {
       navigate('/');
     } else {
       setUserData(currentUser);
-      
+
       // ดึงข้อมูลโปรเจกต์
       fetch(`http://localhost:3000/api/projects/${currentUser.user_id}`)
         .then(res => res.json())
@@ -38,6 +35,34 @@ export const Profile = ({ user, setUser }) => {
           }
         })
         .catch(err => console.error("Fetch projects error:", err));
+
+      // ดึง completion %
+      fetch(`http://localhost:3000/api/users/${currentUser.user_id}/completions`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success') {
+            const map = {};
+            data.projects.forEach(p => { map[p.project_id] = p.percentage; });
+            setCompletions(map);
+          }
+        })
+        .catch(err => console.error("Fetch completions error:", err));
+
+      // ดึง notifications จริงจาก API
+      fetch(`http://localhost:3000/api/user/notifications/${currentUser.user_id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success') {
+            setNotifications(data.data.map(n => ({
+              id: n.id,
+              title: n.title,
+              message: n.message,
+              time: formatTimeAgo(n.created_at),
+              read: n.is_read === 1,
+            })));
+          }
+        })
+        .catch(err => console.error("Fetch notifications error:", err));
     }
   }, [user, navigate]);
 
@@ -78,10 +103,27 @@ export const Profile = ({ user, setUser }) => {
     navigate('/');
   };
 
+  const formatTimeAgo = (dateStr) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'เมื่อสักครู่';
+    if (mins < 60) return `${mins} นาทีที่แล้ว`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} ชั่วโมงที่แล้ว`;
+    const days = Math.floor(hours / 24);
+    return `${days} วันที่แล้ว`;
+  };
+
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const markAllRead = async () => {
+    if (!userData.user_id) return;
+    try {
+      await fetch(`http://localhost:3000/api/user/notifications/${userData.user_id}/read-all`, { method: 'PUT' });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error("Mark all read error:", err);
+    }
   };
 
   return (
@@ -111,17 +153,32 @@ export const Profile = ({ user, setUser }) => {
                   )}
                 </div>
                 <div className="pf-notif-list">
-                  {notifications.map(notif => (
-                    <div key={notif.id} className={`pf-notif-item ${!notif.read ? 'pf-notif-unread' : ''}`}>
-                      <div className="pf-notif-dot-wrap">
-                        {!notif.read && <span className="pf-notif-dot"></span>}
-                      </div>
-                      <div className="pf-notif-content">
-                        <p className="pf-notif-msg">{notif.message}</p>
-                        <span className="pf-notif-time">{notif.time}</span>
-                      </div>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: '20px', textAlign: 'center', color: '#999', fontSize: 14 }}>
+                      ไม่มีการแจ้งเตือน
                     </div>
-                  ))}
+                  ) : (
+                    notifications.map(notif => (
+                      <div key={notif.id} className={`pf-notif-item ${!notif.read ? 'pf-notif-unread' : ''}`}
+                        onClick={() => {
+                          if (!notif.read) {
+                            fetch(`http://localhost:3000/api/user/notifications/${notif.id}/read`, { method: 'PUT' });
+                            setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                          }
+                        }}
+                        style={{ cursor: !notif.read ? 'pointer' : 'default' }}
+                      >
+                        <div className="pf-notif-dot-wrap">
+                          {!notif.read && <span className="pf-notif-dot"></span>}
+                        </div>
+                        <div className="pf-notif-content">
+                          <p className="pf-notif-msg" style={{ fontWeight: !notif.read ? 600 : 400 }}>{notif.title || notif.message}</p>
+                          {notif.title && <p style={{ fontSize: 12, color: '#888', margin: '2px 0 0' }}>{notif.message}</p>}
+                          <span className="pf-notif-time">{notif.time}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -229,6 +286,15 @@ export const Profile = ({ user, setUser }) => {
               <div className="pf-stat-num pf-orange">{projects.length}</div>
               <div className="pf-stat-label">total projects</div>
             </div>
+            <div className="pf-stat-card">
+              <div className="pf-stat-icon-wrap" style={{ background: '#e8f5e9' }}>
+                <iconify-icon icon="mdi:chart-arc" style={{ color: '#4CAF50' }}></iconify-icon>
+              </div>
+              <div className="pf-stat-num" style={{ color: '#4CAF50' }}>
+                {projects.length > 0 ? Math.round(Object.values(completions).reduce((a, b) => a + b, 0) / projects.length) : 0}%
+              </div>
+              <div className="pf-stat-label">avg completion</div>
+            </div>
           </div>
 
           <div className="pf-section-header">
@@ -250,6 +316,23 @@ export const Profile = ({ user, setUser }) => {
                   )}
                 </div>
                 <h3>{proj.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ'}</h3>
+                <div style={{ width: '100%', padding: '0 10px', marginTop: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                    <span style={{ fontSize: '11px', color: '#aaa' }}>ความสำเร็จ</span>
+                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: (completions[proj.project_id] || 0) >= 75 ? '#4CAF50' : '#d75a2a' }}>
+                      {completions[proj.project_id] || 0}%
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: '5px', background: '#f0f0f0', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${completions[proj.project_id] || 0}%`,
+                      height: '100%',
+                      background: (completions[proj.project_id] || 0) >= 75 ? '#4CAF50' : (completions[proj.project_id] || 0) >= 40 ? '#FF9800' : '#d75a2a',
+                      borderRadius: '3px',
+                      transition: 'width 0.8s ease-in-out'
+                    }} />
+                  </div>
+                </div>
               </div>
             ))}
 

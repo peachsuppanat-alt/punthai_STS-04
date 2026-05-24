@@ -21,6 +21,7 @@ export const ResultLogo = () => {
     // --- States สำหรับ Form สร้างโลโก้ ---
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [loadingMessage, setLoadingMessage] = useState('');
     const [brandName, setBrandName] = useState('');
     const [brandValue, setBrandValue] = useState('');
     const [importedProducts, setImportedProducts] = useState([]);
@@ -154,50 +155,73 @@ export const ResultLogo = () => {
         } catch (err) { console.error(err); }
     };
 
-    const handleSubmitLogo = async () => {
+    const handleSubmitLogo = () => {
         if (!brandName.trim()) return alert("กรุณาระบุชื่อแบรนด์");
         if (!selectedStyle) return alert("กรุณาเลือกสไตล์ของโลโก้");
 
         setIsLoading(true);
-        try {
-            const userData = JSON.parse(localStorage.getItem('user') || '{}');
-            const productsText = Array.isArray(importedProducts) 
-                ? importedProducts.map(p => p.name_product || p).join(', ') 
-                : importedProducts;
+        setLoadingMessage('กำลังเตรียมข้อมูล...');
 
-            const payload = {
-                project_id: projectId,
-                user_id: userData.user_id || 0,
-                brand_name: brandName,
-                brand_value: brandValue,
-                products: productsText, 
-                styles: selectedStyle, // 🟢 ส่งสไตล์ที่เลือกเป็น String ก้อนเดียว
-                details: detailsInput,
-                negative_prompt: negativeInput,
-                use_imported_color: useImportedColor,
-                use_imported_font: useImportedFont
-            };
+        const userData = JSON.parse(localStorage.getItem('user') || '{}');
+        const productsText = Array.isArray(importedProducts)
+            ? importedProducts.map(p => p.name_product || p).join(', ')
+            : importedProducts;
 
-            localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
+        const payload = {
+            project_id: projectId,
+            user_id: userData.user_id || 0,
+            brand_name: brandName,
+            brand_value: brandValue,
+            products: productsText,
+            styles: selectedStyle,
+            details: detailsInput,
+            negative_prompt: negativeInput,
+            use_imported_color: useImportedColor,
+            use_imported_font: useImportedFont
+        };
 
-            const res = await fetch('http://localhost:3000/api/generate-logo', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+        localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
 
-            const data = await res.json();
-            if (data.status === 'success') {
-                setIsModalOpen(false); 
-                fetchImages(); 
-            } else {
-                alert("เกิดข้อผิดพลาด: " + data.message);
-            }
-        } catch (err) {
-            alert("ไม่สามารถติดต่อ AI Server ได้");
-        } finally {
+        const params = new URLSearchParams();
+        Object.entries(payload).forEach(([k, v]) => {
+            if (v !== undefined && v !== null) params.append(k, String(v));
+        });
+
+        const eventSource = new EventSource(`http://localhost:3000/api/generate-logo?${params.toString()}`);
+
+        eventSource.addEventListener('progress', (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                setLoadingMessage(data.message);
+            } catch {}
+        });
+
+        eventSource.addEventListener('done', (e) => {
+            eventSource.close();
             setIsLoading(false);
-        }
+            setLoadingMessage('');
+            setIsModalOpen(false);
+            fetchImages();
+        });
+
+        eventSource.addEventListener('error', (e) => {
+            eventSource.close();
+            setIsLoading(false);
+            setLoadingMessage('');
+            try {
+                const data = JSON.parse(e.data);
+                alert(data.message || 'เกิดข้อผิดพลาดในการสร้างโลโก้');
+            } catch {
+                alert('เกิดข้อผิดพลาดในการสร้างโลโก้');
+            }
+        });
+
+        eventSource.onerror = () => {
+            eventSource.close();
+            setIsLoading(false);
+            setLoadingMessage('');
+            alert('การเชื่อมต่อกับ Server ขาดหาย กรุณาลองใหม่อีกครั้ง');
+        };
     };
 
     return (
@@ -404,8 +428,8 @@ export const ResultLogo = () => {
             {isLoading && (
                 <div style={{position:'fixed', inset:0, background:'rgba(255,255,255,0.85)', zIndex:99999, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
                     <iconify-icon icon="line-md:loading-loop" style={{fontSize:'60px', color:'#d75a2a'}}></iconify-icon>
-                    <h2 style={{marginTop:'20px', color:'#d75a2a'}}>Ai กำลังวาดโลโก้ให้คุณใหม่...</h2>
-                    <p style={{color:'#666', marginTop:'10px'}}>อาจใช้เวลาประมาณ 10 - 20 วินาที กรุณารอสักครู่</p>
+                    <h2 style={{marginTop:'20px', color:'#d75a2a'}}>{loadingMessage || 'Ai กำลังวาดโลโก้ให้คุณใหม่...'}</h2>
+                    <p style={{color:'#666', marginTop:'10px'}}>อาจใช้เวลาสักครู่ กรุณารอ...</p>
                 </div>
             )}
 

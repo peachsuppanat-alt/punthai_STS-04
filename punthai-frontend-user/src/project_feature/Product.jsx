@@ -124,20 +124,6 @@ export const Product = () => {
 
   return (
     <div className="yp-body">
-      {/* Navbar */}
-      <header className="yp-navbar">
-        <div className="yp-logo">
-          <Link to="/">
-            <img src={logoImg} alt="logo" className="yp-logo-img" />
-          </Link>
-        </div>
-        <div className="yp-nav-icons">
-          <button className="yp-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
-          <button className="yp-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
-          <button className="yp-btn-users"><iconify-icon icon="solar:user-linear"></iconify-icon></button>
-        </div>
-      </header>
-
       <div className="yp-container">
         {/* Sidebar */}
         <aside className={`yp-sidebar ${isSidebarCollapsed ? 'yp-collapsed' : ''}`}>

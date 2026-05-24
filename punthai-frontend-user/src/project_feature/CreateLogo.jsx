@@ -25,16 +25,24 @@ export const CreateLogo = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
 
   // --- States สำหรับ Form สร้างโลโก้ ---
   const [brandName, setBrandName] = useState('');
   const [brandValue, setBrandValue] = useState('');
   const [importedProducts, setImportedProducts] = useState([]);
-  const [selectedStyles, setSelectedStyles] = useState([]);
+  const [selectedStyle, setSelectedStyle] = useState('combination');
   const [detailsInput, setDetailsInput] = useState('');
   const [negativeInput, setNegativeInput] = useState('');
-  
-  const styleOptions = ['ทันสมัย', 'ความเป็นไทย', 'หรูหรา', 'เรียบง่าย', 'มินิมอล', 'เป็นกันเอง', 'การ์ตูน', 'ตัวหนังสือ', 'คลาสสิค'];
+
+  const styleOptions = [
+    { id: 'wordmark', name: 'Wordmark', desc: '(ตัวอักษรล้วน)', icon: 'mdi:format-text' },
+    { id: 'lettermark', name: 'Lettermark', desc: '(อักษรย่อ)', icon: 'mdi:format-letter-case' },
+    { id: 'combination', name: 'Combination', desc: '(ผสม)', icon: 'mdi:puzzle-outline' },
+    { id: 'emblem', name: 'Emblem', desc: '(ตราสัญลักษณ์)', icon: 'mdi:shield-check-outline' },
+    { id: 'mascot', name: 'Mascot', desc: '(มาสคอต)', icon: 'mdi:teddy-bear' },
+    { id: 'minimal', name: 'Minimal', desc: '(มินิมอล)', icon: 'mdi:shape-outline' }
+  ];
 
   const [useImportedColor, setUseImportedColor] = useState(false);
   const [useImportedFont, setUseImportedFont] = useState(false);
@@ -128,27 +136,19 @@ export const CreateLogo = () => {
     setBrandName('');
     setBrandValue('');
     setImportedProducts([]);
-    setSelectedStyles([]);
+    setSelectedStyle('combination');
     setDetailsInput('');
     setNegativeInput('');
-  };
-
-  const toggleStyle = (style) => {
-    if (selectedStyles.includes(style)) {
-      setSelectedStyles(selectedStyles.filter(s => s !== style));
-    } else {
-      setSelectedStyles([...selectedStyles, style]);
-    }
   };
 
   // ================= ฟังก์ชันส่งข้อมูลไปให้ DALL-E 3 =================
   const handleSubmitLogo = async () => {
     if (!brandName.trim()) return alert("กรุณาระบุชื่อแบรนด์");
-    if (selectedStyles.length === 0) return alert("กรุณาเลือกสไตล์อย่างน้อย 1 อย่าง");
+    if (!selectedStyle) return alert("กรุณาเลือกสไตล์ของโลโก้");
 
     try {
       const status = await fetchSubscriptionStatus(userId);
-      if (status && !status.generation.allowed) {
+      if (status?.generation && !status.generation.allowed) {
         setUsageInfo(status);
         setShowProModal(true);
         return;
@@ -157,46 +157,70 @@ export const CreateLogo = () => {
     } catch (e) { /* continue — backend guard will catch */ }
 
     setIsLoading(true);
-    try {
-      const payload = {
+    setLoadingMessage('กำลังเตรียมข้อมูล...');
+
+    const productsText = Array.isArray(importedProducts)
+      ? importedProducts.map(p => p.name_product || p).join(', ')
+      : importedProducts;
+
+    const payload = {
       project_id: projectId,
       user_id: userId,
       brand_name: brandName,
       brand_value: brandValue,
-      products: importedProducts.join(', '),
-      styles: selectedStyles.join(', '),
+      products: productsText,
+      styles: selectedStyle,
       details: detailsInput,
       negative_prompt: negativeInput,
       use_imported_color: useImportedColor,
       use_imported_font: useImportedFont
     };
-      localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
-      const res = await fetch('http://localhost:3000/api/generate-logo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+    localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
 
-      const data = await res.json();
+    const params = new URLSearchParams();
+    Object.entries(payload).forEach(([k, v]) => { if (v !== undefined && v !== null) params.append(k, v); });
 
-      if (res.status === 403 && data.status === 'limit_reached') {
-        setShowProModal(true);
-        return;
-      }
+    const eventSource = new EventSource(`http://localhost:3000/api/generate-logo?${params.toString()}`);
 
-      if (data.status === 'success') {
-        resetModal();
-        setIsModalOpen(false);
-        navigate('/result-logo', { state: { projectId } });
-      } else {
-        alert("เกิดข้อผิดพลาด: " + data.message);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("ไม่สามารถติดต่อ AI Server ได้");
-    } finally {
+    eventSource.addEventListener('progress', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        setLoadingMessage(data.message || 'กำลังดำเนินการ...');
+      } catch {}
+    });
+
+    eventSource.addEventListener('done', (e) => {
+      eventSource.close();
       setIsLoading(false);
-    }
+      setLoadingMessage('');
+      try {
+        const data = JSON.parse(e.data);
+        if (data.status === 'success') {
+          resetModal();
+          setIsModalOpen(false);
+          navigate('/result-logo', { state: { projectId } });
+        }
+      } catch {}
+    });
+
+    eventSource.addEventListener('error', (e) => {
+      eventSource.close();
+      setIsLoading(false);
+      setLoadingMessage('');
+      try {
+        const data = JSON.parse(e.data);
+        alert(data.message || 'เกิดข้อผิดพลาดในการสร้างโลโก้');
+      } catch {
+        alert('ไม่สามารถติดต่อ AI Server ได้');
+      }
+    });
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      setIsLoading(false);
+      setLoadingMessage('');
+      alert('การเชื่อมต่อกับ Server ขาดหาย กรุณาลองใหม่');
+    };
   };
 
   // 👇 ระหว่างรอเช็คข้อมูลจาก Database ให้ขึ้นหน้าโหลดก่อน ป้องกันหน้าเว็บกะพริบ
@@ -342,21 +366,36 @@ export const CreateLogo = () => {
 
             {/* 4. สไตล์ */}
             <div className="clg-form-group">
-              <label><span className="clg-step">4</span> สไตล์โลโก้ (เลือกได้หลายคำ) <span style={{color:'red'}}>*</span></label>
+              <label><span className="clg-step">4</span> สไตล์โลโก้ <span style={{color:'red'}}>*</span></label>
               <div style={{display:'flex', flexWrap:'wrap', gap:'10px', marginTop:'10px'}}>
                 {styleOptions.map(style => (
-                  <span 
-                    key={style}
-                    onClick={() => toggleStyle(style)}
+                  <div
+                    key={style.id}
+                    onClick={() => setSelectedStyle(style.id)}
                     style={{
-                      padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '14px', transition: '0.2s',
-                      border: selectedStyles.includes(style) ? '1px solid #d75a2a' : '1px solid #ddd',
-                      background: selectedStyles.includes(style) ? '#d75a2a' : '#fff',
-                      color: selectedStyles.includes(style) ? '#fff' : '#666'
+                      padding: '15px 10px',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 'calc(33.33% - 7px)',
+                      boxSizing: 'border-box',
+                      border: selectedStyle === style.id ? '2px solid #d75a2a' : '1px solid #eee',
+                      background: selectedStyle === style.id ? '#fff3ee' : '#fafafa',
+                      transition: 'all 0.2s ease',
+                      gap: '5px'
                     }}
                   >
-                    {style}
-                  </span>
+                    <iconify-icon icon={style.icon} style={{ fontSize: '32px', color: selectedStyle === style.id ? '#d75a2a' : '#888' }}></iconify-icon>
+                    <span style={{ fontWeight: 'bold', fontSize: '13px', color: selectedStyle === style.id ? '#d75a2a' : '#444' }}>
+                      {style.name}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#888', textAlign: 'center' }}>
+                      {style.desc}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -395,7 +434,7 @@ export const CreateLogo = () => {
                 </label>
             </div>
 
-            {usageInfo && (
+            {usageInfo?.generation && (
               <div style={{ textAlign: 'center', margin: '8px 0', fontSize: 13, color: usageInfo.generation.remaining <= 1 ? '#e53e3e' : '#888' }}>
                 <iconify-icon icon="mdi:image-auto-adjust" style={{ verticalAlign: 'middle', marginRight: 4 }}></iconify-icon>
                 ใช้ไป {usageInfo.generation.used}/{usageInfo.generation.limit} ครั้ง
@@ -419,9 +458,8 @@ export const CreateLogo = () => {
       {isLoading && (
         <div style={{position:'fixed', inset:0, background:'rgba(255,255,255,0.85)', zIndex:9999, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
             <iconify-icon icon="line-md:loading-loop" style={{fontSize:'60px', color:'#d75a2a'}}></iconify-icon>
-            {/* 👇 อัปเดตชื่อ AI ตรงนี้ 👇 */}
-            <h2 style={{marginTop:'20px', color:'#d75a2a'}}>DALL·E 3 กำลังวาดโลโก้ให้คุณ...</h2>
-            <p style={{color:'#666', marginTop:'10px'}}>อาจใช้เวลาประมาณ 10 - 20 วินาที กรุณารอสักครู่</p>
+            <h2 style={{marginTop:'20px', color:'#d75a2a'}}>{loadingMessage || 'AI กำลังวาดโลโก้ให้คุณ...'}</h2>
+            <p style={{color:'#666', marginTop:'10px'}}>กรุณารอสักครู่</p>
         </div>
       )}
 

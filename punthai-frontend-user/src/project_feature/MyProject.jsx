@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './MyProject.css';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import CircularProgress from '../components/CircularProgress';
 
-// ดึงรูปภาพกลับมาใช้งาน
 import logoImg from '../assets/logo.png';
 import helpImg from '../assets/help.png';
 import createImg from '../assets/create.png';
@@ -17,10 +17,13 @@ export const MyProject = ({ user }) => {
     const [projectName, setProjectName] = useState('กำลังโหลดข้อมูล...');
     const [projectLogo, setProjectLogo] = useState(null);
     const [products, setProducts] = useState([]);
-    const [selectedColors, setSelectedColors] = useState([]); 
+    const [selectedColors, setSelectedColors] = useState([]);
     const [selectedFont, setSelectedFont] = useState(null);
     const [showNamePopup, setShowNamePopup] = useState(false);
     const [editNameInput, setEditNameInput] = useState('');
+    const [showBrandNamePopup, setShowBrandNamePopup] = useState(false);
+    const [editBrandNameInput, setEditBrandNameInput] = useState('');
+    const [completion, setCompletion] = useState({ percentage: 0, details: {} });
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -28,13 +31,16 @@ export const MyProject = ({ user }) => {
 
     useEffect(() => {
         if (projectId) {
-            // 1. ดึงชื่อโปรเจกต์และโลโก้
+            // 1. ดึงชื่อโปรเจกต์, โลโก้, และชื่อแบรนด์
             fetch(`http://localhost:3000/api/projects/detail/${projectId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
                         setProjectName(data.project.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ');
                         setProjectLogo(data.project.image_logo);
+                        if (data.project.brand_name) {
+                            setSelectedBrandName(data.project.brand_name);
+                        }
                     } else {
                         setProjectName('ไม่พบข้อมูลโปรเจกต์');
                     }
@@ -54,18 +60,15 @@ export const MyProject = ({ user }) => {
                 })
                 .catch(err => console.error("Fetch products error:", err));
 
-            // 3. ดึงชื่อแบรนด์ที่เคยสร้างและถูกเลือกไว้
-            fetch(`http://localhost:3000/api/brand-names/${projectId}`)
+            // 3. ดึง completion %
+            fetch(`http://localhost:3000/api/projects/${projectId}/completion`)
                 .then(res => res.json())
                 .then(data => {
-                    if (data.status === 'success' && data.names) {
-                        const selected = data.names.find(n => n.is_selected === 1 || n.is_selected === true);
-                        if (selected) {
-                            setSelectedBrandName(selected.brand_name);
-                        }
+                    if (data.status === 'success') {
+                        setCompletion({ percentage: data.percentage, details: data.details });
                     }
                 })
-                .catch(err => console.error("Fetch brand names error:", err));
+                .catch(err => console.error("Fetch completion error:", err));
 
             // 4. ดึงข้อมูล สี และ ฟอนต์
             fetch(`http://localhost:3000/api/projects/${projectId}/selected-assets`)
@@ -94,6 +97,26 @@ export const MyProject = ({ user }) => {
 
     const toggleSidebar = () => {
         setIsCollapsed(!isCollapsed);
+    };
+
+    const handleSaveBrandName = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`http://localhost:3000/api/projects/${projectId}/brand-name`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ brand_name: editBrandNameInput })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                setSelectedBrandName(data.brand_name);
+                setShowBrandNamePopup(false);
+            } else {
+                alert(data.message);
+            }
+        } catch (err) {
+            alert('เชื่อมต่อ Server ไม่ได้');
+        }
     };
 
     const handleSaveProjectName = async (e) => {
@@ -226,16 +249,21 @@ export const MyProject = ({ user }) => {
                         {/* Left Card */}
                         <div className="mp-card mp-large">
                             <div className="mp-illustration"></div>
-                            <div className="mp-pic-create" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', marginBottom: '20px' }}>
-                                {projectLogo ? (
-                                    <img 
-                                        src={`http://localhost:3000${projectLogo}`} 
-                                        alt="Project Logo" 
-                                        style={{ width: '200px', height: '200px', objectFit: 'contain', borderRadius: '50%', background: '#fff', padding: '10px', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' }} 
-                                    />
-                                ) : (
-                                    <img src={createImg} alt="" className="mp-pic" />
-                                )}
+                            <div className="mp-pic-create" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', marginBottom: '20px' }}>
+                                <CircularProgress percentage={completion.percentage} size={220} strokeWidth={8}>
+                                    {projectLogo ? (
+                                        <img
+                                            src={`http://localhost:3000${projectLogo}`}
+                                            alt="Project Logo"
+                                            style={{ width: '180px', height: '180px', objectFit: 'contain', borderRadius: '50%', background: '#fff', padding: '10px' }}
+                                        />
+                                    ) : (
+                                        <img src={createImg} alt="" style={{ width: '140px', height: '140px', objectFit: 'contain' }} />
+                                    )}
+                                </CircularProgress>
+                                <span style={{ marginTop: '10px', fontSize: '16px', fontWeight: 'bold', color: completion.percentage >= 75 ? '#4CAF50' : '#d75a2a' }}>
+                                    {completion.percentage}% สำเร็จ
+                                </span>
                             </div>
                             
                             <h2 className="mp-h2">
@@ -278,13 +306,24 @@ export const MyProject = ({ user }) => {
                             {/* Name Card */}
                             <div className="mp-card">
                                 <div className="mp-card-title" style={{ color: '#d75a2a', fontWeight: 'bold', marginBottom: '15px' }}>Name</div>
-                                <h3 style={{ marginBottom: '20px', color: '#333' }}>
-                                    {selectedBrandName ? selectedBrandName : "ให้ Ai ช่วยคิดชื่อให้สิ"}
+                                <h3
+                                    style={{ marginBottom: '20px', color: '#333', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                                    onClick={() => {
+                                        setEditBrandNameInput(selectedBrandName || '');
+                                        setShowBrandNamePopup(true);
+                                    }}
+                                    title="คลิกเพื่อแก้ไขชื่อแบรนด์"
+                                >
+                                    {selectedBrandName ? selectedBrandName : "ยังไม่ได้ตั้งชื่อแบรนด์"}
+                                    <iconify-icon icon="mdi:pencil-outline" style={{fontSize: '18px', color: '#aaa'}}></iconify-icon>
                                 </h3>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button
                                         className="mp-btn-edit"
-                                        onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'name' } })}
+                                        onClick={() => {
+                                            setEditBrandNameInput(selectedBrandName || '');
+                                            setShowBrandNamePopup(true);
+                                        }}
                                         style={{ padding: '8px 16px', background: '#ffe6de', color: '#d75a2a', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
                                     >
                                         Edit Name
@@ -294,7 +333,7 @@ export const MyProject = ({ user }) => {
                                         onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'name' } })}
                                         style={{ padding: '8px 16px', background: '#ffe6de', color: '#d75a2a', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
                                     >
-                                        View
+                                        AI แนะนำ
                                     </button>
                                 </div>
                             </div>
@@ -376,6 +415,41 @@ export const MyProject = ({ user }) => {
                     </div>
                 </main>
             </div>
+
+            {/* Popup สำหรับเปลี่ยนชื่อแบรนด์ */}
+            {showBrandNamePopup && (
+                <div style={popupOverlayStyle} onClick={() => setShowBrandNamePopup(false)}>
+                    <div style={popupContentStyle} onClick={e => e.stopPropagation()}>
+                        <h2 style={{color: '#d3542b', marginBottom: '15px'}}>ตั้งชื่อแบรนด์ของคุณ</h2>
+                        <p style={{color: '#888', fontSize: '14px', marginBottom: '15px'}}>พิมพ์ชื่อแบรนด์ที่ต้องการ หรือไปที่ "AI แนะนำ" เพื่อให้ AI ช่วยคิดชื่อ</p>
+                        <form onSubmit={handleSaveBrandName}>
+                            <input
+                                type="text"
+                                placeholder="พิมพ์ชื่อแบรนด์ที่นี่..."
+                                value={editBrandNameInput}
+                                onChange={(e) => setEditBrandNameInput(e.target.value)}
+                                required
+                                style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '10px', border: '1px solid #ccc', fontSize: '16px' }}
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBrandNamePopup(false)}
+                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#eee', color: '#333' }}
+                                >
+                                    ยกเลิก
+                                </button>
+                                <button
+                                    type="submit"
+                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#d3542b', color: '#fff', fontWeight: 'bold' }}
+                                >
+                                    บันทึกชื่อ
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Popup สำหรับเปลี่ยนชื่อโปรเจกต์ */}
             {showNamePopup && (

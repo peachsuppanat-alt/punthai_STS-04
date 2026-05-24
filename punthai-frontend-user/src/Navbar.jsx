@@ -5,7 +5,7 @@ import logo from "./assets/logo.png"
 
 const Navbar = ({ user, onOpenLogin, onLogout }) => {
     const navigate = useNavigate();
-
+    0
     const handleProfileClick = () => {
         if (user) {
             navigate('/profile');

@@ -58,7 +58,8 @@ function App() {
 
       <Routes>
         <Route path="/" element={<Home user={user} />} />
-        <Route path="/project" element={<MyProject />} /> 
+        <Route path="/project" element={<MyProject />} />
+        <Route path="/your-projects" element={<MyProject />} />
         <Route path="/brand-dna" element={<BrandDNA />} />
         <Route path="/create-concept" element={<CreateConcept />} />
         <Route path="/create-logo" element={<CreateLogo />} />

@@ -545,8 +545,22 @@ export const CreateConcept = () => {
   const [useDna, setUseDna]   = useState(false);
   const [nmErrors, setNmErrors] = useState({});
   const [namesList, setNamesList] = useState([]);
+  const [customBrandName, setCustomBrandName] = useState('');
+  const [savingCustomName, setSavingCustomName] = useState(false);
 
-  useEffect(() => { if (projectId) fetchNames(); }, [projectId]);
+  useEffect(() => {
+    if (projectId) {
+      fetchNames();
+      fetch(`http://localhost:3000/api/projects/detail/${projectId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success' && data.project.brand_name) {
+            setCustomBrandName(data.project.brand_name);
+          }
+        })
+        .catch(err => console.error(err));
+    }
+  }, [projectId]);
 
   // ดึง palette ที่ save แล้วจาก DB เพื่อเอา color_id / concept_id มาใช้กด Favorite & Select
   const fetchDbPalettes = async () => {
@@ -668,7 +682,34 @@ export const CreateConcept = () => {
         body: JSON.stringify({ project_id: projectId })
       });
       fetchNames();
+      const res = await fetch(`http://localhost:3000/api/projects/detail/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success' && data.project.brand_name) {
+        setCustomBrandName(data.project.brand_name);
+      }
     } catch (err) { console.error(err); }
+  };
+
+  const handleSaveCustomBrandName = async () => {
+    if (!customBrandName.trim()) return alert('กรุณาระบุชื่อแบรนด์');
+    setSavingCustomName(true);
+    try {
+      const res = await fetch(`http://localhost:3000/api/projects/${projectId}/brand-name`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_name: customBrandName.trim() })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        alert('บันทึกชื่อแบรนด์สำเร็จ!');
+      } else {
+        alert(data.message);
+      }
+    } catch (err) {
+      alert('เชื่อมต่อ Server ไม่ได้');
+    } finally {
+      setSavingCustomName(false);
+    }
   };
 
   const selectedNameObj = namesList.find(n => n.is_selected);
@@ -998,19 +1039,44 @@ export const CreateConcept = () => {
           {/* ════════════════════════════════════
               TAB 1: NAME  (original, unchanged)
               ════════════════════════════════════ */}
-          <div className="cncpt-tab-content" style={{ display: activeTab === 'name' ? 'flex' : 'none', alignItems: 'flex-start', padding: '40px' }}>
+          <div className="cncpt-tab-content" style={{ display: activeTab === 'name' ? 'flex' : 'none', alignItems: 'flex-start', padding: '40px', flexDirection: 'column' }}>
+            {/* ช่องตั้งชื่อแบรนด์ด้วยตัวเอง */}
+            <div style={{ width: '100%', marginBottom: '30px', background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+              <p style={{ color: '#d75a2a', fontWeight: 'bold', marginBottom: '10px', fontSize: '16px' }}>
+                <iconify-icon icon="mdi:pencil-outline" style={{ verticalAlign: 'middle', marginRight: '6px' }}></iconify-icon>
+                ชื่อแบรนด์ของคุณ
+              </p>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="พิมพ์ชื่อแบรนด์ที่ต้องการ..."
+                  value={customBrandName}
+                  onChange={(e) => setCustomBrandName(e.target.value)}
+                  style={{ flex: 1, padding: '14px 18px', borderRadius: '12px', border: '1px solid #ddd', fontSize: '18px', fontWeight: 'bold', color: '#333', outline: 'none' }}
+                />
+                <button
+                  onClick={handleSaveCustomBrandName}
+                  disabled={savingCustomName}
+                  style={{ padding: '14px 24px', borderRadius: '12px', border: 'none', background: '#d3542b', color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px', whiteSpace: 'nowrap' }}
+                >
+                  {savingCustomName ? 'กำลังบันทึก...' : 'บันทึกชื่อ'}
+                </button>
+              </div>
+              <p style={{ color: '#aaa', fontSize: '13px', marginTop: '8px' }}>ชื่อนี้จะถูกใช้ในการสร้างโลโก้และคอนเทนต์ต่างๆ</p>
+            </div>
+
             {namesList.length === 0 ? (
               <div className="cncpt-empty-state" style={{ width: '100%' }}>
                 <div className="cncpt-empty-icon"><iconify-icon icon="mdi:pencil-box-outline"></iconify-icon></div>
-                <p className="cncpt-empty-title">Find the perfect brand name for you.</p>
-                <button className="cncpt-get-start-btn" onClick={() => openModal('name')}>Get Start</button>
+                <p className="cncpt-empty-title">หรือให้ AI ช่วยคิดชื่อแบรนด์ให้คุณ</p>
+                <button className="cncpt-get-start-btn" onClick={() => openModal('name')}>ให้ AI คิดชื่อ</button>
               </div>
             ) : (
               <div style={{ width: '100%' }}>
                 {selectedNameObj && (
                   <div className="cncpt-result-state" style={{ marginBottom: '40px', background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
                     <p className="cncpt-result-label" style={{ color: '#d75a2a' }}>ชื่อที่คุณเลือกใช้สำหรับโปรเจกต์นี้</p>
-                    <h2 className="cncpt-result-name" style={{ fontSize: '50px', color: '#d75a2a', margin: '15px 0' }}>{selectedNameObj.brand_name}</h2>
+                    <h2 className="cncpt-result-name" style={{ fontSize: '50px', color: '#d75a2a', margin: '15px 0' }}>{customBrandName || selectedNameObj.brand_name}</h2>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>

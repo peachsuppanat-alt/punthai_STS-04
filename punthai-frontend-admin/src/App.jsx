@@ -1,28 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './Login';
-import Dashboard from './Dashboard';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './context/AuthContext';
+import AdminLayout from './components/layout/AdminLayout';
+import Login from './pages/Login';
+import HomePage from './pages/home/HomePage';
+import DashboardsPage from './pages/dashboards/DashboardsPage';
+import NotificationPage from './pages/notifications/NotificationPage';
+import PackageListPage from './pages/packages/PackageListPage';
+import PackageFormPage from './pages/packages/PackageFormPage';
 
-function App() {
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    // เช็คว่าเคยล็อคอิน Admin ไว้ไหม
-    const adminSession = localStorage.getItem('adminData');
-    if (adminSession) setIsAdmin(true);
-  }, []);
-
+export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* หน้า Login */}
-        <Route path="/login" element={!isAdmin ? <Login setIsAdmin={setIsAdmin} /> : <Navigate to="/" />} />
-        
-        {/* หน้า Dashboard (ถ้ายังไม่ล็อคอิน ให้เด้งไป Login) */}
-        <Route path="/" element={isAdmin ? <Dashboard setIsAdmin={setIsAdmin} /> : <Navigate to="/login" />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<AdminLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="dashboards" element={<DashboardsPage />} />
+            <Route path="notifications" element={<NotificationPage />} />
+            <Route path="packages" element={<PackageListPage />} />
+            <Route path="packages/new" element={<PackageFormPage />} />
+            <Route path="packages/:id/edit" element={<PackageFormPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: { fontFamily: 'var(--font-family)', fontSize: '14px' },
+        }}
+      />
+    </AuthProvider>
   );
 }
-
-export default App;
