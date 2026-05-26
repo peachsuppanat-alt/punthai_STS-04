@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import './product.css';
-
+import './Product.css';
+import { ProductSidebar } from '../components/ProductSidebar';
 import logoImg from '../assets/logo.png';
-import helpImg from '../assets/help.png';
 
 export const Product = () => {
   const navigate = useNavigate();
@@ -11,15 +10,14 @@ export const Product = () => {
   const projectId = location.state?.projectId;
 
   // States
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [products, setProducts] = useState([]); // เก็บรายการสินค้า
+  const [products, setProducts] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   // Form States
   const [productName, setProductName] = useState('');
   const [productType, setProductType] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  
+
   // Image Upload States
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -30,15 +28,14 @@ export const Product = () => {
     { label: 'เครื่องดื่ม', value: 'เครื่องดื่ม' },
     { label: 'เสื้อผ้า', value: 'เสื้อผ้า' },
     { label: 'ความงาม', value: 'ความงาม' },
-    { label: 'ของใช้', value: 'ของใช้' }
+    { label: 'ของใช้', value: 'ของใช้' },
   ];
 
-  // ดึงข้อมูลสินค้าเมื่อเปิดหน้า
   useEffect(() => {
     if (projectId) {
       fetchProducts();
     } else {
-      alert("ไม่พบรหัสโปรเจกต์ กรุณากลับไปเลือกโปรเจกต์ใหม่");
+      alert('ไม่พบรหัสโปรเจกต์ กรุณากลับไปเลือกโปรเจกต์ใหม่');
       navigate('/');
     }
   }, [projectId]);
@@ -47,17 +44,14 @@ export const Product = () => {
     try {
       const res = await fetch(`http://localhost:3000/api/brand_product/${projectId}`);
       const data = await res.json();
-      if (data.status === 'success') {
-        setProducts(data.products);
-      }
+      if (data.status === 'success') setProducts(data.products);
     } catch (err) {
-      console.error("Fetch products error:", err);
+      console.error('Fetch products error:', err);
     }
   };
 
-  // --- Modal Logic ---
   const handleOpenModal = () => setIsModalOpen(true);
-  
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     resetForm();
@@ -71,7 +65,6 @@ export const Product = () => {
     setIsDropdownOpen(false);
   };
 
-  // --- Image Upload Logic ---
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) processFile(file);
@@ -89,189 +82,196 @@ export const Product = () => {
     if (file) processFile(file);
   };
 
-  // --- Submit Form ---
   const handleSubmit = async () => {
-    if (!productName) return alert("กรุณากรอกชื่อสินค้า");
-    if (!productType) return alert("กรุณาเลือกประเภทสินค้า");
-    // หมายเหตุ: ถ้าบังคับให้อัปโหลดรูปด้วย ให้เพิ่ม if (!imageFile) return alert("กรุณาอัปโหลดรูปภาพ");
+    if (!productName) return alert('กรุณากรอกชื่อสินค้า');
+    if (!productType) return alert('กรุณาเลือกประเภทสินค้า');
 
     const formData = new FormData();
     formData.append('project_id', projectId);
     formData.append('name_product', productName);
     formData.append('type_product', productType);
-    if (imageFile) {
-        formData.append('image_product', imageFile);
-    }
+    if (imageFile) formData.append('image_product', imageFile);
 
     try {
       const res = await fetch('http://localhost:3000/api/brand_product', {
         method: 'POST',
-        body: formData, // ส่งเป็น FormData เพื่อรองรับไฟล์
+        body: formData,
       });
       const data = await res.json();
-
       if (data.status === 'success') {
-        fetchProducts(); // โหลดข้อมูลใหม่มาแสดง
+        fetchProducts();
         handleCloseModal();
       } else {
-        alert("เพิ่มสินค้าไม่สำเร็จ: " + data.message);
+        alert('เพิ่มสินค้าไม่สำเร็จ: ' + data.message);
       }
     } catch (err) {
       console.error(err);
-      alert("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+      alert('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
     }
   };
 
   return (
-    <div className="yp-body">
-      <div className="yp-container">
-        {/* Sidebar */}
-        <aside className={`yp-sidebar ${isSidebarCollapsed ? 'yp-collapsed' : ''}`}>
-          <button className="yp-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
-            {isSidebarCollapsed ? '❯' : '❮'}
-          </button>
-          
-          <ul className="yp-menu">
-            {/* กดปุ่มนี้เพื่อกลับไปหน้า MyProject.jsx */}
-            <li onClick={() => navigate('/project', { state: { projectId } })}>
-              <span className="yp-icon"><iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon></span>
-              <span className="yp-text">Projects</span>
-            </li>
-            <li onClick={() => navigate('/brand-dna', { state: { projectId } })}>
-              <span className="yp-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span>
-              <span className="yp-text">Brand DNA</span>
-            </li>
-            <li onClick={() => navigate('/create-concept', { state: { projectId } })}>
-              <span className="yp-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span>
-              <span className="yp-text">Create Concept</span>
-            </li>
-            <li onClick={() => navigate('/create-logo', { state: { projectId}})} >
-              <span className="yp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-              <span className="yp-text">Create Logo</span>
-            </li>
-            <li onClick={() => navigate('/result', { state: { projectId } })} style={{ cursor: 'pointer' }} >
-              <span className="yp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-              <span className="yp-text">Create Pictures</span>
-            </li>
-          </ul>
-          <hr className="yp-hr" />
-          <ul className="yp-menu">
-            {/* แท็บนี้ Active อยู่ */}
-            <li className="yp-active" style={{ background: '#f3f6ea', color: '#6b8e23' }}>
-              <span className="yp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-              <span className="yp-text">Yours Projects</span>
-            </li>
-          </ul>
+    <div className="pd-body">
 
-          <div className="yp-help">
-            <img src={helpImg} className="yp-help-img" alt="help" />
-            <p className="yp-help-text">Having trouble?</p>
-            <a href="#" className="yp-contact-link">Contact Us</a>
-          </div>
-        </aside>
+      {/* Orbs */}
+      <div className="pd-orb3" aria-hidden="true"></div>
+      <div className="pd-orb4" aria-hidden="true"></div>
+
+      {/* Navbar */}
+      <header className="pd-navbar">
+        <div className="pd-logo">
+          <Link to="/">
+            <img src={logoImg} alt="logo" className="pd-logo-img" />
+          </Link>
+        </div>
+        <div className="pd-nav-icons">
+          <button className="pd-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
+          <button className="pd-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
+          <button className="pd-btn-users" onClick={() => navigate('/profile')}><iconify-icon icon="solar:user-linear"></iconify-icon></button>
+        </div>
+      </header>
+
+      <div className="pd-container">
+
+        {/* Sidebar */}
+        <ProductSidebar projectId={projectId} />
 
         {/* Main Content */}
-        <main className="yp-main">
-          <h1 lang="en" className="yp-h1">My Project</h1>
-          <p className="yp-subtitle">พัฒนาแบรนด์ของคุณให้ดีกว่าเดิม</p>
+        <main className="pd-main">
 
-          {/* แสดงการ์ดสินค้าถ้ามีข้อมูลใน Database */}
-          {/* แสดงการ์ดสินค้าถ้ามีข้อมูลใน Database */}
-            <div className="yp-cards-container">
+          <h1 className="pd-page-title" lang="en">My Products</h1>
+          <p className="pd-page-subtitle">จัดการรายการสินค้าของโปรเจกต์คุณ</p>
+
+          {products.length === 0 ? (
+            <div className="pd-empty-state">
+              <div className="pd-empty-icon">
+                <iconify-icon icon="mdi:package-variant-closed"></iconify-icon>
+              </div>
+              <p className="pd-empty-title">ยังไม่มีสินค้าในโปรเจกต์นี้</p>
+              <button className="pd-add-first-btn" onClick={handleOpenModal}>
+                <iconify-icon icon="mdi:plus"></iconify-icon> เพิ่มสินค้าแรก
+              </button>
+            </div>
+          ) : (
+            <div className="pd-cards-grid">
               {products.map((product, index) => (
-                <div key={product.product_id || index} className="yp-ai-card">
-                  <div className="yp-ai-card-header">
-                    <div className="yp-step-number">{index + 1}</div>
-                    <h2>{product.name_product}</h2>
-                  </div>
-                  <div className="yp-image-group">
-                    <div className="yp-image-box">
-                       {product.image_product ? (
-                          <img src={`http://localhost:3000/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} />
-                       ) : null}
+                <div key={product.product_id || index} className="pd-product-card">
+                  <div className="pd-card-index">{index + 1}</div>
+                  <div className="pd-card-image-row">
+                    <div className="pd-image-box pd-image-main">
+                      {product.image_product ? (
+                        <img
+                          src={`http://localhost:3000/uploads/${product.image_product}`}
+                          alt={product.name_product}
+                        />
+                      ) : (
+                        <iconify-icon icon="mdi:image-outline"></iconify-icon>
+                      )}
                     </div>
-                    {/* กล่องเปล่าเผื่อไว้ใส่รูป mockup ตามดีไซน์ของคุณ */}
-                    <div className="yp-image-box"></div>
-                    <div className="yp-image-box"></div>
+                    <div className="pd-image-box pd-image-placeholder"></div>
+                    <div className="pd-image-box pd-image-placeholder"></div>
+                  </div>
+                  <div className="pd-card-footer">
+                    <h3 className="pd-card-name">{product.name_product}</h3>
+                    {product.type_product && (
+                      <span className="pd-card-type">{product.type_product}</span>
+                    )}
                   </div>
                 </div>
               ))}
-          </div>
 
-          {/* ปุ่มบวก (+) */}
-          <button className="yp-fab" onClick={handleOpenModal}>
-            <iconify-icon icon="tabler:plus" width="32" height="32"></iconify-icon>
-          </button>
+              {/* Add More Card */}
+              <div className="pd-product-card pd-add-card" onClick={handleOpenModal}>
+                <iconify-icon icon="mdi:plus-circle-outline"></iconify-icon>
+                <p>เพิ่มสินค้าใหม่</p>
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
-      {/* Popup Modal */}
+      {/* FAB */}
+      {products.length > 0 && (
+        <button className="pd-fab" onClick={handleOpenModal}>
+          <iconify-icon icon="tabler:plus" width="28" height="28"></iconify-icon>
+        </button>
+      )}
+
+      {/* Modal */}
       {isModalOpen && (
-        <div className="yp-modal" onClick={handleCloseModal}>
-          <div className="yp-modal-box" onClick={(e) => e.stopPropagation()}>
-            <button className="yp-close-modal" onClick={handleCloseModal}>&times;</button>
+        <div className="cncpt-cc-modal" onClick={handleCloseModal}>
+          <div className="cncpt-cc-modal-box" onClick={(e) => e.stopPropagation()}>
+            <button className="cncpt-cc-close" onClick={handleCloseModal}>✕</button>
 
             {/* Step 1 */}
-            <div className="yp-form-group">
-              <label><span className="yp-step">1</span> สินค้าของคุณคืออะไร</label>
-              <input 
-                type="text" 
-                placeholder="เช่น โดนัท" 
+            <div className="cncpt-form-group">
+              <label>
+                <span className="cncpt-step">1</span>
+                สินค้าของคุณคืออะไร
+                <span className="cncpt-req-star">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="เช่น โดนัท"
                 value={productName}
                 onChange={(e) => setProductName(e.target.value)}
               />
             </div>
 
             {/* Step 2 */}
-            <div className="yp-form-group">
-              <label><span className="yp-step">2</span> ประเภท</label>
-              <div className="yp-dropdown">
-                <div className="yp-dropdown-selected" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
-                  <span className="yp-selected-text">{productType || '-- เลือกประเภทสินค้า --'}</span>
-                  <span className="yp-arrow">⌄</span>
+            <div className="cncpt-form-group">
+              <label><span className="cncpt-step">2</span> ประเภทสินค้า <span className="cncpt-req-star">*</span></label>
+              <div className={`cncpt-cc-dd${isDropdownOpen ? ' cncpt-open' : ''}`}>
+                <div
+                  className="cncpt-cc-dd-sel"
+                  onClick={(e) => { e.stopPropagation(); setIsDropdownOpen(!isDropdownOpen); }}
+                >
+                  <span className={productType ? '' : 'cncpt-dd-placeholder'}>
+                    {productType || '-- เลือกประเภทสินค้า --'}
+                  </span>
+                  <iconify-icon icon="mdi:chevron-down"></iconify-icon>
                 </div>
-                {isDropdownOpen && (
-                  <ul className="yp-dropdown-menu" style={{ display: 'block' }}>
-                    {categories.map((cat, idx) => (
-                      <li key={idx} onClick={() => { setProductType(cat.value); setIsDropdownOpen(false); }}>
-                        {cat.label}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <ul className="cncpt-cc-dd-list">
+                  {categories.map((cat) => (
+                    <li key={cat.value} onClick={() => { setProductType(cat.value); setIsDropdownOpen(false); }}>
+                      {cat.label}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
 
             {/* Step 3 */}
-            <div className="yp-form-group">
-              <label><span className="yp-step">3</span> รูปภาพสินค้าของคุณ</label>
-              <div 
-                className="yp-upload-box" 
-                onDragOver={handleDragOver} 
+            <div className="cncpt-form-group">
+              <label><span className="cncpt-step">3</span> รูปภาพสินค้าของคุณ</label>
+              <div
+                className="pd-upload-box"
+                onDragOver={handleDragOver}
                 onDrop={handleDrop}
-                style={{ borderColor: previewUrl ? '#cfcfcf' : '' }}
               >
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  hidden 
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
                   ref={fileInputRef}
                   onChange={handleFileChange}
                 />
-                
                 {previewUrl ? (
                   <>
-                    <img src={previewUrl} className="yp-preview-img" alt="preview" />
-                    <button type="button" className="yp-change-btn" onClick={() => fileInputRef.current.click()}>
-                      เปลี่ยนรูป
+                    <img src={previewUrl} className="pd-preview-img" alt="preview" />
+                    <button type="button" className="pd-change-btn" onClick={() => fileInputRef.current.click()}>
+                      <iconify-icon icon="mdi:image-edit-outline"></iconify-icon> เปลี่ยนรูป
                     </button>
                   </>
                 ) : (
                   <>
-                    <p className="yp-drag">Drag & Drop here</p>
-                    <p className="yp-sub">รูปภาพของคุณ หรือลิงก์</p>
-                    <button type="button" className="yp-upload-btn" onClick={() => fileInputRef.current.click()}>
-                      Upload
+                    <div className="pd-upload-icon">
+                      <iconify-icon icon="mdi:cloud-upload-outline"></iconify-icon>
+                    </div>
+                    <p className="pd-drag-text">Drag &amp; Drop here</p>
+                    <p className="pd-drag-sub">รูปภาพสินค้าของคุณ</p>
+                    <button type="button" className="pd-upload-btn" onClick={() => fileInputRef.current.click()}>
+                      เลือกรูปภาพ
                     </button>
                   </>
                 )}
@@ -279,9 +279,9 @@ export const Product = () => {
             </div>
 
             {/* Actions */}
-            <div className="yp-modal-actions">
-              <button className="yp-cancel" onClick={handleCloseModal}>ยกเลิก</button>
-              <button className="yp-confirm" onClick={handleSubmit}>ตกลง</button>
+            <div className="cncpt-modal-actions">
+              <button className="cncpt-cancel-btn" onClick={handleCloseModal}>ยกเลิก</button>
+              <button className="cncpt-confirm-btn" onClick={handleSubmit}>เพิ่มสินค้า</button>
             </div>
           </div>
         </div>

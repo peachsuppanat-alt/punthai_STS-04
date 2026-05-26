@@ -1,0 +1,263 @@
+/* =====================================================
+   sidebar.css — ProjectSidebar (ใช้ร่วมกันทุกหน้าใน project_feature)
+   Fonts : Bai Jamjuree (Thai) + Poppins (EN)
+   Brand : #d3542b  /  #f5f5f5 bg  /  white surface
+   ===================================================== */
+
+/* ── Sidebar Container ─────────────────────────────── */
+.csnews-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: #ffffff;
+  padding: 20px 15px;
+  border-right: 1px solid #eee;
+  transition: width 0.3s, min-width 0.3s, padding 0.3s, background 0.3s, backdrop-filter 0.3s, box-shadow 0.3s;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: visible;
+  transition: width 0.3s, min-width 0.3s, padding 0.3s;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 101;
+  flex-shrink: 0;
+}
+
+/* ── Collapsed State ───────────────────────────────── */
+.csnews-sidebar.csnews-collapsed {
+  width: 80px;
+  min-width: 80px;
+  padding: 20px 10px;
+  border-radius: 0 30px 30px 0;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.70) !important;
+  box-shadow: 4px 0 24px rgba(180, 90, 50, 0.06), inset 1px 0 0 rgba(255,255,255,0.6);
+  isolation: isolate;
+}
+
+.csnews-sidebar.csnews-collapsed .csnews-text        { display: none; }
+.csnews-sidebar.csnews-collapsed .csnews-menu li     { justify-content: center; width: 100%; padding: 10px; }
+.csnews-sidebar.csnews-collapsed .csnews-hr          { width: 40px; margin: 10px auto; }
+.csnews-sidebar.csnews-collapsed .csnews-logout-wrap { align-items: center; }
+.csnews-sidebar.csnews-collapsed .csnews-btn-logout  {
+  justify-content: center;
+  padding: 12px;
+}
+
+/* ── Toggle Button ─────────────────────────────────── */
+.csnews-toggle-btn {
+  position: fixed;
+  top: calc(80px + 20px); /* ชิดใต้ navbar (ความสูง navbar 80px) */
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 12px rgba(180, 90, 50, 0.10), inset 0 1px 0 rgba(255,255,255,0.6);
+  cursor: pointer;
+  padding: 0;
+  z-index: 9999;
+  transition: left 0.3s, background 0.25s, box-shadow 0.25s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #a05a3a;
+}
+.csnews-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 6px 18px rgba(180, 90, 50, 0.15), inset 0 1px 0 rgba(255,255,255,0.7);
+  color: #d3542b;
+}
+
+/* ── Menu List ─────────────────────────────────────── */
+.csnews-menu {
+  list-style: none;
+  padding: 0;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.csnews-menu li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: color 0.22s ease, background 0.22s ease;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #444;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.csnews-menu li:hover {
+  color: #d3542b;
+  background: transparent;
+}
+
+.csnews-menu li.csnews-active {
+  color: #d3542b;
+  font-weight: 600;
+  background: transparent;
+}
+
+/* ── Icons ─────────────────────────────────────────── */
+.csnews-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: transparent;
+  transition: background 0.22s ease, color 0.22s ease;
+}
+
+.csnews-icon iconify-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+/* icon box pop on hover & active */
+.csnews-menu li:hover .csnews-icon,
+.csnews-menu li.csnews-active .csnews-icon {
+  background: #d3542b;
+  color: #fff;
+}
+
+/* iconify รับ color จาก parent ผ่าน currentColor */
+.csnews-menu li:hover .csnews-icon iconify-icon,
+.csnews-menu li.csnews-active .csnews-icon iconify-icon {
+  color: #fff;
+}
+
+/* ── Text ──────────────────────────────────────────── */
+.csnews-text {
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+/* ── Divider ───────────────────────────────────────── */
+.csnews-hr {
+  border: none;
+  border-top: 1px solid #e5e5e5;
+  margin: 12px 0 4px 0;
+  width: 100%;
+}
+
+/* ── Logout Button ─────────────────────────────────── */
+.csnews-logout-wrap {
+  margin-top: auto;
+  padding: 16px 0 4px 0;
+}
+
+.csnews-btn-logout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: #fff3ee;
+  border: 1px solid #f4c4aa;
+  border-radius: 12px;
+  color: #d3542b;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.csnews-btn-logout iconify-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.csnews-btn-logout:hover {
+  background: #ffe6d9;
+  border-color: #d3542b;
+}
+
+/* ── Background Illustration ───────────────────────── */
+.csnews-bg-illustration {
+  position: absolute;
+  inset: 0;                       /* เต็ม sidebar ทั้งหมด */
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;                     /* เลเยอร์หลังสุด */
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+/* overlay สีให้กลืนกับ brand */
+.csnews-bg-illustration::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 243, 238, 0.58) 50%,
+    rgba(245, 235, 225, 0.45) 100%
+  );
+}
+
+.csnews-bg-illustration img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center bottom;
+  filter: saturate(0.75) brightness(1.08) sepia(0.12);
+}
+
+/* ทุก element ใน sidebar อยู่เหนือรูป */
+.csnews-menu,
+.csnews-hr,
+.csnews-logout-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+/* ซ่อนรูปตอน collapsed */
+.csnews-sidebar.csnews-collapsed .csnews-bg-illustration {
+  display: none;
+}
+
+/* ── Scrollbar ─────────────────────────────────────── */
+.csnews-sidebar::-webkit-scrollbar       { width: 4px; }
+.csnews-sidebar::-webkit-scrollbar-track { background: transparent; }
+.csnews-sidebar::-webkit-scrollbar-thumb { background: #e0d8d5; border-radius: 99px; }
+.csnews-sidebar::-webkit-scrollbar-thumb:hover { background: #c8b0aa; }
+
+/* ── Responsive ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .csnews-sidebar {
+    position: fixed;
+    top: 80px;
+    left: 0;
+    height: calc(100vh - 80px);
+    z-index: 500;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .csnews-toggle-btn {
+    top: calc(80px + 16px);
+  }
+}

@@ -339,7 +339,6 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
   const [saving, setSaving]           = useState(false);
   const [successId, setSuccessId]     = useState(null);
 
-  // Position: below & right-aligned to the heart button
   const [style, setStyle] = useState({});
   useEffect(() => {
     if (!anchorRect) return;
@@ -350,7 +349,6 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
     setStyle({ position: 'fixed', top: anchorRect.bottom + 8, left });
   }, [anchorRect]);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target)) onClose();
@@ -359,7 +357,6 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
 
-  // Fetch products
   useEffect(() => {
     if (!projectId) { setLoading(false); return; }
     fetch(`http://localhost:3000/api/brand_product/${projectId}`)
@@ -395,10 +392,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
 
   return (
     <div className="pkc-like-picker" style={style} ref={pickerRef} onClick={e => e.stopPropagation()}>
-      {/* Arrow tip */}
       <div className="pkc-like-picker-arrow" />
-
-      {/* Header */}
       <div className="pkc-like-picker-header">
         <iconify-icon icon="mdi:heart" style={{ color: '#e53935', fontSize: '15px' }} />
         <span>บันทึก Favorite ให้สินค้า</span>
@@ -406,18 +400,14 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
           <iconify-icon icon="mdi:close" />
         </button>
       </div>
-
-      {/* Package hint */}
       <div className="pkc-like-picker-pkg">
         <img src={pkg.thumbnail} alt={pkg.name} className="pkc-like-picker-pkg-img" />
         <span className="pkc-like-picker-pkg-name">{pkg.name}</span>
       </div>
-
-      {/* Product list */}
       <div className="pkc-like-picker-list">
         {loading ? (
           <div className="pkc-like-picker-state">
-            <iconify-icon icon="mdi:loading" style={{ animation: 'pkc-spin 1s linear infinite', fontSize: '22px', color: '#D35325' }} />
+            <iconify-icon icon="mdi:loading" style={{ animation: 'pkc-spin 1s linear infinite', fontSize: '22px', color: '#c94f24' }} />
           </div>
         ) : products.length === 0 ? (
           <div className="pkc-like-picker-state" style={{ fontSize: '12px', color: '#aaa' }}>
@@ -442,15 +432,13 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
               {isDone
                 ? <iconify-icon icon="mdi:check-circle" style={{ color: '#4caf50', fontSize: '18px', flexShrink: 0 }} />
                 : isActive
-                  ? <iconify-icon icon="mdi:radiobox-marked" style={{ color: '#D35325', fontSize: '18px', flexShrink: 0 }} />
+                  ? <iconify-icon icon="mdi:radiobox-marked" style={{ color: '#c94f24', fontSize: '18px', flexShrink: 0 }} />
                   : <iconify-icon icon="mdi:radiobox-blank" style={{ color: '#ccc', fontSize: '18px', flexShrink: 0 }} />
               }
             </div>
           );
         })}
       </div>
-
-      {/* Footer */}
       {!successId && (
         <div className="pkc-like-picker-footer">
           <button
@@ -527,46 +515,41 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
       .finally(() => setLoading(false));
   }, [projectId]);
 
-const handleConfirm = async () => {
-  if (!selectedProductId) return alert('กรุณาเลือกสินค้าก่อน');
-  setSaving(true);
-  try {
-    // 1. อัปเดต brand_product.package_id
-    await fetch(`http://localhost:3000/api/brand_product/${selectedProductId}/package`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ package_id: pkg.id }),
-    });
-
-    // 2. บันทึกลง package_catalog
-    const res2 = await fetch('http://localhost:3000/api/package-catalog', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        product_id: selectedProductId,
-        package_id: pkg.id,
-        action: 'select',
-      }),
-    });
-
-    const data = await res2.json();
-    if (data.status === 'success') {
-      setSuccessMsg(`เลือก Package "${pkg.name}" ให้กับสินค้าเรียบร้อยแล้ว!`);
-      setTimeout(() => onClose(), 1800);
-    } else {
-      alert('บันทึกไม่สำเร็จ: ' + data.message);
+  const handleConfirm = async () => {
+    if (!selectedProductId) return alert('กรุณาเลือกสินค้าก่อน');
+    setSaving(true);
+    try {
+      await fetch(`http://localhost:3000/api/brand_product/${selectedProductId}/package`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ package_id: pkg.id }),
+      });
+      const res2 = await fetch('http://localhost:3000/api/package-catalog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: selectedProductId,
+          package_id: pkg.id,
+          action: 'select',
+        }),
+      });
+      const data = await res2.json();
+      if (data.status === 'success') {
+        setSuccessMsg(`เลือก Package "${pkg.name}" ให้กับสินค้าเรียบร้อยแล้ว!`);
+        setTimeout(() => onClose(), 1800);
+      } else {
+        alert('บันทึกไม่สำเร็จ: ' + data.message);
+      }
+    } catch {
+      alert('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+    } finally {
+      setSaving(false);
     }
-  } catch {
-    alert('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   return (
     <div className="pkc-modal-backdrop" onClick={onClose}>
       <div className="pkc-select-product-modal" onClick={e => e.stopPropagation()}>
-        {/* Header */}
         <div className="pkc-sp-header">
           <button className="pkc-sp-back-btn" onClick={onBack}>
             <iconify-icon icon="mdi:arrow-left" />
@@ -581,8 +564,6 @@ const handleConfirm = async () => {
             <iconify-icon icon="mdi:close" />
           </button>
         </div>
-
-        {/* Body */}
         <div className="pkc-sp-body">
           {successMsg ? (
             <div className="pkc-sp-success">
@@ -591,7 +572,7 @@ const handleConfirm = async () => {
             </div>
           ) : loading ? (
             <div className="pkc-sp-loading">
-              <iconify-icon icon="mdi:loading" style={{ fontSize: '36px', color: '#D35325', animation: 'pkc-spin 1s linear infinite' }} />
+              <iconify-icon icon="mdi:loading" style={{ fontSize: '36px', color: '#c94f24', animation: 'pkc-spin 1s linear infinite' }} />
               <p>กำลังโหลดสินค้า...</p>
             </div>
           ) : products.length === 0 ? (
@@ -631,8 +612,6 @@ const handleConfirm = async () => {
             </div>
           )}
         </div>
-
-        {/* Footer */}
         {!successMsg && !loading && products.length > 0 && (
           <div className="pkc-sp-footer">
             <button className="pkc-sp-cancel-btn" onClick={onBack}>ย้อนกลับ</button>
@@ -694,19 +673,15 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
     )}
     <div className="pkc-modal-backdrop" onClick={onClose}>
       <div className="pkc-modal" onClick={e => e.stopPropagation()}>
-
-        {/* top-right actions */}
         <div className="pkc-modal-actions">
           <HeartBtn liked={liked} onToggle={onToggleLike} />
           <button className="pkc-modal-close" onClick={onClose}>
             <iconify-icon icon="mdi:close" />
           </button>
         </div>
-
         <div className="pkc-modal-inner">
           {/* LEFT */}
           <div className="pkc-modal-left">
-            {/* Main image – full, no background */}
             <div className="pkc-main-img-wrap" onClick={() => setLightboxOpen(true)} style={{cursor:'zoom-in'}}>
               <img
                 src={mat.images[activeImgIdx]}
@@ -718,7 +693,6 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
                 <iconify-icon icon="mdi:magnify-plus-outline" />
               </button>
             </div>
-            {/* Thumbnails */}
             <div className="pkc-thumbs">
               {mat.images.map((img, i) => (
                 <button
@@ -731,13 +705,11 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
               ))}
             </div>
           </div>
-
           {/* RIGHT */}
           <div className="pkc-modal-right">
             <CategoryBadges categories={pkg.categories} />
             <p className="pkc-modal-type">{pkg.type}</p>
             <h2 className="pkc-modal-name">{pkg.name}</h2>
-
             {pkg.materials.length > 1 && (
               <div className="pkc-section">
                 <p className="pkc-section-label">วัสดุ</p>
@@ -752,13 +724,11 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
                 </div>
               </div>
             )}
-
             <div className="pkc-section">
               <p className="pkc-section-label">ประเภทวัสดุ</p>
               <p className="pkc-detail-text">{mat.name}</p>
               <p className="pkc-detail-desc">{mat.detail}</p>
             </div>
-
             <div className="pkc-section">
               <p className="pkc-section-label">ขนาด</p>
               <div className="pkc-sizes">
@@ -771,7 +741,6 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
                 ))}
               </div>
             </div>
-
             <button className="pkc-select-btn" onClick={() => setShowSelectProduct(true)}>
               <iconify-icon icon="mdi:check-circle-outline"
                 style={{ marginRight: '8px', fontSize: '18px', verticalAlign: 'middle' }} />
@@ -793,7 +762,6 @@ function PackageCard({ pkg, liked, onToggleLike, onOpen }) {
   const intervalRef = useRef(null);
   const holdTimeoutRef = useRef(null);
   const holdingRef = useRef(false);
-
   const [pickerAnchor, setPickerAnchor] = useState(null);
 
   const stopCycle = () => {
@@ -823,10 +791,8 @@ function PackageCard({ pkg, liked, onToggleLike, onOpen }) {
   const handleHeartClick = (e) => {
     e.stopPropagation();
     if (liked) {
-      // ถ้ากดใจแล้ว → ยกเลิกได้ทันที
       onToggleLike(pkg.id);
     } else {
-      // ยังไม่กดใจ → เปิด picker เลือก product ก่อน
       const rect = e.currentTarget.getBoundingClientRect();
       setPickerAnchor(rect);
     }
@@ -865,7 +831,6 @@ function PackageCard({ pkg, liked, onToggleLike, onOpen }) {
           })}
         </div>
       </div>
-
       <div className="pkc-card-body">
         <p className="pkc-card-type">{pkg.type}</p>
         <h3 className="pkc-card-name">{pkg.name}</h3>
@@ -884,8 +849,6 @@ function PackageCard({ pkg, liked, onToggleLike, onOpen }) {
         </button>
       </div>
     </div>
-
-    {/* Inline Like Product Picker */}
     {pickerAnchor && (
       <LikeProductPicker
         pkg={pkg}
@@ -898,7 +861,7 @@ function PackageCard({ pkg, liked, onToggleLike, onOpen }) {
   );
 }
 
-// ─── Main Catalog ──────────────────────────────────────────────
+// ─── PackageCatalog — content only (no navbar/sidebar/tabs) ───
 export function PackageCatalog() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedPackage, setSelectedPackage] = useState(null);
@@ -924,36 +887,34 @@ export function PackageCatalog() {
 
   return (
     <>
-      {/* Filter row */}
-      <div className="pkc-filter-row">
-        <FilterDropdown activeFilter={activeFilter} onChange={setActiveFilter} />
-        {activeFilter !== 'all' && (
-          <span className="pkc-result-count">พบ {filtered.length} รายการ</span>
-        )}
+      <div className="pkc-content-card">
+        <div className="pkc-filter-row">
+          <FilterDropdown activeFilter={activeFilter} onChange={setActiveFilter} />
+          {activeFilter !== 'all' && (
+            <span className="pkc-result-count">พบ {filtered.length} รายการ</span>
+          )}
+        </div>
+        <div className="pkc-grid">
+          {filtered.length === 0 ? (
+            <div className="pkc-empty">
+              <iconify-icon icon="mdi:package-variant-remove" class="pkc-empty-icon" />
+              <div className="pkc-empty-text">ไม่พบ Package ในหมวดนี้</div>
+            </div>
+          ) : filtered.map(pkg => {
+            const liked = likedIds.has(pkg.id);
+            return (
+              <PackageCard
+                key={pkg.id}
+                pkg={pkg}
+                liked={liked}
+                onToggleLike={toggleLike}
+                onOpen={handleOpen}
+              />
+            );
+          })}
+        </div>
       </div>
 
-      {/* Grid */}
-      <div className="pkc-grid">
-        {filtered.length === 0 ? (
-          <div className="pkc-empty">
-            <iconify-icon icon="mdi:package-variant-remove" class="pkc-empty-icon" />
-            <div className="pkc-empty-text">ไม่พบ Package ในหมวดนี้</div>
-          </div>
-        ) : filtered.map(pkg => {
-          const liked = likedIds.has(pkg.id);
-          return (
-            <PackageCard
-              key={pkg.id}
-              pkg={pkg}
-              liked={liked}
-              onToggleLike={toggleLike}
-              onOpen={handleOpen}
-            />
-          );
-        })}
-      </div>
-
-      {/* Modal */}
       {selectedPackage && (
         <PackageDetailModal
           pkg={selectedPackage}

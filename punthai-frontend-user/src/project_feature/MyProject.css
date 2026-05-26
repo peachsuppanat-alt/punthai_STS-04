@@ -1,285 +1,280 @@
-/* ครอบตัวนี้เพื่อไม่ให้สไตล์ไปทับหน้าอื่น */
+/* =====================================================
+   MyProject.css — Thai warmth inspired UI
+   Brand: #d3542b  /  warm cream bg  /  Bai Jamjuree
+   ===================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+  --orange:      #c94f24;
+  --orange-dk:   #a83e1a;
+  --orange-lt:   #fff3ee;
+  --orange-mid:  #fde0d0;
+  --bg:          #fefaf7;
+  --surface:     #ffffff;
+  --surface-2:   #fdf9f6;
+  --cream-dark:  #f5ede4;
+  --line:        #ecddd3;
+  --line-dk:     #ddd0c4;
+  --charcoal:    #2a1f17;
+  --gray-2:      #5a4a40;
+  --gray-3:      #9a8880;
+  --gray-4:      #c4b5ab;
+  --radius-sm:   12px;
+  --radius-md:   18px;
+  --radius-lg:   24px;
+  --sh-sm:       0 2px 12px rgba(80,40,20,.07);
+  --sh-md:       0 8px 30px rgba(80,40,20,.10);
+  --sh-lg:       0 20px 56px rgba(80,40,20,.14);
+  --trans:       all .25s ease;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Wrapper ─────────────────────────────────────── */
 .mp-body-wrapper {
-  background: #f5f5f5;
+  background: var(--bg);
   font-family: 'Bai Jamjuree', sans-serif;
   min-height: 100vh;
 }
 
-.mp-body-wrapper:lang(en) {
-  font-family: 'Poppins', sans-serif;
-}
-
+/* ── Navbar ──────────────────────────────────────── */
 .mp-navbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 40px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  position: sticky;
-  top: 0;
+  padding: 0 40px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 80px;
   z-index: 1000;
+  box-shadow: var(--sh-sm);
 }
 
 .mp-logo-img {
-  height: 50px;     
-  width: auto;       
+  height: 46px;
+  width: auto;
   object-fit: contain;
   cursor: pointer;
-  transition: 0.3s ease;
+  transition: var(--trans);
 }
-
-.mp-logo-img:hover {
-  transform: scale(1.05);
-}
+.mp-logo-img:hover { transform: scale(1.04); }
 
 .mp-btn-users,
 .mp-btn-world {
-  width: 44px;
-  height: 44px;
+  width: 42px; height: 42px;
   border-radius: 50%;
-  border: none;
-  background: #f1f1f1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  transition: all 0.5s ease;
+  transition: var(--trans);
 }
-
 .mp-btn-users iconify-icon,
 .mp-btn-world iconify-icon {
-  font-size: 22px;
-  color: #D35325;
+  font-size: 20px;
+  color: var(--gray-2);
+  transition: var(--trans);
 }
-
 .mp-btn-users:hover,
 .mp-btn-world:hover {
-  background: #f05a28;
+  background: var(--orange);
+  border-color: var(--orange);
 }
-
 .mp-btn-users:hover iconify-icon,
-.mp-btn-world:hover iconify-icon {
-  color: #fff;
-}
+.mp-btn-world:hover iconify-icon { color: #fff; }
 
-.mp-nav-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
+.mp-nav-right { display: flex; align-items: center; gap: 16px; }
+.mp-nav-icons { display: flex; gap: 10px; align-items: center; }
 
-.mp-nav-icons {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
+/* ── Layout ──────────────────────────────────────── */
 .mp-container {
   display: flex;
-  min-height: calc(100vh - 80px); 
+  position: fixed;
+  top: 80px; left: 0; right: 0; bottom: 0;
+  overflow: hidden;
 }
 
-/* Sidebar */
-.mp-sidebar {
-  width: 240px;
-  background: #ffffff;
-  padding: 20px 15px;
-  border-right: 1px solid #eee;
-  position: sticky;  
-  top: 70px;  
-  height: calc(100vh - 70px); 
-  transition: 0.3s;
-  display: flex;
-  flex-direction: column;
-}
-
-.mp-sidebar.mp-collapsed {
-  width: 90px;
-  padding: 20px 10px;
-  border-radius: 0 30px 30px 0;
-  align-items: center;
-}
-
-.mp-menu {
-  list-style: none;
-  padding: 0;
-  margin-top: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.mp-menu li {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  font-weight: 500;
-}
-
-.mp-menu li:hover {
-  background: #f3f6ea;
-  color: #6b8e23;
-}
-
-.mp-icon iconify-icon {
-  font-size: 25px;
-  width: 24px;
-  height: 24px;
-  margin-top: 5px;
-}
-
-.mp-text {
-  white-space: nowrap;
-  transition: 0.3s;
-}
-
-.mp-hr {
-  border: none;
-  border-top: 1px solid #e5e5e5;
-  margin: 10px 0 -15px 0;
-}
-
-/* ตอนหด */
-.mp-sidebar.mp-collapsed .mp-text {
-  display: none;
-}
-
-.mp-sidebar.mp-collapsed .mp-menu li {
-  justify-content: center;
-  width: 100%;
-}
-
-.mp-sidebar.mp-collapsed .mp-help {
-  display: none;
-}
-
-.mp-sidebar.mp-collapsed {
-  width: 80px;
-}
-
-.mp-sidebar.mp-collapsed .mp-hr {
-  width: 40px;         
-  margin: 10px auto;  
-}
-
-/* ตัวเลื่อนยืดหด */
-.mp-toggle-btn {
-  position: absolute;
-  top: 20px;
-  right: -15px;
-  width: 34px;
-  height: 34px;
-  border-radius: 100%;
-  border: none;
-  background: #f1f1f1;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  padding: 0;
-}
-
-.mp-help {
-  margin-top: auto;
-  text-align: center;
-}
-
-.mp-help-img {
-  width: 135px;
-  margin-bottom: 10px;
-}
-
-.mp-help-text {
-  color: #d75a2a;
-  font-weight: 600;
-}
-
-.mp-contact-link {
-  display: inline-block;
-  color: #333;
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.mp-contact-link:hover {
-  text-decoration: underline;
-}
-
-.mp-sidebar.mp-collapsed .mp-help-text,
-.mp-sidebar.mp-collapsed .mp-contact-link {
-  display: none;
-}
-
-/* Main */
 .mp-main {
   flex: 1;
-  padding: 30px;
+  padding: 32px 36px;
+  overflow-y: auto;
+  position: relative;
+  background: #f5f2ec;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-dk) transparent;
 }
 
+/* ── Soft Orbs Background (เหมือน BrandDNA) ─────── */
+.mp-main::before,
+.mp-main::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(72px);
+}
+.mp-main::before {
+  width: 560px; height: 560px;
+  top: 60px; left: -140px;
+  background: radial-gradient(circle, rgba(244,162,126,0.55) 0%, rgba(244,162,126,0) 70%);
+  animation: orbDrift1 11s ease-in-out infinite alternate;
+}
+.mp-main::after {
+  width: 500px; height: 500px;
+  bottom: -80px; right: -100px;
+  background: radial-gradient(circle, rgba(126,207,164,0.48) 0%, rgba(126,207,164,0) 70%);
+  animation: orbDrift2 14s ease-in-out infinite alternate;
+}
+.mp-orb3 {
+  position: fixed;
+  width: 420px; height: 420px;
+  top: 28%; right: 5%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(68px);
+  background: radial-gradient(circle, rgba(126,174,207,0.42) 0%, rgba(126,174,207,0) 70%);
+  animation: orbDrift3 9s ease-in-out infinite alternate;
+}
+.mp-orb4 {
+  position: fixed;
+  width: 320px; height: 320px;
+  top: 52%; left: 32%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(80px);
+  background: radial-gradient(circle, rgba(180,155,220,0.32) 0%, rgba(180,155,220,0) 70%);
+  animation: orbDrift4 16s ease-in-out infinite alternate;
+}
+@keyframes orbDrift1 {
+  0%   { transform: translate(0px,    0px)    scale(1);    }
+  30%  { transform: translate(60px,   80px)   scale(1.08); }
+  65%  { transform: translate(25px,   150px)  scale(0.95); }
+  100% { transform: translate(90px,   55px)   scale(1.12); }
+}
+@keyframes orbDrift2 {
+  0%   { transform: translate(0px,    0px)    scale(1);    }
+  40%  { transform: translate(-80px,  -65px)  scale(1.10); }
+  70%  { transform: translate(-35px,  -115px) scale(0.92); }
+  100% { transform: translate(-105px, -48px)  scale(1.06); }
+}
+@keyframes orbDrift3 {
+  0%   { transform: translate(0px,   0px)    scale(1);    }
+  35%  { transform: translate(-55px, 75px)   scale(1.06); }
+  70%  { transform: translate(-95px, 28px)   scale(0.96); }
+  100% { transform: translate(-28px, 95px)   scale(1.09); }
+}
+@keyframes orbDrift4 {
+  0%   { transform: translate(0px,   0px)    scale(1);    }
+  50%  { transform: translate(65px,  -85px)  scale(1.16); }
+  100% { transform: translate(-45px, 65px)   scale(0.88); }
+}
+
+/* make sure content sits above blob layer */
+.mp-main > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mp-main::-webkit-scrollbar { width: 5px; }
+.mp-main::-webkit-scrollbar-thumb { background: var(--line-dk); border-radius: 99px; }
+
+/* ── Page Header ─────────────────────────────────── */
 .mp-h1 {
-  color: #d75a2a;
-  margin-bottom: 5px;
-  font-weight: 900;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--charcoal);
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
 }
 
 .mp-subtitle {
-  color: #666;
-  margin-bottom: 20px;
-  font-size: 20px;
+  color: var(--gray-3);
+  font-size: 14px;
+  margin-bottom: 24px;
+  font-weight: 400;
 }
 
+/* ── Grid ────────────────────────────────────────── */
 .mp-grid {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  gap: 18px;
-  align-items: stretch; 
+  grid-template-columns: 1.25fr 1fr;
+  gap: 20px;
+  align-items: start;
 }
 
-/* Left Card */
+/* ── Card Base ───────────────────────────────────── */
 .mp-card {
-  border-radius: 18px;
-  padding: 24px;
-  background: linear-gradient(145deg, #ffffff, #fafafa);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.06);
-  transition: all 0.3s ease;
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  background: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  isolation: isolate;
+  box-shadow: 0 4px 24px rgba(180, 90, 50, 0.06), 0 1px 0 rgba(255,255,255,0.6) inset;
+  transition: var(--trans);
 }
-
 .mp-card:hover {
+  box-shadow: 0 12px 36px rgba(180, 90, 50, 0.10), 0 1px 0 rgba(255,255,255,0.6) inset;
   transform: translateY(-4px);
-  box-shadow: 0 18px 40px rgba(0,0,0,0.08);
+  border-color: rgba(201, 79, 36, 0.25);
+  background: rgba(255, 255, 255, 0.48);
 }
 
-.mp-large {
-  text-align: center;
+/* ── Card entrance animation ─────────────────────── */
+@keyframes cardIn {
+  0%   { opacity: 0; transform: translateY(18px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
+.mp-card {
+  animation: cardIn .45s cubic-bezier(.22,1,.36,1) both;
+}
+.mp-right-column .mp-card:nth-child(1) { animation-delay: .05s; }
+.mp-right-column .mp-card:nth-child(2) { animation-delay: .10s; }
+.mp-right-column .mp-card:nth-child(3) { animation-delay: .15s; }
+.mp-right-column .mp-card:nth-child(4) { animation-delay: .20s; }
+/* ── Left Card ───────────────────────────────────── */
+.mp-large { text-align: center; }
 
 .mp-large .mp-h2 {
-  color: #d75a2a;
-  margin: 30px 0 5px;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--orange);
+  margin: 10px 0 6px;
+  letter-spacing: -0.2px;
 }
 
 .mp-large .mp-p {
-  color: #666;
+  color: var(--gray-3);
+  font-size: 13px;
   margin-bottom: 20px;
 }
 
-.mp-large .mp-btn {
-  display: block;
-  width: 100%;
-  margin-bottom: 10px;
-  padding: 12px;
-  border: none;
-  border-radius: 10px;
-  background: #eaeaea;
-  cursor: pointer;
+/* ── ตัวคั่น Thai ornament ────────────────────────── */
+.mp-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 14px 0 16px;
+  color: var(--line-dk);
+  font-size: 18px;
 }
-
-.mp-large .mp-btn:hover {
-  background: #ddd;
+.mp-divider::before,
+.mp-divider::after {
+  content: '';
+  flex: 1;
+  max-width: 80px;
+  height: 1px;
+  background: var(--line);
 }
 
 .mp-pic-create {
@@ -289,34 +284,56 @@
   align-items: center;
 }
 
-.mp-pic-create .mp-pic {
-  width: 250px;    
-  max-width: 100%;
-}
-
+/* ── Action List ─────────────────────────────────── */
 .mp-action-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 40px;
+  gap: 10px;
+  margin-top: 4px;
+  text-align: left;
 }
 
 .mp-action-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 12px;
-  border-radius: 10px;
-  background: #f3f3f3;
+  padding: 0 16px;
+  height: 60px;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.6);
+  border: 1.5px solid rgba(255,255,255,0.9);
+  box-shadow: 0 2px 8px rgba(180,90,50,0.06);
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all .22s ease;
   font-weight: 500;
+  font-size: 14px;
+  color: var(--gray-2);
+  position: relative;
+  overflow: hidden;
 }
-
+.mp-action-item::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--orange), #e8845a);
+  border-radius: 99px;
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition: all .22s ease;
+}
 .mp-action-item:hover {
-  background: #e8e8e8;
-  transform: translateY(-2px);
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(201,79,36,0.25);
+  transform: translateX(5px);
+  color: var(--orange);
+  box-shadow: 0 6px 20px rgba(201,79,36,0.12);
 }
+.mp-action-item:hover::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+.mp-action-item:hover iconify-icon { color: var(--orange); }
 
 .mp-action-item .mp-left {
   display: flex;
@@ -324,133 +341,215 @@
   gap: 14px;
 }
 
+/* icon วงกลม background สีส้มอ่อน */
+.mp-action-item .psb-icon,
+.mp-action-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--orange-mid);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: var(--trans);
+}
+.mp-action-item:hover .mp-action-icon,
+.mp-action-item:hover .psb-icon {
+  background: var(--orange);
+}
 .mp-action-item iconify-icon {
-  font-size: 22px;
-  color: #555;
+  font-size: 18px;
+  color: var(--orange);
+  transition: var(--trans);
 }
+.mp-action-item:hover iconify-icon { color: #fff; }
 
-.mp-action-item:hover iconify-icon {
-  color: #d75a2a;
-}
-
-/* Right Column */
+/* ── Right Column ────────────────────────────────── */
 .mp-right-column {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px;
+  gap: 16px;
 }
-
-.mp-right-column .mp-card:first-child {
-  grid-column: span 2; 
-}
-
-.mp-right-column .mp-products-card {
-  grid-column: span 2; 
-}
-
+.mp-right-column .mp-card:first-child { grid-column: span 2; }
+.mp-right-column .mp-products-card   { grid-column: span 2; }
 .mp-right-column .mp-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
-/* fonts */
-.mp-small .mp-h3 {
-  color: #d75a2a;
-  margin-bottom: 16px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-}
-
-.mp-name-box {
-  background: #fafafa;
-  padding: 30px;
-  border-radius: 12px;
-}
-
-.mp-name-box span {
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.mp-font-empty {
-  height: 70px;
-  background: #efefef;
-  border-radius: 10px;
-  margin-bottom: 10px;
-}
-
-.mp-btn-group {
-  display: flex;
-  gap: 10px;
-}
-
-.mp-btn {
+/* ── Card Section Labels ─────────────────────────── */
+.mp-small .mp-h3,
+.mp-card-title {
   font-family: 'Poppins', sans-serif;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--orange) !important;
+  margin-bottom: 14px;
+}
+
+/* ── Name Card ───────────────────────────────────── */
+.mp-name-box {
+  background: var(--surface-2);
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  margin-bottom: 16px;
+}
+.mp-name-box span { font-size: 20px; font-weight: 700; color: var(--charcoal); }
+
+/* ── Font preview "Aa" ───────────────────────────── */
+.mp-font-empty {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  margin-bottom: 16px;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+/* "Aa" จะถูก render ใน JSX — style ไว้รองรับ */
+.mp-font-preview-aa {
+  font-family: 'Poppins', sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--charcoal);
+  line-height: 1;
+}
+.mp-font-preview-name {
+  font-size: 12px;
+  color: var(--gray-3);
+}
+
+/* ── Buttons ─────────────────────────────────────── */
+.mp-btn {
+  font-family: 'Bai Jamjuree', sans-serif;
   font-size: 13px;
+  font-weight: 600;
   padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  background: linear-gradient(145deg, #f3d3c6, #f7e1d8);
+  border-radius: 99px;
   cursor: pointer;
-  font-weight: 500;
-  transition: all 0.25s ease;
+  transition: var(--trans);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 14px rgba(201,79,36,.28);
 }
-
 .mp-btn:hover {
+  background: var(--orange-dk);
   transform: translateY(-2px);
-  background: linear-gradient(145deg, #e9b9a5, #f3cbbb);
-  box-shadow: 0 6px 14px rgba(215,83,37,0.18);
+  box-shadow: 0 6px 18px rgba(201,79,36,.35);
 }
 
-/* Colors */
+/* ── Edit Name / AI แนะนำ (Name card) ──────────────
+   ใช้ inline style override จาก JSX → จัดการด้วย class */
+.mp-btn-edit {
+  background: var(--orange) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 99px !important;
+  padding: 10px 20px !important;
+  font-family: 'Bai Jamjuree', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  box-shadow: 0 4px 14px rgba(201,79,36,.28);
+  transition: var(--trans);
+}
+.mp-btn-edit:hover {
+  background: var(--orange-dk) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(201,79,36,.35);
+}
+.mp-btn-view {
+  background: transparent !important;
+  color: var(--gray-2) !important;
+  border: 1.5px solid var(--line-dk) !important;
+  border-radius: 99px !important;
+  padding: 10px 20px !important;
+  font-family: 'Bai Jamjuree', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: var(--trans);
+}
+.mp-btn-view:hover {
+  border-color: var(--orange) !important;
+  color: var(--orange) !important;
+  background: var(--orange-lt) !important;
+  transform: translateY(-2px);
+}
+
+.mp-btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ── Colors ──────────────────────────────────────── */
 .mp-colors {
   display: flex;
-  gap: 5px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
 }
 
 .mp-color {
-  width: 50px;
-  height: 50px;
+  width: 42px; height: 42px;
   border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,.14);
+  transition: var(--trans);
 }
+.mp-color:hover { transform: scale(1.14) translateY(-2px); }
 
-.mp-red { background: #c5c5c5; }
-.mp-orange { background: #c5c5c5; }
-.mp-green { background: #c5c5c5; }
-.mp-yellow { background: #c5c5c5; }
-
-/* Products */
+/* ── Products Grid ───────────────────────────────── */
 .mp-products {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 5px;
-  margin-bottom: 16px;
-  justify-items: center; 
+  gap: 8px;
+  margin-bottom: 18px;
 }
 
 .mp-product-box {
-  width: 95%; 
   aspect-ratio: 1/1;
-  background: linear-gradient(145deg, #ededed, #f9f9f9);
-  border-radius: 10px;
-  transition: all 0.25s ease;
+  background: var(--cream-dark);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  overflow: hidden;
+  transition: var(--trans);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--orange-mid);
 }
+
+/* placeholder mountain icon inside empty product box */
+.mp-product-box::before {
+  content: '';
+  display: block;
+  width: 36px; height: 24px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 24'%3E%3Cpath d='M2 22 L11 8 L18 16 L23 10 L34 22Z' fill='none' stroke='%23d4bfb5' stroke-width='1.5' stroke-linejoin='round'/%3E%3Ccircle cx='28' cy='7' r='3' fill='none' stroke='%23d4bfb5' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat center / contain;
+  opacity: .9;
+}
+.mp-product-box:has(img)::before { display: none; }
 
 .mp-product-box:hover {
   transform: scale(1.05);
-  box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+  box-shadow: var(--sh-md);
+  border-color: var(--line-dk);
 }
-/* --- สไตล์สำหรับ Popup (นำไปวางล่างสุดของ MyProject.css) --- */
+
+/* ── Popup ───────────────────────────────────────── */
 .mp-popup-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(3px);
+  inset: 0;
+  background: rgba(30, 12, 4, 0.35);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -458,75 +557,143 @@
 }
 
 .mp-popup-content {
-  background: white;
-  padding: 30px;
-  border-radius: 16px;
+  position: relative;
+  background: #fff;
+  padding: 0;
+  border-radius: 28px;
   width: 90%;
-  max-width: 400px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  animation: popIn 0.3s ease-out forwards;
+  max-width: 420px;
+  box-shadow:
+    0 40px 80px rgba(42,20,10,.22),
+    0 0 0 1px rgba(255,255,255,.7) inset;
+  border: 1px solid rgba(211,180,163,.4);
+  overflow: hidden;
+  animation: popIn .36s cubic-bezier(.34,1.56,.64,1) forwards;
 }
+
+/* gradient header banner */
+.mp-popup-content::before {
+  content: '';
+  display: block;
+  height: 48px;
+  background: linear-gradient(135deg, #c94f24 0%, #e8845a 50%, #f5b08a 100%);
+  width: 100%;
+  flex-shrink: 0;
+}
+
+
 
 @keyframes popIn {
-  0% { transform: scale(0.9); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0%   { transform: scale(.86) translateY(20px); opacity: 0; }
+  100% { transform: scale(1)   translateY(0);    opacity: 1; }
 }
 
-.mp-popup-content h3 {
-  color: #d75a2a;
-  margin-top: 0;
-  margin-bottom: 20px;
+.mp-popup-content h3,
+.mp-popup-content h2 {
+  font-family: 'Bai Jamjuree', sans-serif;
+  color: var(--charcoal) !important;
+  margin-top: 0 !important;
+  margin-bottom: 6px;
   font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  text-align: center;
+}
+
+.mp-popup-content p {
+  color: var(--gray-3);
+  font-size: 13px;
+  margin-bottom: 20px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* inner padding */
+.mp-popup-content form,
+.mp-popup-content > h2,
+.mp-popup-content > h3,
+.mp-popup-content > p,
+.mp-popup-content > div {
+  padding-left: 32px;
+  padding-right: 32px;
+}
+.mp-popup-content > h2:first-of-type,
+.mp-popup-content > h3:first-of-type {
+  padding-top: 22px;
+}
+.mp-popup-content form {
+  padding-bottom: 28px;
+}
+.mp-popup-content > div:last-child {
+  padding-bottom: 28px;
 }
 
 .mp-popup-input {
   width: 100%;
-  padding: 12px 15px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 16px;
-  margin-bottom: 20px;
-  box-sizing: border-box;
+  padding: 14px 18px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 15px;
+  margin-bottom: 24px;
   outline: none;
-  transition: border 0.3s;
+  background: var(--surface-2);
+  transition: border .2s, background .2s, box-shadow .2s;
+  color: var(--charcoal);
 }
-
 .mp-popup-input:focus {
-  border-color: #d75a2a;
+  border-color: var(--orange);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(201,79,36,.10);
 }
 
 .mp-popup-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 12px;
 }
 
-.mp-btn-cancel, .mp-btn-save {
-  padding: 10px 20px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  font-size: 14px;
-  transition: 0.2s;
-}
-
 .mp-btn-cancel {
-  background: #eee;
-  color: #555;
+  padding: 12px 28px;
+  border-radius: 99px;
+  border: 1.5px solid var(--line-dk);
+  background: var(--surface);
+  color: var(--gray-2);
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--trans);
 }
-
-.mp-btn-cancel:hover {
-  background: #e0e0e0;
-}
+.mp-btn-cancel:hover { background: var(--cream-dark); border-color: #c0b5aa; }
 
 .mp-btn-save {
-  background: #d75a2a;
-  color: white;
+  padding: 12px 32px;
+  border-radius: 99px;
+  border: none;
+  background: linear-gradient(135deg, var(--orange), #e8845a);
+  color: #fff;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--trans);
+  box-shadow: 0 4px 16px rgba(201,79,36,.35);
+}
+.mp-btn-save:hover {
+  background: linear-gradient(135deg, var(--orange-dk), var(--orange));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(201,79,36,.42);
 }
 
-.mp-btn-save:hover {
-  background: #bf4d22;
+/* ── Responsive ──────────────────────────────────── */
+@media (max-width: 900px) {
+  .mp-grid { grid-template-columns: 1fr; }
+  .mp-right-column { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .mp-main { padding: 20px; }
+  .mp-right-column { grid-template-columns: 1fr; }
+  .mp-right-column .mp-card:first-child,
+  .mp-right-column .mp-products-card { grid-column: span 1; }
 }

@@ -1,0 +1,194 @@
+/* =====================================================
+   ConceptSidebar.css — สำหรับหน้า CreateConcept & Product
+   หน้าตาเหมือน sidebar.css ทุกอย่าง
+   แต่ toggle button ใช้ position: absolute (อิงกับ aside)
+   แทน position: fixed เพื่อไม่ให้หลุด layout
+   ===================================================== */
+
+/* ── Sidebar Container ─────────────────────────────── */
+.psb2-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: #ffffff;
+  padding: 20px 15px;
+  border-right: 1px solid #eee;
+  transition: width 0.3s, min-width 0.3s, padding 0.3s;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: visible;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1000;
+  flex-shrink: 0;
+}
+
+/* ── Collapsed State ───────────────────────────────── */
+.psb2-sidebar.psb2-collapsed {
+  width: 80px;
+  min-width: 80px;
+  padding: 20px 10px;
+  border-radius: 0 30px 30px 0;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.70) !important;
+  box-shadow: 4px 0 24px rgba(180, 90, 50, 0.06), inset 1px 0 0 rgba(255,255,255,0.6);
+  isolation: isolate;
+}
+
+.psb2-sidebar.psb2-collapsed .psb2-text    { display: none; }
+.psb2-sidebar.psb2-collapsed .psb2-menu li { justify-content: center; width: 100%; padding: 10px; }
+.psb2-sidebar.psb2-collapsed .psb2-hr      { width: 40px; margin: 10px auto; }
+
+/* ── Toggle Button — absolute อิงกับ sidebar ───────── */
+.psb2-toggle-btn {
+  position: absolute;
+  top: calc(20px + 17px);
+  right: -17px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 12px rgba(180, 90, 50, 0.10), inset 0 1px 0 rgba(255,255,255,0.6);
+  cursor: pointer;
+  padding: 0;
+  z-index: 99999;
+  transition: background 0.25s, box-shadow 0.25s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #a05a3a;
+}
+
+.psb2-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 6px 18px rgba(180, 90, 50, 0.15), inset 0 1px 0 rgba(255,255,255,0.7);
+  color: #d3542b;
+}
+
+/* ── Menu List ─────────────────────────────────────── */
+.psb2-menu {
+  list-style: none;
+  padding: 0;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.psb2-menu li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: color 0.22s ease, background 0.22s ease;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #444;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.psb2-menu li:hover  { color: #d3542b; background: transparent; }
+.psb2-menu li.psb2-active { color: #d3542b; font-weight: 600; background: transparent; }
+
+/* ── Icons ─────────────────────────────────────────── */
+.psb2-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: transparent;
+  transition: background 0.22s ease, color 0.22s ease;
+}
+
+.psb2-icon iconify-icon { font-size: 20px; width: 20px; height: 20px; }
+
+.psb2-menu li:hover .psb2-icon,
+.psb2-menu li.psb2-active .psb2-icon {
+  background: #d3542b;
+  color: #fff;
+}
+
+.psb2-menu li:hover .psb2-icon iconify-icon,
+.psb2-menu li.psb2-active .psb2-icon iconify-icon { color: #fff; }
+
+/* ── Text ──────────────────────────────────────────── */
+.psb2-text { white-space: nowrap; transition: opacity 0.2s; }
+
+/* ── Divider ───────────────────────────────────────── */
+.psb2-hr {
+  border: none;
+  border-top: 1px solid #e5e5e5;
+  margin: 12px 0 4px 0;
+  width: 100%;
+}
+
+/* ── Background Illustration ───────────────────────── */
+.psb2-bg-illustration {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.psb2-bg-illustration::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 243, 238, 0.58) 50%,
+    rgba(245, 235, 225, 0.45) 100%
+  );
+}
+
+.psb2-bg-illustration img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center bottom;
+  filter: saturate(0.75) brightness(1.08) sepia(0.12);
+}
+
+.psb2-menu,
+.psb2-hr {
+  position: relative;
+  z-index: 1;
+}
+
+.psb2-sidebar.psb2-collapsed .psb2-bg-illustration { display: none; }
+
+/* ── Responsive ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .psb2-sidebar {
+    position: fixed;
+    top: 80px;
+    left: 0;
+    height: calc(100vh - 80px);
+    z-index: 500;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.08);
+  }
+}
+/* ── Scrollbar (hidden) ────────────────────────────── */
+.psb2-sidebar { scrollbar-width: none; }
+.psb2-sidebar::-webkit-scrollbar { display: none; }

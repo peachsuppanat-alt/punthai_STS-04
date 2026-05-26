@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './content-online.css';
-import { fetchSubscriptionStatus } from './utils/subscriptionGuard';
-import ProUpgradeModal from './components/ProUpgradeModal';
 
 const API = 'http://localhost:3000';
 
@@ -79,17 +77,6 @@ const ContentOnline = ({ user }) => {
   // History
   const [history, setHistory] = useState([]);
   const [historyDetail, setHistoryDetail] = useState(null);
-  const [showProModal, setShowProModal] = useState(false);
-  const [usageInfo, setUsageInfo] = useState(null);
-
-  // ===== Fetch generation usage =====
-  useEffect(() => {
-    if (user?.user_id) {
-      fetchSubscriptionStatus(user.user_id).then(data => {
-        if (data) setUsageInfo(data);
-      });
-    }
-  }, [user]);
 
   // ===== Data Fetching =====
   useEffect(() => {
@@ -226,17 +213,6 @@ const ContentOnline = ({ user }) => {
 
   // ===== Generate =====
   const handleGenerate = async (mode = 'both') => {
-    if (mode !== 'caption_only' && user?.user_id) {
-      try {
-        const status = await fetchSubscriptionStatus(user.user_id);
-        if (status && !status.generation.allowed) {
-          setUsageInfo(status);
-          setShowProModal(true);
-          return;
-        }
-        setUsageInfo(status);
-      } catch (e) { /* continue — backend guard will catch */ }
-    }
     setIsGenerating(true);
     setProgress({ step: 0, total: 5, message: 'เริ่มต้น...' });
     if (mode === 'both') setResult(null);
@@ -263,15 +239,6 @@ const ContentOnline = ({ user }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-
-      if (response.status === 403) {
-        const errData = await response.json();
-        if (errData.status === 'limit_reached') {
-          setShowProModal(true);
-          setIsGenerating(false);
-          return;
-        }
-      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -650,14 +617,6 @@ const ContentOnline = ({ user }) => {
             )}
           </div>
 
-          {usageInfo && (
-            <div style={{ textAlign: 'center', margin: '8px 0', fontSize: 13, color: usageInfo.generation.remaining <= 1 ? '#e53e3e' : '#888' }}>
-              <iconify-icon icon="mdi:image-auto-adjust" style={{ verticalAlign: 'middle', marginRight: 4 }}></iconify-icon>
-              ใช้ไป {usageInfo.generation.used}/{usageInfo.generation.limit} ครั้ง
-              {usageInfo.generation.period === 'lifetime' ? ' (ตลอดชีพ)' : ' (เดือนนี้)'}
-            </div>
-          )}
-
           <div className="co-btn-row">
             <button className="co-btn-back" onClick={() => setStep(5)}>
               <iconify-icon icon="mdi:arrow-left"></iconify-icon> ย้อนกลับ
@@ -867,7 +826,6 @@ const ContentOnline = ({ user }) => {
           </div>
         </div>
       )}
-      <ProUpgradeModal isOpen={showProModal} onClose={() => setShowProModal(false)} feature="generation" />
     </div>
   );
 };

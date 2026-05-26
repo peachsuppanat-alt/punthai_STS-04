@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import './MyProject.css';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import CircularProgress from '../components/CircularProgress';
+import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
-import helpImg from '../assets/help.png';
 import createImg from '../assets/create.png';
 
 export const MyProject = ({ user }) => {
@@ -12,7 +12,6 @@ export const MyProject = ({ user }) => {
     // ถ้าหน้า App.jsx ไม่ได้ส่ง Props user มาให้ ก็ให้ไปดึงจาก LocalStorage แทนทันที
     const currentUser = user || JSON.parse(localStorage.getItem('user') || 'null');
 
-    const [isCollapsed, setIsCollapsed] = useState(false);
     const [selectedBrandName, setSelectedBrandName] = useState(null);
     const [projectName, setProjectName] = useState('กำลังโหลดข้อมูล...');
     const [projectLogo, setProjectLogo] = useState(null);
@@ -95,10 +94,6 @@ export const MyProject = ({ user }) => {
         }
     }, [projectId]);
 
-    const toggleSidebar = () => {
-        setIsCollapsed(!isCollapsed);
-    };
-
     const handleSaveBrandName = async (e) => {
         e.preventDefault();
         try {
@@ -180,53 +175,11 @@ export const MyProject = ({ user }) => {
             </header>
 
             <div className="mp-container">
-                {/* --- Sidebar --- */}
-                <aside className={`mp-sidebar ${isCollapsed ? 'mp-collapsed' : ''}`} id="mp-sidebar">
-                    <button className="mp-toggle-btn" id="mp-toggleBtn" onClick={toggleSidebar}>
-                        {isCollapsed ? '❯' : '❮'}
-                    </button>
-                    <ul className="mp-menu">
-                        <li className="active">
-                            <span className="mp-icon">
-                                <iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon>
-                            </span>
-                            <span className="mp-text">Projects</span>
-                        </li>
-                        <li onClick={() => navigate('/brand-dna', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-                            <span className="mp-icon">
-                                <iconify-icon icon="mdi:palette-outline"></iconify-icon>
-                            </span>
-                            <span className="mp-text">Brand DNA</span>
-                        </li>
-                        <li onClick={() => navigate('/create-concept', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-                            <span className="mp-icon">
-                                <iconify-icon icon="mdi:lightbulb-outline"></iconify-icon>
-                            </span>
-                            <span className="mp-text">Create Concept </span>
-                        </li>
-                        <li onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-                            <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-                            <span className="cncpt-text">Create Logo</span>
-                        </li>
-                        <li onClick={() => navigate('/result', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-                            <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-                            <span className="cncpt-text">Create Pictures</span>
-                        </li>
-                    </ul>
-                    <hr className="mp-hr" />
-                    <ul className="mp-menu">
-                        <li onClick={() => navigate('/product', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-                            <span className="mp-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-                            <span className="mp-text">Yours Product</span>
-                        </li>
-                    </ul>
-                    <div className="mp-help">
-                        <img src={helpImg} className="mp-help-img" alt="help" />
-                        <p className="mp-help-text">Having trouble?</p>
-                        <a href="#" className="mp-contact-link">Contact Us</a>
-                    </div>
-                </aside>
 
+                <ProjectSidebar activePage="project" projectId={projectId} />
+
+                <div className="mp-orb3"></div>
+                <div className="mp-orb4"></div>
                 <main className="mp-main">
                     
                     <h1 
@@ -266,6 +219,7 @@ export const MyProject = ({ user }) => {
                                 </span>
                             </div>
                             
+                            <div className="mp-divider">✦</div>
                             <h2 className="mp-h2">
                                  {selectedBrandName ? selectedBrandName : " ชื่อแบรนด์ ยังไม่ได้ตั้งชื่อ"}
                             </h2>
@@ -278,7 +232,7 @@ export const MyProject = ({ user }) => {
                                     style={{ cursor: 'pointer' }}
                                 >
                                     <div className="mp-left" >
-                                        <iconify-icon icon="mdi:dna"></iconify-icon>
+                                        <span className="mp-action-icon"><iconify-icon icon="mdi:dna"></iconify-icon></span>
                                         <span>Generates Brand DNA</span>
                                     </div>
                                     <iconify-icon icon="mdi:chevron-right"></iconify-icon>
@@ -290,13 +244,13 @@ export const MyProject = ({ user }) => {
                                     style={{ cursor: 'pointer' }}
                                 >
                                     <div className="mp-left">
-                                        <iconify-icon icon="mdi:lightbulb-outline"></iconify-icon>
+                                        <span className="mp-action-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span>
                                         <span>Create Your Brand Concept</span>
                                     </div>
                                     <iconify-icon icon="mdi:chevron-right"></iconify-icon>
                                 </div>
-                                <div className="mp-action-item" onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><iconify-icon icon="mdi:image-outline"></iconify-icon><span>Generate Product Pictures</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
-                                <div className="mp-action-item" onClick={() => navigate('/product', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><iconify-icon icon="mdi:folder-outline"></iconify-icon><span>Explore Other Projects</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
+                                <div className="mp-action-item" onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><span className="mp-action-icon"><iconify-icon icon="mdi:image-outline"></iconify-icon></span><span>Generate Product Pictures</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
+                                <div className="mp-action-item" onClick={() => navigate('/product', { state: { projectId } })} style={{ cursor: 'pointer' }}><div className="mp-left"><span className="mp-action-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span>Explore Other Projects</span></div><iconify-icon icon="mdi:chevron-right"></iconify-icon></div>
                             </div>
                         </div>
 
@@ -368,14 +322,19 @@ export const MyProject = ({ user }) => {
                                 <h3 className="mp-h3">Fonts</h3>
                                 <div className="mp-font-empty" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50px', marginBottom: '15px', background: '#f9f9f9', borderRadius: '8px' }}>
                                     {selectedFont ? (
-                                        <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#333', fontFamily: selectedFont.font_name }}>{selectedFont.font_name}</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                            <span className="mp-font-preview-aa" style={{ fontFamily: selectedFont.font_name }}> Aa</span>
+                                            <span className="mp-font-preview-name">{selectedFont.font_name}</span>
+                                        </div>
                                     ) : (
-                                        <span style={{ color: '#aaa', fontSize: '14px' }}>ยังไม่ได้เลือกฟอนต์</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                            <span className="mp-font-preview-aa">Aa</span>
+                                            <span className="mp-font-preview-name">ยังไม่ได้เลือกฟอนต์</span>
+                                        </div>
                                     )}
                                 </div>
                                 <button 
                                     className="mp-btn" 
-                                    style={{ background: selectedFont ? '#fff3ee' : '#f5f5f5', color: selectedFont ? '#d75a2a' : '#aaa' }}
                                     onClick={() => navigate('/create-concept', { state: { projectId, activeTab: 'font' } })}
                                 >
                                     Edit Fonts
@@ -418,30 +377,30 @@ export const MyProject = ({ user }) => {
 
             {/* Popup สำหรับเปลี่ยนชื่อแบรนด์ */}
             {showBrandNamePopup && (
-                <div style={popupOverlayStyle} onClick={() => setShowBrandNamePopup(false)}>
-                    <div style={popupContentStyle} onClick={e => e.stopPropagation()}>
-                        <h2 style={{color: '#d3542b', marginBottom: '15px'}}>ตั้งชื่อแบรนด์ของคุณ</h2>
-                        <p style={{color: '#888', fontSize: '14px', marginBottom: '15px'}}>พิมพ์ชื่อแบรนด์ที่ต้องการ หรือไปที่ "AI แนะนำ" เพื่อให้ AI ช่วยคิดชื่อ</p>
+                <div className="mp-popup-overlay" onClick={() => setShowBrandNamePopup(false)}>
+                    <div className="mp-popup-content" onClick={e => e.stopPropagation()}>
+                        <h2>ตั้งชื่อแบรนด์ของคุณ</h2>
+                        <p>พิมพ์ชื่อแบรนด์ที่ต้องการ หรือไปที่ "AI แนะนำ" เพื่อให้ AI ช่วยคิดชื่อ</p>
                         <form onSubmit={handleSaveBrandName}>
                             <input
                                 type="text"
+                                className="mp-popup-input"
                                 placeholder="พิมพ์ชื่อแบรนด์ที่นี่..."
                                 value={editBrandNameInput}
                                 onChange={(e) => setEditBrandNameInput(e.target.value)}
                                 required
-                                style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '10px', border: '1px solid #ccc', fontSize: '16px' }}
                             />
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <div className="mp-popup-actions">
                                 <button
                                     type="button"
+                                    className="mp-btn-cancel"
                                     onClick={() => setShowBrandNamePopup(false)}
-                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#eee', color: '#333' }}
                                 >
                                     ยกเลิก
                                 </button>
                                 <button
                                     type="submit"
-                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#d3542b', color: '#fff', fontWeight: 'bold' }}
+                                    className="mp-btn-save"
                                 >
                                     บันทึกชื่อ
                                 </button>
@@ -453,29 +412,29 @@ export const MyProject = ({ user }) => {
 
             {/* Popup สำหรับเปลี่ยนชื่อโปรเจกต์ */}
             {showNamePopup && (
-                <div style={popupOverlayStyle} onClick={() => setShowNamePopup(false)}>
-                    <div style={popupContentStyle} onClick={e => e.stopPropagation()}>
-                        <h2 style={{color: '#d3542b', marginBottom: '15px'}}>ตั้งชื่อโปรเจกต์ของคุณ</h2>
+                <div className="mp-popup-overlay" onClick={() => setShowNamePopup(false)}>
+                    <div className="mp-popup-content" onClick={e => e.stopPropagation()}>
+                        <h2>ตั้งชื่อโปรเจกต์ของคุณ</h2>
                         <form onSubmit={handleSaveProjectName}>
-                            <input 
-                                type="text" 
-                                placeholder="พิมพ์ชื่อโปรเจกต์ที่นี่..." 
+                            <input
+                                type="text"
+                                className="mp-popup-input"
+                                placeholder="พิมพ์ชื่อโปรเจกต์ที่นี่..."
                                 value={editNameInput}
                                 onChange={(e) => setEditNameInput(e.target.value)}
                                 required
-                                style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '10px', border: '1px solid #ccc', fontSize: '16px' }}
                             />
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                <button 
-                                    type="button" 
+                            <div className="mp-popup-actions">
+                                <button
+                                    type="button"
+                                    className="mp-btn-cancel"
                                     onClick={() => setShowNamePopup(false)}
-                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#eee', color: '#333' }}
                                 >
                                     ยกเลิก
                                 </button>
-                                <button 
+                                <button
                                     type="submit"
-                                    style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#d3542b', color: '#fff', fontWeight: 'bold' }}
+                                    className="mp-btn-save"
                                 >
                                     บันทึกชื่อ
                                 </button>
@@ -486,13 +445,4 @@ export const MyProject = ({ user }) => {
             )}
         </div>
     );
-};
-
-// สไตล์สำหรับ Popup 
-const popupOverlayStyle = {
-    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, backdropFilter: 'blur(3px)'
-};
-const popupContentStyle = {
-    backgroundColor: 'white', padding: '30px', borderRadius: '16px', width: '90%', maxWidth: '400px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
 };

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './BrandDNA.css';
+import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
-import helpImg from '../assets/help.png';
 
 export const BrandDNA = () => {
   const navigate = useNavigate();
@@ -13,8 +13,6 @@ export const BrandDNA = () => {
   //  ดึง user_id จาก LocalStorage (สมมติว่าคุณเก็บข้อมูล user ไว้ตอน Login)
   const userData = JSON.parse(localStorage.getItem('user') || '{}');
   const userId = userData.user_id || 0;
-
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   //สีและฟอนต์  
   const [recommendedColor, setRecommendedColor] = useState(null);
@@ -317,12 +315,16 @@ export const BrandDNA = () => {
   return (
     <div className="bdna-body">
 
+      {/* Soft Orbs background — fixed position, ไม่รบกวน layout */}
+      <div className="bdna-orb3" aria-hidden="true"></div>
+      <div className="bdna-orb4" aria-hidden="true"></div>
+
       {/* Loading Screen */}
       {isLoading && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <iconify-icon icon="line-md:loading-loop" style={{ fontSize: '60px', color: '#d75a2a' }}></iconify-icon>
-          <h2 style={{ marginTop: '20px', color: '#d75a2a' }}>Gemini AI กำลังวิเคราะห์ Brand DNA ของคุณ...</h2>
-          <p style={{ color: '#666' }}>อาจใช้เวลาประมาณ 5 - 10 วินาที กรุณารอสักครู่</p>
+        <div className="bdna-loading-overlay">
+          <iconify-icon icon="line-md:loading-loop"></iconify-icon>
+          <h2>Gemini AI กำลังวิเคราะห์ Brand DNA ของคุณ...</h2>
+          <p>อาจใช้เวลาประมาณ 5 - 10 วินาที กรุณารอสักครู่</p>
         </div>
       )}
 
@@ -336,41 +338,22 @@ export const BrandDNA = () => {
         </div>
       </header>
 
-      <div className="bdna-container">
+      <div className="bdna-layout">
+
         {/* Sidebar */}
-        <aside className={`bdna-sidebar ${isSidebarCollapsed ? 'bdna-collapsed' : ''}`} id="bdna-sidebar">
-          <button className="bdna-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>{isSidebarCollapsed ? '❯' : '❮'}</button>
-          <ul className="bdna-menu">
-            <li onClick={() => navigate('/project', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon></span><span className="bdna-text">Projects</span></li>
-            <li className="bdna-active" style={{ background: '#f3f6ea', color: '#6b8e23' }}><span className="bdna-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span><span className="bdna-text">Brand DNA</span></li>
-            <li onClick={() => navigate('/create-concept', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="bdna-text">Create Concept</span></li>
-            <li onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-              <span className="cncpt-text">Create Logo</span>
-            </li>
-            <li onClick={() => navigate('/result', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-              <span className="cncpt-text">Create Pictures</span>
-            </li>
-          </ul>
-          <hr className="bdna-hr" />
-          <ul className="bdna-menu">
-            <li onClick={() => navigate('/product', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="bdna-text">Yours Projects</span></li>
-          </ul>
-          <div className="bdna-help"><img src={helpImg} className="bdna-help-img" alt="help" /><p className="bdna-help-text">Having trouble?</p><a href="#" className="bdna-contact-link">Contact Us</a></div>
-        </aside>
+        <ProjectSidebar activePage="brand-dna" projectId={projectId} />
 
         <main className="bdna-main bdna-dna-main">
 
           {/* 👇 1. หน้าต่างต้อนรับ Welcome Screen 👇 */}
           {!showResult && showWelcome && (
-            <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginTop: '20px' }}>
-              <iconify-icon icon="mdi:dna" style={{ fontSize: '80px', color: '#d75a2a' }}></iconify-icon>
-              <h1 style={{ color: '#d75a2a', fontSize: '32px', marginTop: '20px' }}>ค้นหา Brand DNA ในตัวคุณ</h1>
-              <p style={{ color: '#666', fontSize: '18px', maxWidth: '650px', margin: '20px auto 40px', lineHeight: '1.6' }}>
+            <div className="bdna-welcome-box">
+              <iconify-icon icon="mdi:dna"></iconify-icon>
+              <h1>ค้นหา Brand DNA ในตัวคุณ</h1>
+              <p>
                 Brand DNA คือแก่นแท้และจุดยืนของแบรนด์ที่จะช่วยสร้างความแตกต่างให้ธุรกิจของคุณ การทำแบบทดสอบนี้จะช่วยให้ <b>AI วิเคราะห์ตัวตนแบรนด์ แนะนำกลุ่มเป้าหมาย และทิศทางการออกแบบ</b> ที่เหมาะสมที่สุดสำหรับแบรนด์ของคุณ
               </p>
-              <button className="bdna-btn-next-form" style={{ padding: '15px 40px', fontSize: '18px' }} onClick={() => setShowWelcome(false)}>
+              <button className="bdna-btn-next-form" onClick={() => setShowWelcome(false)}>
                 เริ่มค้นหา Brand DNA ของคุณ
               </button>
             </div>
@@ -380,8 +363,8 @@ export const BrandDNA = () => {
           {!showResult && !showWelcome && (
             <>
               <div className="bdna-dna-header">
-                <h1 className="bdna-dna-title" lang="en">Define Your Brand DNA</h1>
-                <p className="bdna-dna-subtitle">Answer the questions below to help define your brand identity and goals</p>
+                <h1 className="bdna-dna-title">กำหนด Brand DNA ของคุณ</h1>
+                <p className="bdna-dna-subtitle">ตอบคำถามด้านล่างเพื่อช่วยกำหนดเอกลักษณ์และทิศทางของแบรนด์คุณ</p>
               </div>
 
               <div className="bdna-stepper">
@@ -634,6 +617,7 @@ export const BrandDNA = () => {
         <div className="bdna-modal" onClick={handleCloseModal}>
           <div className="bdna-modal-box" onClick={(e) => e.stopPropagation()}>
             <button className="bdna-close-modal" onClick={handleCloseModal}>&times;</button>
+            <div className="bdna-modal-inner">
             <div className="bdna-form-group">
               <label><span className="bdna-step-num">1</span> สินค้าของคุณคืออะไร</label>
               <input type="text" placeholder="เช่น โดนัท" value={productName} onChange={(e) => setProductName(e.target.value)} />
@@ -692,6 +676,7 @@ export const BrandDNA = () => {
               <button className="bdna-cancel" onClick={handleCloseModal}>ยกเลิก</button>
               <button className="bdna-confirm" onClick={handleAddProductSubmit}>ตกลง</button>
             </div>
+            </div>{/* end bdna-modal-inner */}
           </div>
         </div>
       )}

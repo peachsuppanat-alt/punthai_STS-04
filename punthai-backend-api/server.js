@@ -193,22 +193,40 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// ================= API GOOGLE AUTH (เพิ่มใหม่) =================
+// ================= API GOOGLE AUTH (รองรับทั้ง access_token และ ID token) =================
 app.post('/api/auth/google', async (req, res) => {
     const { token } = req.body;
     try {
-        const ticket = await googleClient.verifyIdToken({
-            idToken: token,
-            audience: process.env.GOOGLE_CLIENT_ID,
-        });
-        const payload = ticket.getPayload();
-        const { sub: googleId, email, given_name, family_name, picture } = payload; // ดึง picture ออกมา
+        let googleId, email, given_name, family_name, picture;
+
+        // ตรวจว่าเป็น access_token หรือ ID token (JWT)
+        const isIdToken = token && token.split('.').length === 3;
+
+        if (isIdToken) {
+            // ID token (credential) — ใช้ verifyIdToken
+            const ticket = await googleClient.verifyIdToken({
+                idToken: token,
+                audience: process.env.GOOGLE_CLIENT_ID,
+            });
+            const payload = ticket.getPayload();
+            ({ sub: googleId, email, given_name, family_name, picture } = payload);
+        } else {
+            // access_token — ใช้ Google UserInfo API
+            const userInfoRes = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const info = userInfoRes.data;
+            googleId = info.sub;
+            email = info.email;
+            given_name = info.given_name || '';
+            family_name = info.family_name || '';
+            picture = info.picture || null;
+        }
 
         const connection = await pool.getConnection();
         const [users] = await connection.query('SELECT * FROM user_profile WHERE email = ?', [email]);
 
         if (users.length > 0) {
-            // 🟢 ถ้ามีบัญชีอยู่แล้ว ให้ อัปเดต รูปโปรไฟล์จาก Google + last_active_at
             try {
                 await connection.query('UPDATE user_profile SET google_id = ?, image_profile = ?, last_active_at = NOW() WHERE email = ?', [googleId, picture, email]);
             } catch (e) {
@@ -218,12 +236,11 @@ app.post('/api/auth/google', async (req, res) => {
             connection.release();
             return res.json({ status: 'success', message: 'เข้าสู่ระบบด้วย Google สำเร็จ', user: updatedUser[0] });
         } else {
-            // 🟢 ถ้ายังไม่มีบัญชี ให้เพิ่ม picture ลงในฐานข้อมูลด้วย
             const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
             const baseUserName = email.split('@')[0];
 
             const [result] = await connection.query(
-                `INSERT INTO user_profile (user_name, password, email, first_name, last_name, google_id, image_profile, subscription_status) 
+                `INSERT INTO user_profile (user_name, password, email, first_name, last_name, google_id, image_profile, subscription_status)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'STANDARD')`,
                 [baseUserName, randomPassword, email, given_name, family_name, googleId, picture]
             );
@@ -4932,6 +4949,191 @@ app.post('/api/subscription/check-expired', async (req, res) => {
     }
 });
 // ================= END SUBSCRIPTION & PAYMENT =================
+
+
+// ================= START API โรงพิมพ์ (Third Party) =================
+
+// POST /api/third-party/register — ลงทะเบียนโรงพิมพ์
+app.post('/api/third-party/register', upload.single('image_profile'), async (req, res) => {
+    const { third_party_name, email, password, phone } = req.body;
+    const image_profile = req.file ? req.file.filename : null;
+
+    if (!third_party_name || !email || !password || !phone) {
+        return res.status(400).json({
+            status: 'error',
+            message: 'กรุณากรอกข้อมูลให้ครบ: ชื่อร้าน, อีเมล, รหัสผ่าน, เบอร์โทร'
+        });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+
+        const [existing] = await connection.query(
+            'SELECT third_party_id FROM third_party WHERE email = ?', [email]
+        );
+        if (existing.length > 0) {
+            connection.release();
+            return res.status(400).json({ status: 'error', message: 'อีเมลนี้ถูกใช้งานแล้ว' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const [result] = await connection.query(
+            `INSERT INTO third_party (third_party_name, email, password, phone, image_profile, subscription_status)
+             VALUES (?, ?, ?, ?, ?, 'active')`,
+            [third_party_name, email, hashedPassword, phone, image_profile]
+        );
+
+        const [newShop] = await connection.query(
+            'SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status FROM third_party WHERE third_party_id = ?',
+            [result.insertId]
+        );
+        connection.release();
+
+        res.json({
+            status: 'success',
+            message: 'ลงทะเบียนโรงพิมพ์สำเร็จ!',
+            third_party: newShop[0]
+        });
+
+    } catch (error) {
+        console.error('Third Party Register Error:', error);
+        res.status(500).json({ status: 'error', message: 'Database Error', error: error.message });
+    }
+});
+
+// POST /api/third-party/login — เข้าสู่ระบบโรงพิมพ์
+app.post('/api/third-party/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ status: 'error', message: 'กรุณากรอกอีเมลและรหัสผ่าน' });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(
+            'SELECT * FROM third_party WHERE email = ?', [email]
+        );
+
+        if (rows.length === 0) {
+            connection.release();
+            return res.status(401).json({ status: 'error', message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' });
+        }
+
+        const shop = rows[0];
+
+        if (shop.subscription_status === 'cancelled') {
+            connection.release();
+            return res.status(403).json({ status: 'error', message: 'บัญชีนี้ถูกยกเลิกแล้ว กรุณาติดต่อผู้ดูแลระบบ' });
+        }
+
+        let validPassword = false;
+        const isHashed = shop.password && (shop.password.startsWith('$2a$') || shop.password.startsWith('$2b$'));
+
+        if (isHashed) {
+            validPassword = await bcrypt.compare(password, shop.password);
+        } else {
+            if (password === shop.password) {
+                validPassword = true;
+                try {
+                    const salt = await bcrypt.genSalt(10);
+                    const newHashed = await bcrypt.hash(password, salt);
+                    await connection.query(
+                        'UPDATE third_party SET password = ? WHERE third_party_id = ?',
+                        [newHashed, shop.third_party_id]
+                    );
+                } catch (hashErr) {
+                    console.error('Auto-migrate password error:', hashErr);
+                }
+            }
+        }
+
+        connection.release();
+
+        if (!validPassword) {
+            return res.status(401).json({ status: 'error', message: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' });
+        }
+
+        delete shop.password;
+        res.json({
+            status: 'success',
+            message: 'เข้าสู่ระบบสำเร็จ!',
+            third_party: shop
+        });
+
+    } catch (error) {
+        console.error('Third Party Login Error:', error);
+        res.status(500).json({ status: 'error', message: 'Server Error', error: error.message });
+    }
+});
+
+// GET /api/third-party/:id — ดูข้อมูลโรงพิมพ์
+app.get('/api/third-party/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(
+            'SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status FROM third_party WHERE third_party_id = ?',
+            [id]
+        );
+        connection.release();
+
+        if (rows.length === 0) {
+            return res.status(404).json({ status: 'error', message: 'ไม่พบข้อมูลโรงพิมพ์' });
+        }
+        res.json({ status: 'success', third_party: rows[0] });
+    } catch (error) {
+        console.error('Get Third Party Error:', error);
+        res.status(500).json({ status: 'error', message: 'Database Error', error: error.message });
+    }
+});
+
+// PUT /api/third-party/:id — แก้ไขข้อมูลโรงพิมพ์
+app.put('/api/third-party/:id', upload.single('image_profile'), async (req, res) => {
+    const { id } = req.params;
+    const { third_party_name, phone, password } = req.body;
+    const image_profile = req.file ? req.file.filename : null;
+
+    try {
+        const connection = await pool.getConnection();
+
+        const fields = [];
+        const params = [];
+
+        if (third_party_name) { fields.push('third_party_name = ?'); params.push(third_party_name); }
+        if (phone)             { fields.push('phone = ?');            params.push(phone); }
+        if (image_profile)     { fields.push('image_profile = ?');    params.push(image_profile); }
+        if (password && password.trim() !== '') {
+            const salt = await bcrypt.genSalt(10);
+            const hashed = await bcrypt.hash(password, salt);
+            fields.push('password = ?');
+            params.push(hashed);
+        }
+
+        if (fields.length === 0) {
+            connection.release();
+            return res.status(400).json({ status: 'error', message: 'ไม่มีข้อมูลที่ต้องการอัปเดต' });
+        }
+
+        params.push(id);
+        await connection.query(`UPDATE third_party SET ${fields.join(', ')} WHERE third_party_id = ?`, params);
+
+        const [updated] = await connection.query(
+            'SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status FROM third_party WHERE third_party_id = ?',
+            [id]
+        );
+        connection.release();
+
+        res.json({ status: 'success', message: 'อัปเดตข้อมูลสำเร็จ', third_party: updated[0] });
+    } catch (error) {
+        console.error('Update Third Party Error:', error);
+        res.status(500).json({ status: 'error', message: 'Database Error', error: error.message });
+    }
+});
+
+// ================= END API โรงพิมพ์ (Third Party) =================
 
 
 const PORT = process.env.PORT || 3000;

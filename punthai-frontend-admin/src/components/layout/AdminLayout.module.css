@@ -1,6 +1,11 @@
+.container{
+  
+ 
+}
 .layout {
   display: flex;
   min-height: 100vh;
+  background-color: #f0f1e9;
 }
 
 .main {

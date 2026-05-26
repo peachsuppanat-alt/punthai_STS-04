@@ -11,6 +11,7 @@ export default function AdminLayout() {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   return (
+    <div className={styles.container}>
     <div className={styles.layout}>
       <Sidebar />
       <div className={styles.main}>
@@ -19,6 +20,7 @@ export default function AdminLayout() {
           <Outlet />
         </div>
       </div>
+    </div>
     </div>
   );
 }

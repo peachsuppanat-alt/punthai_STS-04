@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './CreateConcept.css';
+import { ConceptSidebarNews } from '../components/ConceptSidebarNews';
 
 import logoImg from '../assets/logo.png';
-import helpImg from '../assets/help.png';
 
 /* ============================================================
    COLOR & FONT CONSTANTS  (ported from CreateConcept_News.jsx)
@@ -475,7 +475,7 @@ async function cncptGenerateColorPool(moodsEN, tonesEN, biz) {
 
 /* ── Shared helper sub-components (Color & Font tabs only) ── */
 function CncptIcon({ icon, width }) {
-  return <iconify-icon icon={icon} width={width || undefined} />;
+  return <iconify-icon icon={icon} width={width || "16"} style={{display:'inline-block', verticalAlign:'middle', flexShrink:0}} />;
 }
 function CncptTag({ children, active, onClick, shake }) {
   return (
@@ -517,7 +517,6 @@ export const CreateConcept = () => {
   // ─────────────────────────────────────────────────────────
   // ORIGINAL STATE (unchanged)
   // ─────────────────────────────────────────────────────────
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const [loading, setLoading]       = useState({ show: false, text: '' });
   const [activeDropdown, setActiveDropdown] = useState(null);
@@ -1003,29 +1002,13 @@ export const CreateConcept = () => {
         </div>
       </header>
 
+      {/* Ambient orbs (identical to BrandDNA) */}
+      <div className="cncpt-orb3"></div>
+      <div className="cncpt-orb4"></div>
+
       <div className="cncpt-container">
-        {/* ── SIDEBAR (original, unchanged) ── */}
-        <aside className={`cncpt-sidebar ${isSidebarCollapsed ? 'cncpt-collapsed' : ''}`} id="cncpt-sidebar">
-          <button className="cncpt-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>{isSidebarCollapsed ? '❯' : '❮'}</button>
-          <ul className="cncpt-menu">
-            <li onClick={() => navigate('/project', { state: { projectId } })}><span className="cncpt-icon"><iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon></span><span className="cncpt-text">Projects</span></li>
-            <li onClick={() => navigate('/brand-dna', { state: { projectId } })}><span className="cncpt-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span><span className="cncpt-text">Brand DNA</span></li>
-            <li className="cncpt-active"><span className="cncpt-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="cncpt-text">Create Concept</span></li>
-            <li onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-              <span className="cncpt-text">Create Logo</span>
-            </li>
-          </ul>
-          <hr className="cncpt-hr"/>
-          <ul className="cncpt-menu">
-            <li onClick={() => navigate('/your-projects', { state: { projectId } })}><span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="cncpt-text">Yours Projects</span></li>
-          </ul>
-          <div className="cncpt-help">
-            <img src={helpImg} className="cncpt-help-img" alt="help"/>
-            <p className="cncpt-help-text">Having trouble?</p>
-            <a href="#" className="cncpt-contact-link">Contact Us</a>
-          </div>
-        </aside>
+        {/* ── SIDEBAR ── */}
+        <ConceptSidebarNews activePage="create-concept" projectId={projectId} />
 
         {/* ── MAIN CONTENT ── */}
         <main className="cncpt-main-content">
@@ -1039,34 +1022,34 @@ export const CreateConcept = () => {
           {/* ════════════════════════════════════
               TAB 1: NAME  (original, unchanged)
               ════════════════════════════════════ */}
-          <div className="cncpt-tab-content" style={{ display: activeTab === 'name' ? 'flex' : 'none', alignItems: 'flex-start', padding: '40px', flexDirection: 'column' }}>
+          <div className="cncpt-tab-content" style={{ display: activeTab === 'name' ? 'flex' : 'none' }}>
             {/* ช่องตั้งชื่อแบรนด์ด้วยตัวเอง */}
-            <div style={{ width: '100%', marginBottom: '30px', background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
-              <p style={{ color: '#d75a2a', fontWeight: 'bold', marginBottom: '10px', fontSize: '16px' }}>
-                <iconify-icon icon="mdi:pencil-outline" style={{ verticalAlign: 'middle', marginRight: '6px' }}></iconify-icon>
+            <div className="cncpt-name-input-card">
+              <p>
+                <iconify-icon icon="mdi:pencil-outline"></iconify-icon>
                 ชื่อแบรนด์ของคุณ
               </p>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <div className="cncpt-name-input-row">
                 <input
                   type="text"
+                  className="cncpt-name-input"
                   placeholder="พิมพ์ชื่อแบรนด์ที่ต้องการ..."
                   value={customBrandName}
                   onChange={(e) => setCustomBrandName(e.target.value)}
-                  style={{ flex: 1, padding: '14px 18px', borderRadius: '12px', border: '1px solid #ddd', fontSize: '18px', fontWeight: 'bold', color: '#333', outline: 'none' }}
                 />
                 <button
+                  className="cncpt-name-save-btn"
                   onClick={handleSaveCustomBrandName}
                   disabled={savingCustomName}
-                  style={{ padding: '14px 24px', borderRadius: '12px', border: 'none', background: '#d3542b', color: '#fff', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px', whiteSpace: 'nowrap' }}
                 >
                   {savingCustomName ? 'กำลังบันทึก...' : 'บันทึกชื่อ'}
                 </button>
               </div>
-              <p style={{ color: '#aaa', fontSize: '13px', marginTop: '8px' }}>ชื่อนี้จะถูกใช้ในการสร้างโลโก้และคอนเทนต์ต่างๆ</p>
+              <p className="cncpt-name-hint">ชื่อนี้จะถูกใช้ในการสร้างโลโก้และคอนเทนต์ต่างๆ</p>
             </div>
 
             {namesList.length === 0 ? (
-              <div className="cncpt-empty-state" style={{ width: '100%' }}>
+              <div className="cncpt-empty-state">
                 <div className="cncpt-empty-icon"><iconify-icon icon="mdi:pencil-box-outline"></iconify-icon></div>
                 <p className="cncpt-empty-title">หรือให้ AI ช่วยคิดชื่อแบรนด์ให้คุณ</p>
                 <button className="cncpt-get-start-btn" onClick={() => openModal('name')}>ให้ AI คิดชื่อ</button>
@@ -1074,31 +1057,30 @@ export const CreateConcept = () => {
             ) : (
               <div style={{ width: '100%' }}>
                 {selectedNameObj && (
-                  <div className="cncpt-result-state" style={{ marginBottom: '40px', background: '#fff', padding: '30px', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
-                    <p className="cncpt-result-label" style={{ color: '#d75a2a' }}>ชื่อที่คุณเลือกใช้สำหรับโปรเจกต์นี้</p>
-                    <h2 className="cncpt-result-name" style={{ fontSize: '50px', color: '#d75a2a', margin: '15px 0' }}>{customBrandName || selectedNameObj.brand_name}</h2>
+                  <div className="cncpt-selected-name-card">
+                    <p className="cncpt-result-label">ชื่อที่คุณเลือกใช้สำหรับโปรเจกต์นี้</p>
+                    <h2 className="cncpt-result-name">{customBrandName || selectedNameObj.brand_name}</h2>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ color: '#333' }}>รายชื่อที่ AI แนะนำ</h3>
+                  <h3 style={{ color: 'var(--charcoal)', fontWeight: 700 }}>รายชื่อที่ AI แนะนำ</h3>
                   <button className="cncpt-rename-btn" onClick={() => openModal('name')}>
                     ให้ AI คิดให้อีกครั้ง <iconify-icon icon="mdi:refresh"></iconify-icon>
                   </button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+                <div className="cncpt-names-grid">
                   {otherNames.map((n) => (
-                    <div key={n.concept_id} style={{ background: '#fff', padding: '25px 20px', borderRadius: '16px', textAlign: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.04)', position: 'relative' }}>
+                    <div key={n.concept_id} className="cncpt-name-card">
                       <button
+                        className={`cncpt-name-card-like${n.is_liked ? ' liked' : ''}`}
                         onClick={() => handleLike(n.concept_id, n.is_liked)}
-                        style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', cursor: 'pointer', color: n.is_liked ? '#d75a2a' : '#ccc', fontSize: '24px' }}
                       >
                         <iconify-icon icon={n.is_liked ? "mdi:heart" : "mdi:heart-outline"}></iconify-icon>
                       </button>
-                      <h3 style={{ fontSize: '22px', color: '#333', margin: '20px 0 30px' }}>{n.brand_name}</h3>
+                      <h3>{n.brand_name}</h3>
                       <button
                         onClick={() => handleSelect(n.concept_id)}
                         className="cncpt-select-btn"
-                        style={{ width: '100%', background: '#fff3ee', color: '#d75a2a', border: '1px solid #d75a2a' }}
                       >
                         <iconify-icon icon="mdi:check-circle-outline"></iconify-icon> เลือกชื่อนี้
                       </button>
@@ -1227,7 +1209,7 @@ export const CreateConcept = () => {
                           return (
                             <div key={p.name+idx} className={`cncpt-palette-card${isSelected?' cncpt-selected':''}`}>
                               <h3 className="cncpt-pc-name">{p.name}</h3>
-                              <div className="cncpt-pc-tags">{tagsTH.map(t=><span key={t} className="cncpt-ptag">{t}</span>)}</div>
+                              <div className="cncpt-pc-tags">{tagsTH.map(t=><span key={t} className="cncpt-pc-tag">{t}</span>)}</div>
                               <div className="cncpt-pc-swatches-row">
                                 {p.colors.map((hex,hi)=>(
                                   <div key={hex+hi} className="cncpt-swatch-item" style={{background:hex}}
@@ -1236,8 +1218,8 @@ export const CreateConcept = () => {
                                   </div>
                                 ))}
                               </div>
-                              <div className="cncpt-card-actions">
-                                <button className={`cncpt-favorite-card-btn${isFav?' cncpt-fav-active':''}`}
+                              <div className="cncpt-pc-actions">
+                                <button className={`cncpt-pc-fav-btn${isFav?' cncpt-faved':''}`}
                                   onClick={async ()=>{
                                     const newFav = !isFav;
                                     // อัปเดต UI ก่อนเลย
@@ -1289,10 +1271,9 @@ export const CreateConcept = () => {
                                       }
                                     } catch(err) { console.error('like palette error:', err); }
                                   }}>
-                                  <CncptIcon icon={isFav?'mdi:star':'mdi:star-outline'}/>
-                                  {isFav?'Favorited ›':'Favorite ›'}
+                                  <CncptIcon icon={isFav?'solar:heart-bold':'solar:heart-linear'}/>
                                 </button>
-                                <button className="cncpt-select-btn" onClick={async ()=>{
+                                <button className={`cncpt-pc-sel-btn${isSelected?' cncpt-selected':''}`} onClick={async ()=>{
                                   setCncptSelectedPalette(p.name);
                                   if (!projectId) return;
                                   try {
@@ -1498,7 +1479,7 @@ export const CreateConcept = () => {
                     </div>
                   ) : (
                     <>
-                      <div className="cncpt-fonts-grid">
+                      <div className="cncpt-font-grid">
                         {cncptSearchedFonts.map((f,idx)=>{
                           cncptLoadGoogleFont(f);
                           return (
@@ -1515,8 +1496,8 @@ export const CreateConcept = () => {
                               <p className="cncpt-fc-sample" style={{fontFamily:`'${f.name}',sans-serif`}}>Your Brand Should Look Great</p>
                               {f.thai && <p className="cncpt-fc-sample" style={{fontFamily:`'${f.name}',sans-serif`}}>แบรนด์ของคุณควรดูดีเสมอ</p>}
                               <p className="cncpt-fc-lang">{f.thai?'🇹🇭 รองรับภาษาไทย':'Latin'}</p>
-                              <div className="cncpt-card-actions">
-                                <button className={`cncpt-favorite-card-btn${cncptFavFonts.has(f.name)?' cncpt-fav-active':''}`}
+                              <div className="cncpt-pc-actions">
+                                <button className={`cncpt-pc-fav-btn${cncptFavFonts.has(f.name)?' cncpt-faved':''}`}
                                   onClick={async ()=>{
                                     const newFav = !cncptFavFonts.has(f.name);
                                     setCncptFavFonts(prev=>{const s=new Set(prev);newFav?s.add(f.name):s.delete(f.name);return s;});
@@ -1536,10 +1517,9 @@ export const CreateConcept = () => {
                                       });
                                     } catch(err) { console.error('like font error:', err); }
                                   }}>
-                                  <CncptIcon icon={cncptFavFonts.has(f.name)?'mdi:star':'mdi:star-outline'}/>
-                                  {cncptFavFonts.has(f.name)?'Favorited ›':'Favorite ›'}
+                                  <CncptIcon icon={cncptFavFonts.has(f.name)?'solar:heart-bold':'solar:heart-linear'}/>
                                 </button>
-                                <button className={`cncpt-select-btn${cncptSelectedFontName===f.name?' cncpt-selected-btn':''}`}
+                                <button className={`cncpt-pc-sel-btn${cncptSelectedFontName===f.name?' cncpt-selected':''}`}
                                   onClick={async ()=>{
                                     setCncptSelectedFont(idx);
                                     setCncptSelectedFontName(f.name);
@@ -1568,7 +1548,7 @@ export const CreateConcept = () => {
                                       });
                                     } catch(err) { console.error('select font error:', err); }
                                   }}>
-                                  <CncptIcon icon="mdi:check-circle-outline"/> Select ›
+                                  <CncptIcon icon="mdi:check-circle-outline"/> เลือกฟอนต์นี้
                                 </button>
                               </div>
                             </div>
@@ -1598,7 +1578,6 @@ export const CreateConcept = () => {
       {modals.name && (
         <div className="cncpt-cc-modal" onClick={() => closeModal('name')}>
           <div className="cncpt-cc-modal-box" onClick={e => e.stopPropagation()}>
-            <button className="cncpt-cc-close" onClick={() => closeModal('name')}>✕</button>
 
             <div className="cncpt-form-group">
               <label><span className="cncpt-step">1</span> สินค้าของคุณคืออะไร <span className="cncpt-req-star">*</span></label>
@@ -1675,7 +1654,6 @@ export const CreateConcept = () => {
       {colorModal && (
         <div className="cncpt-cc-modal" onClick={() => { setColorModal(false); setCncptColorErrors({}); }}>
           <div className="cncpt-cc-modal-box" onClick={e => e.stopPropagation()}>
-            <button className="cncpt-cc-close" onClick={() => { setColorModal(false); setCncptColorErrors({}); }}>✕</button>
 
             <div className="cncpt-form-group">
               <label><span className="cncpt-step">1</span> สินค้าของคุณคืออะไร <span className="cncpt-req-star">*</span></label>
@@ -1732,7 +1710,6 @@ export const CreateConcept = () => {
       {fontsModal && (
         <div className="cncpt-cc-modal" onClick={() => { setFontsModal(false); setCncptFontErrors({}); }}>
           <div className="cncpt-cc-modal-box" onClick={e => e.stopPropagation()}>
-            <button className="cncpt-cc-close" onClick={() => { setFontsModal(false); setCncptFontErrors({}); }}>✕</button>
 
             <div className="cncpt-form-group">
               <label><span className="cncpt-step">1</span> สินค้าของคุณคืออะไร <span className="cncpt-req-star">*</span></label>

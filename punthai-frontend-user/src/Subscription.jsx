@@ -286,7 +286,7 @@ const Subscription = ({ user, setUser }) => {
                     <div className="sub-usage-info">
                         <iconify-icon icon="solar:gallery-check-linear" width="20"></iconify-icon>
                         <span>
-                            ใช้ไป {subStatus.generation_used}/{subStatus.generation_limit} ครั้ง
+                            ทดลองใช้ไป {subStatus.generation_used}/{subStatus.generation_limit} ครั้ง
                             ({subStatus.generation_period === 'monthly' ? 'เดือนนี้' : 'ตลอดอายุ Account'})
                         </span>
                     </div>

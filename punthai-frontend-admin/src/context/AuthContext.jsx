@@ -8,12 +8,12 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const raw = localStorage.getItem('adminData');
+    const raw = sessionStorage.getItem('adminData');
     if (raw) {
       try {
         setAdmin(JSON.parse(raw));
       } catch {
-        localStorage.removeItem('adminData');
+        sessionStorage.removeItem('adminData');
       }
     }
     setLoading(false);
@@ -22,14 +22,14 @@ export function AuthProvider({ children }) {
   const login = async (formData) => {
     const res = await loginAdmin(formData);
     if (res.status === 'success') {
-      localStorage.setItem('adminData', JSON.stringify(res.admin));
+      sessionStorage.setItem('adminData', JSON.stringify(res.admin));
       setAdmin(res.admin);
     }
     return res;
   };
 
   const logout = () => {
-    localStorage.removeItem('adminData');
+    sessionStorage.removeItem('adminData');
     setAdmin(null);
   };
 

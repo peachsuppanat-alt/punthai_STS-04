@@ -3,9 +3,9 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './CreateLogo.css';
 import { fetchSubscriptionStatus } from '../utils/subscriptionGuard';
 import ProUpgradeModal from '../components/ProUpgradeModal';
+import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
-import helpImg from '../assets/help.png';
 //import createLogoImg from './assets/create logo.png';
 
 export const CreateLogo = () => {
@@ -22,7 +22,6 @@ export const CreateLogo = () => {
   const [isChecking, setIsChecking] = useState(true);
 
   // --- States สำหรับ Layout ---
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -225,16 +224,21 @@ export const CreateLogo = () => {
 
   // 👇 ระหว่างรอเช็คข้อมูลจาก Database ให้ขึ้นหน้าโหลดก่อน ป้องกันหน้าเว็บกะพริบ
   if (isChecking) {
-      return (
-          <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: '#f5f5f5' }}>
-              <iconify-icon icon="line-md:loading-loop" style={{ fontSize: '50px', color: '#d75a2a' }}></iconify-icon>
-              <h3 style={{ marginTop: '20px', color: '#666' }}>กำลังตรวจสอบข้อมูลโปรเจกต์...</h3>
-          </div>
-      );
+    return (
+      <div className="clg-checking">
+        <iconify-icon icon="line-md:loading-loop"></iconify-icon>
+        <h3>กำลังตรวจสอบข้อมูลโปรเจกต์...</h3>
+      </div>
+    );
   }
 
   return (
-    <div className="clg-body-wrapper">
+    <div className="clg-body">
+
+      {/* Soft Orbs background */}
+      <div className="clg-orb3" aria-hidden="true"></div>
+      <div className="clg-orb4" aria-hidden="true"></div>
+
       {/* Navbar */}
       <header className="clg-navbar">
         <div className="clg-logo">
@@ -249,45 +253,15 @@ export const CreateLogo = () => {
         </div>
       </header>
 
-      <div className="clg-container">
+      <div className="clg-layout">
+
         {/* Sidebar */}
-        <aside className={`clg-sidebar ${isSidebarCollapsed ? 'clg-collapsed' : ''}`} id="clg-sidebar">
-          <button className="clg-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
-            {isSidebarCollapsed ? '❯' : '❮'}
-          </button>
-          
-          <ul className="clg-menu">
-            <li onClick={() => navigate('/project', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="clg-icon">
-                <iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon>
-                </span>
-                <span className="clg-text">Projects</span>
-            </li>
-            <li onClick={() => navigate('/brand-dna', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="clg-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span><span className="clg-text">Brand DNA</span>
-            </li>
-            <li onClick={() => navigate('/create-concept', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="clg-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="clg-text">Create Concept</span>
-            </li>
-            <li className="clg-active" style={{ cursor: 'pointer' }}>
-              <span className="clg-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="clg-text">Create Logo</span>
-            </li>
-            <li onClick={() => navigate('/result', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="clg-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="clg-text">Create Pictures</span>
-            </li>
-          </ul>
-          <hr className="clg-hr" />
-          <ul className="clg-menu">
-            <li onClick={() => navigate('/product', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="clg-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="clg-text">Yours product</span>
-            </li>
-          </ul>
-        </aside>
+        <ProjectSidebar activePage="create-logo" projectId={projectId} />
 
         {/* Main Content */}
         <main className="clg-main">
-          <h1 lang="en">Create Logo</h1>
-          <p className="clg-subtitle">เริ่มต้นด้วยการสร้างโลโก้ที่สะท้อนถึงเอกลักษณ์ของแบรนด์ของคุณ</p>
+          <h1 className="clg-page-title" lang="en">Create Logo</h1>
+          <p className="clg-page-subtitle">เริ่มต้นด้วยการสร้างโลโก้ที่สะท้อนถึงเอกลักษณ์ของแบรนด์ของคุณ</p>
 
           <div className="clg-ai-card">
             <div className="clg-ai-card-content">
@@ -305,161 +279,136 @@ export const CreateLogo = () => {
       {/* AI Generate Popup Modal */}
       {isModalOpen && (
         <div className="clg-modal" onClick={handleCloseModal}>
-          <div className="clg-modal-box" onClick={(e) => e.stopPropagation()} style={{maxHeight: '90vh', overflowY: 'auto'}}>
+          <div className="clg-modal-box" onClick={(e) => e.stopPropagation()}>
             <button className="clg-close-modal" onClick={handleCloseModal}>&times;</button>
-            <h2 style={{color: '#d3542b', marginBottom: '20px'}}>ตั้งค่าโลโก้ของคุณ</h2>
+            <div className="clg-modal-inner">
+              <h2 className="clg-modal-title">ตั้งค่าโลโก้ของคุณ</h2>
 
-            {/* 1. ชื่อแบรนด์ */}
-            <div className="clg-form-group">
-              <label style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <span><span className="clg-step">1</span> ชื่อแบรนด์ <span style={{color:'red'}}>*</span></span>
-                <button 
-                  onClick={handleImportBrandName}
-                  style={{background:'#fff3ee', color:'#d75a2a', border:'none', padding:'5px 12px', borderRadius:'20px', cursor:'pointer', fontSize:'13px', display:'flex', alignItems:'center', gap:'5px'}}
-                >
-                  <iconify-icon icon="mdi:download"></iconify-icon> นำเข้าชื่อที่เลือก
-                </button>
-              </label>
-              <input 
-                type="text" 
-                placeholder="ระบุชื่อแบรนด์..." 
-                value={brandName}
-                onChange={(e) => setBrandName(e.target.value)}
-              />
-            </div>
-
-            {/* 2. คุณค่าแบรนด์ */}
-            <div className="clg-form-group">
-              <label style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <span><span className="clg-step">2</span> คุณค่า/แนวคิดแบรนด์</span>
-                <button 
-                  onClick={handleImportBrandValue}
-                  style={{background:'#fff3ee', color:'#d75a2a', border:'none', padding:'5px 12px', borderRadius:'20px', cursor:'pointer', fontSize:'13px', display:'flex', alignItems:'center', gap:'5px'}}
-                >
-                  <iconify-icon icon="mdi:dna"></iconify-icon> นำเข้าจาก Brand DNA
-                </button>
-              </label>
-              <textarea 
-                rows="3" 
-                placeholder="ระบุคุณค่าหรือแนวคิดหลัก..." 
-                value={brandValue}
-                onChange={(e) => setBrandValue(e.target.value)}
-                style={{width:'100%', border:'1px solid #ddd', borderRadius:'14px', padding:'12px', marginTop:'10px', outline:'none', fontFamily:'inherit'}}
-              />
-            </div>
-
-            {/* 3. สินค้า */}
-            <div className="clg-form-group">
-              <label style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <span><span className="clg-step">3</span> สินค้าที่จะสร้างโลโก้</span>
-                <button 
-                  onClick={handleImportProducts}
-                  style={{background:'#fff3ee', color:'#d75a2a', border:'none', padding:'5px 12px', borderRadius:'20px', cursor:'pointer', fontSize:'13px', display:'flex', alignItems:'center', gap:'5px'}}
-                >
-                  <iconify-icon icon="mdi:basket"></iconify-icon> นำเข้ารายการสินค้า
-                </button>
-              </label>
-              <p style={{fontSize:'13px', color:'#888', marginTop:'5px'}}>
-                {importedProducts.length > 0 ? `นำเข้าแล้ว: ${importedProducts.map(p => p.name_product).join(', ')}` : '*หากไม่มี จะเจนเป็นโลโก้อาร์ตแบบนามธรรม'}
-              </p>
-            </div>
-
-            {/* 4. สไตล์ */}
-            <div className="clg-form-group">
-              <label><span className="clg-step">4</span> สไตล์โลโก้ <span style={{color:'red'}}>*</span></label>
-              <div style={{display:'flex', flexWrap:'wrap', gap:'10px', marginTop:'10px'}}>
-                {styleOptions.map(style => (
-                  <div
-                    key={style.id}
-                    onClick={() => setSelectedStyle(style.id)}
-                    style={{
-                      padding: '15px 10px',
-                      borderRadius: '12px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 'calc(33.33% - 7px)',
-                      boxSizing: 'border-box',
-                      border: selectedStyle === style.id ? '2px solid #d75a2a' : '1px solid #eee',
-                      background: selectedStyle === style.id ? '#fff3ee' : '#fafafa',
-                      transition: 'all 0.2s ease',
-                      gap: '5px'
-                    }}
-                  >
-                    <iconify-icon icon={style.icon} style={{ fontSize: '32px', color: selectedStyle === style.id ? '#d75a2a' : '#888' }}></iconify-icon>
-                    <span style={{ fontWeight: 'bold', fontSize: '13px', color: selectedStyle === style.id ? '#d75a2a' : '#444' }}>
-                      {style.name}
-                    </span>
-                    <span style={{ fontSize: '11px', color: '#888', textAlign: 'center' }}>
-                      {style.desc}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 5. รายละเอียดเพิ่มเติม */}
-            <div className="clg-form-group">
-              <label><span className="clg-step">5</span> รายละเอียดที่อยากได้เพิ่มเติม</label>
-              <textarea 
-                rows="2" 
-                placeholder="เช่น อยากได้รูปช้างยืนบนดอกบัว..." 
-                value={detailsInput}
-                onChange={(e) => setDetailsInput(e.target.value)}
-                style={{width:'100%', border:'1px solid #ddd', borderRadius:'14px', padding:'12px', marginTop:'10px', outline:'none', fontFamily:'inherit'}}
-              />
-            </div>
-
-            {/* 6. สิ่งที่ไม่อยากได้ */}
-            <div className="clg-form-group">
-              <label><span className="clg-step">6</span> สิ่งที่ไม่อยากให้มี (Negative Prompt)</label>
-              <input 
-                type="text" 
-                placeholder="เช่น สีดำ, รูปกะโหลก..." 
-                value={negativeInput}
-                onChange={(e) => setNegativeInput(e.target.value)}
-              />
-            </div>
-            {/* 👇 เพิ่มข้อ 7 และ 8 👇 */}
-            <div className="clg-form-group" style={{ display: 'flex', gap: '20px', marginTop: '15px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: '#f9f9f9', padding: '10px 15px', borderRadius: '8px', border: '1px solid #eee', width: '100%' }}>
-                    <input type="checkbox" checked={useImportedColor} onChange={(e) => setUseImportedColor(e.target.checked)} style={{ width: '20px', height: '20px', accentColor: '#d3542b' }} />
-                    <span style={{ fontWeight: '500', color: '#444' }}>นำเข้า <b>ชุดสี</b> ที่เลือกไว้แล้ว</span>
+              {/* 1. ชื่อแบรนด์ */}
+              <div className="clg-form-group">
+                <label style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <span><span className="clg-step">1</span> ชื่อแบรนด์ <span style={{color:'var(--orange)'}}>*</span></span>
+                  <button onClick={handleImportBrandName} className="clg-import-btn">
+                    <iconify-icon icon="mdi:download"></iconify-icon> นำเข้าชื่อที่เลือก
+                  </button>
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', background: '#f9f9f9', padding: '10px 15px', borderRadius: '8px', border: '1px solid #eee', width: '100%' }}>
-                    <input type="checkbox" checked={useImportedFont} onChange={(e) => setUseImportedFont(e.target.checked)} style={{ width: '20px', height: '20px', accentColor: '#d3542b' }} />
-                    <span style={{ fontWeight: '500', color: '#444' }}>นำเข้า <b>ฟอนต์</b> ที่เลือกไว้แล้ว</span>
-                </label>
-            </div>
-
-            {usageInfo?.generation && (
-              <div style={{ textAlign: 'center', margin: '8px 0', fontSize: 13, color: usageInfo.generation.remaining <= 1 ? '#e53e3e' : '#888' }}>
-                <iconify-icon icon="mdi:image-auto-adjust" style={{ verticalAlign: 'middle', marginRight: 4 }}></iconify-icon>
-                ใช้ไป {usageInfo.generation.used}/{usageInfo.generation.limit} ครั้ง
-                {usageInfo.generation.period === 'lifetime' ? ' (ตลอดชีพ)' : ' (เดือนนี้)'}
+                <input 
+                  type="text" 
+                  placeholder="ระบุชื่อแบรนด์..." 
+                  value={brandName}
+                  onChange={(e) => setBrandName(e.target.value)}
+                />
               </div>
-            )}
 
-            {/* Actions */}
-            <div className="clg-modal-actions" style={{borderTop:'1px solid #eee', paddingTop:'20px', marginTop:'20px'}}>
-              <button className="clg-cancel" onClick={handleCloseModal}>ยกเลิก</button>
-              <button className="clg-confirm" onClick={handleSubmitLogo} disabled={isLoading}>
-                {isLoading ? 'AI กำลังเจนรูป...' : 'ให้ AI เจนโลโก้'}
-              </button>
-            </div>
+              {/* 2. คุณค่าแบรนด์ */}
+              <div className="clg-form-group">
+                <label style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <span><span className="clg-step">2</span> คุณค่า/แนวคิดแบรนด์</span>
+                  <button onClick={handleImportBrandValue} className="clg-import-btn">
+                    <iconify-icon icon="mdi:dna"></iconify-icon> นำเข้าจาก Brand DNA
+                  </button>
+                </label>
+                <textarea 
+                  rows="3" 
+                  placeholder="ระบุคุณค่าหรือแนวคิดหลัก..." 
+                  value={brandValue}
+                  onChange={(e) => setBrandValue(e.target.value)}
+                  className="clg-textarea"
+                />
+              </div>
 
+              {/* 3. สินค้า */}
+              <div className="clg-form-group">
+                <label style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <span><span className="clg-step">3</span> สินค้าที่จะสร้างโลโก้</span>
+                  <button onClick={handleImportProducts} className="clg-import-btn">
+                    <iconify-icon icon="mdi:basket"></iconify-icon> นำเข้ารายการสินค้า
+                  </button>
+                </label>
+                <p className="clg-product-hint">
+                  {importedProducts.length > 0 ? `นำเข้าแล้ว: ${importedProducts.map(p => p.name_product).join(', ')}` : '*หากไม่มี จะเจนเป็นโลโก้อาร์ตแบบนามธรรม'}
+                </p>
+              </div>
+
+              {/* 4. สไตล์ */}
+              <div className="clg-form-group">
+                <label><span className="clg-step">4</span> สไตล์โลโก้ <span style={{color:'var(--orange)'}}>*</span></label>
+                <div className="clg-style-grid">
+                  {styleOptions.map(style => (
+                    <div
+                      key={style.id}
+                      onClick={() => setSelectedStyle(style.id)}
+                      className={`clg-style-option${selectedStyle === style.id ? ' clg-style-selected' : ''}`}
+                    >
+                      <iconify-icon icon={style.icon}></iconify-icon>
+                      <span className="clg-style-name">{style.name}</span>
+                      <span className="clg-style-desc">{style.desc}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 5. รายละเอียดเพิ่มเติม */}
+              <div className="clg-form-group">
+                <label><span className="clg-step">5</span> รายละเอียดที่อยากได้เพิ่มเติม</label>
+                <textarea 
+                  rows="2" 
+                  placeholder="เช่น อยากได้รูปช้างยืนบนดอกบัว..." 
+                  value={detailsInput}
+                  onChange={(e) => setDetailsInput(e.target.value)}
+                  className="clg-textarea"
+                />
+              </div>
+
+              {/* 6. สิ่งที่ไม่อยากได้ */}
+              <div className="clg-form-group">
+                <label><span className="clg-step">6</span> สิ่งที่ไม่อยากให้มี (Negative Prompt)</label>
+                <input 
+                  type="text" 
+                  placeholder="เช่น สีดำ, รูปกะโหลก..." 
+                  value={negativeInput}
+                  onChange={(e) => setNegativeInput(e.target.value)}
+                />
+              </div>
+
+              {/* 7+8. Checkbox นำเข้าสี/ฟอนต์ */}
+              <div className="clg-form-group clg-checkbox-row">
+                <label className="clg-checkbox-card">
+                  <input type="checkbox" checked={useImportedColor} onChange={(e) => setUseImportedColor(e.target.checked)} />
+                  <span>นำเข้า <b>ชุดสี</b> ที่เลือกไว้แล้ว</span>
+                </label>
+                <label className="clg-checkbox-card">
+                  <input type="checkbox" checked={useImportedFont} onChange={(e) => setUseImportedFont(e.target.checked)} />
+                  <span>นำเข้า <b>ฟอนต์</b> ที่เลือกไว้แล้ว</span>
+                </label>
+              </div>
+
+              {usageInfo?.generation && (
+                <div className={`clg-usage-info${usageInfo.generation.remaining <= 1 ? ' clg-usage-warn' : ''}`}>
+                  <iconify-icon icon="mdi:image-auto-adjust"></iconify-icon>
+                  ใช้ไป {usageInfo.generation.used}/{usageInfo.generation.limit} ครั้ง
+                  {usageInfo.generation.period === 'lifetime' ? ' (ตลอดชีพ)' : ' (เดือนนี้)'}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="clg-modal-actions">
+                <button className="clg-cancel" onClick={handleCloseModal}>ยกเลิก</button>
+                <button className="clg-confirm" onClick={handleSubmitLogo} disabled={isLoading}>
+                  {isLoading ? 'AI กำลังเจนรูป...' : 'ให้ AI เจนโลโก้'}
+                </button>
+              </div>
+            </div>{/* end clg-modal-inner */}
           </div>
         </div>
       )}
 
-      {/* Loading Overlay ขยายเต็มจอ */}
+      {/* Loading Overlay */}
       {isLoading && (
-        <div style={{position:'fixed', inset:0, background:'rgba(255,255,255,0.85)', zIndex:9999, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center'}}>
-            <iconify-icon icon="line-md:loading-loop" style={{fontSize:'60px', color:'#d75a2a'}}></iconify-icon>
-            <h2 style={{marginTop:'20px', color:'#d75a2a'}}>{loadingMessage || 'AI กำลังวาดโลโก้ให้คุณ...'}</h2>
-            <p style={{color:'#666', marginTop:'10px'}}>กรุณารอสักครู่</p>
+        <div className="clg-loading-overlay">
+          <iconify-icon icon="line-md:loading-loop"></iconify-icon>
+          <h2>{loadingMessage || 'AI กำลังวาดโลโก้ให้คุณ...'}</h2>
+          <p>กรุณารอสักครู่</p>
         </div>
       )}
 

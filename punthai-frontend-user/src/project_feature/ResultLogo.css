@@ -1,298 +1,358 @@
-/* Main */
+/* =====================================================
+   ResultLogo.css — aligned with CreateLogo design system
+   Brand: #c94f24  /  warm cream bg  /  Bai Jamjuree
+   ===================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+
+/* ── Design Tokens (identical to CreateLogo) ──────── */
+:root {
+  --orange:     #c94f24;
+  --orange-dk:  #a83e1a;
+  --orange-lt:  #fff3ee;
+  --orange-mid: #fde0d0;
+  --bg:         #fefaf7;
+  --surface:    #ffffff;
+  --surface-2:  #fdf9f6;
+  --cream-dark: #f5ede4;
+  --line:       #ecddd3;
+  --line-dk:    #ddd0c4;
+  --charcoal:   #2a1f17;
+  --gray-2:     #5a4a40;
+  --gray-3:     #9a8880;
+  --gray-4:     #c4b5ab;
+  --radius-sm:  12px;
+  --radius-md:  18px;
+  --radius-lg:  24px;
+  --sh-sm:      0 2px 12px rgba(80,40,20,.07);
+  --sh-md:      0 8px 30px rgba(80,40,20,.10);
+  --trans:      all .25s ease;
+}
+
+/* ── Body ─────────────────────────────────────────── */
+.rl-body {
+  background: var(--bg);
+  font-family: 'Bai Jamjuree', sans-serif;
+  min-height: 100vh;
+}
+
+/* ── Orbs (identical to CreateLogo orbs) ─────────── */
+.rl-orb3 {
+  position: fixed;
+  width: 420px; height: 420px;
+  top: 28%; right: 5%;
+  border-radius: 50%; pointer-events: none; z-index: 0;
+  filter: blur(68px);
+  background: radial-gradient(circle, rgba(126,174,207,0.42) 0%, rgba(126,174,207,0) 70%);
+  animation: rlOrb3 9s ease-in-out infinite alternate;
+}
+.rl-orb4 {
+  position: fixed;
+  width: 320px; height: 320px;
+  top: 52%; left: 32%;
+  border-radius: 50%; pointer-events: none; z-index: 0;
+  filter: blur(80px);
+  background: radial-gradient(circle, rgba(180,155,220,0.32) 0%, rgba(180,155,220,0) 70%);
+  animation: rlOrb4 16s ease-in-out infinite alternate;
+}
+@keyframes rlOrb3 {
+  0%   { transform: translate(0,0)       scale(1);    }
+  35%  { transform: translate(-55px,75px) scale(1.06); }
+  70%  { transform: translate(-95px,28px) scale(0.96); }
+  100% { transform: translate(-28px,95px) scale(1.09); }
+}
+@keyframes rlOrb4 {
+  0%   { transform: translate(0,0)       scale(1);    }
+  50%  { transform: translate(65px,-85px) scale(1.16); }
+  100% { transform: translate(-45px,65px) scale(0.88); }
+}
+
+/* ── Main area ────────────────────────────────────── */
 .rl-main {
   flex: 1;
-  padding: 30px;
+  padding: 28px 36px;
+  overflow-y: auto;
+  position: relative;
+  background: #f5f2ec;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-dk) transparent;
+}
+.rl-main::-webkit-scrollbar { width: 5px; }
+.rl-main::-webkit-scrollbar-thumb { background: var(--line-dk); border-radius: 99px; }
+.rl-main::before,
+.rl-main::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(72px);
+}
+.rl-main::before {
+  width: 560px; height: 560px;
+  top: 60px; left: -140px;
+  background: radial-gradient(circle, rgba(244,162,126,0.55) 0%, rgba(244,162,126,0) 70%);
+  animation: rlOrb1 11s ease-in-out infinite alternate;
+}
+.rl-main::after {
+  width: 500px; height: 500px;
+  bottom: -80px; right: -100px;
+  background: radial-gradient(circle, rgba(126,207,164,0.48) 0%, rgba(126,207,164,0) 70%);
+  animation: rlOrb2 14s ease-in-out infinite alternate;
+}
+@keyframes rlOrb1 {
+  0%   { transform: translate(0,0)        scale(1);    }
+  30%  { transform: translate(60px,80px)  scale(1.08); }
+  65%  { transform: translate(25px,150px) scale(0.95); }
+  100% { transform: translate(90px,55px)  scale(1.12); }
+}
+@keyframes rlOrb2 {
+  0%   { transform: translate(0,0)          scale(1);    }
+  40%  { transform: translate(-80px,-65px)  scale(1.10); }
+  70%  { transform: translate(-35px,-115px) scale(0.92); }
+  100% { transform: translate(-105px,-48px) scale(1.06); }
+}
+.rl-main > * { position: relative; z-index: 1; }
+
+/* ── Page header ──────────────────────────────────── */
+.rl-page-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 26px; font-weight: 700;
+  color: var(--charcoal);
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
+}
+.rl-page-subtitle {
+  color: var(--gray-3);
+  font-size: 14px;
+  margin-bottom: 28px;
 }
 
-.rl-main h1 {
-  color: #d75a2a;
-  margin-bottom: 5px;
-  font-weight: 1100;
+/* ── Empty state ──────────────────────────────────── */
+.rl-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 80px 0;
+  color: var(--gray-3);
 }
+.rl-empty-state iconify-icon { font-size: 48px; color: var(--orange); }
+.rl-empty-state p { font-size: 15px; }
 
-.rl-subtitle {
-  color: #666;
-  margin-bottom: 20px;
-  font-size: 20px;
-}
-
-.rl-grid {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  gap: 18px;
-  align-items: stretch; 
-}
-
-/* ===== Result Page ===== */
-
+/* ── Logo Grid ────────────────────────────────────── */
 .rl-logo-grid {
   display: grid;
-  grid-template-columns: repeat(3, 336px);
-  gap: 30px;
-  margin-top: 30px;
-  justify-content: start;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 8px;
 }
 
-/* การ์ด */
+/* ── Logo Card ────────────────────────────────────── */
 .rl-logo-card {
   position: relative;
-  width: 336px;            
-  background: #fff;
-  border-radius: 20px;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
   padding: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-  transition: 0.25s ease;
+  border: 1.5px solid rgba(255,255,255,0.6);
+  box-shadow: var(--sh-sm);
+  transition: var(--trans);
   cursor: pointer;
+  animation: rlCardIn .4s cubic-bezier(.22,1,.36,1) both;
 }
-
+@keyframes rlCardIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .rl-logo-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 18px 40px rgba(0,0,0,0.08);
+  box-shadow: var(--sh-md), 0 1px 0 rgba(255,255,255,0.7) inset;
+  border-color: rgba(201,79,36,0.18);
+  background: rgba(255,255,255,0.85);
+}
+.rl-logo-card--selected {
+  border-color: var(--orange) !important;
+  box-shadow: 0 0 0 3px rgba(201,79,36,0.15), var(--sh-sm) !important;
 }
 
-/* ช่องแสดงโลโก้ */
+/* ── Logo Box ─────────────────────────────────────── */
 .rl-logo-box {
   width: 100%;
-  height: 242px;
-  border-radius: 14px;   
-  border: 2px dashed #ddd;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-md);
+  border: 1.5px dashed var(--line);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #aaa;
-  font-size: 18px;
-  box-sizing: border-box;  
-  overflow: hidden; /* เพิ่มเพื่อไม่ให้รูปภาพล้นขอบโค้ง */
+  overflow: hidden;
+  background: var(--surface-2);
+  box-sizing: border-box;
 }
 
-/* กล่องปุ่มลอย */
+/* ── Action buttons cluster ───────────────────────── */
 .rl-logo-actions {
   position: absolute;
   top: 12px;
   right: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  background: rgba(255,255,255,0.9);
+  gap: 5px;
+  background: rgba(255,255,255,0.92);
   padding: 6px;
-  border-radius: 14px;
-  backdrop-filter: blur(6px);
-  z-index: 2; /* ให้อยู่เหนือรูปภาพ */
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.7);
+  box-shadow: 0 4px 12px rgba(80,40,20,.10);
+  z-index: 2;
 }
 
-/* ปุ่ม */
 .rl-action-btn {
   width: 34px;
   height: 34px;
   border: none;
-  background: #f5f5f5;
+  background: var(--surface-2);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: 0.2s ease;
-
-  text-decoration: none;   
-  color: inherit;          
+  transition: var(--trans);
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--line);
 }
+.rl-action-btn iconify-icon { font-size: 17px; color: var(--gray-2); transition: var(--trans); }
+.rl-action-btn:hover { background: var(--orange); border-color: var(--orange); }
+.rl-action-btn:hover iconify-icon { color: #fff; }
 
-.rl-action-btn iconify-icon {
-  font-size: 18px;
-  color: #666;
+/* Favorite active */
+.rl-favorite-btn.active { background: var(--orange-lt); border-color: var(--orange-mid); }
+.rl-favorite-btn.active iconify-icon { color: var(--orange); }
+
+/* Select active */
+.rl-select-btn--active { background: #e8f5e9; border-color: #81c784; }
+.rl-select-btn--active iconify-icon { color: #4CAF50; }
+
+/* ── Download dropdown ────────────────────────────── */
+.rl-download-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--sh-md);
+  padding: 6px;
+  z-index: 100;
+  min-width: 160px;
 }
-
-.rl-action-btn:hover {
-  background: #D35325;
+.rl-download-menu-label {
+  font-size: 11px;
+  color: var(--gray-3);
+  padding: 5px 10px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+  font-weight: 600;
 }
-
-.rl-action-btn:hover iconify-icon {
-  color: #fff;
-}
-
-@media (max-width: 1100px) {
-  .rl-logo-grid {
-    grid-template-columns: repeat(2, 336px);
-  }
-}
-
-@media (max-width: 760px) {
-  .rl-logo-grid {
-    grid-template-columns: 336px;
-  }
-}
-
-.rl-favorite-btn iconify-icon {
-  transition: 0.2s ease;
-}
-
-.rl-favorite-btn.active iconify-icon {
-  color: #D35325;  
-}
-
-/* ปุ่มรีเฟรช */
-.rl-floating-refresh {
-  position: fixed;
-  bottom: 30px;
-  right: 30px;
-
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-
+.rl-download-opt {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
   border: none;
-  background: #D35325;
-  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Bai Jamjuree', sans-serif;
+  color: var(--gray-2);
+  transition: var(--trans);
+}
+.rl-download-opt:hover { background: var(--orange-lt); color: var(--orange); }
+.rl-download-opt--locked { color: var(--gray-4); cursor: pointer; }
+.rl-download-opt--locked:hover { background: var(--cream-dark); color: var(--orange); }
 
+/* ── Floating "สร้างใหม่" button ──────────────────── */
+.rl-floating-text-btn {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  background: linear-gradient(135deg, var(--orange), #e8845a);
+  color: #fff;
+  border: none;
+  padding: 14px 26px;
+  border-radius: 99px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Bai Jamjuree', sans-serif;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(201,79,36,.38);
+  transition: var(--trans);
+  z-index: 999;
   display: flex;
   align-items: center;
-  justify-content: center;
-
-  cursor: pointer;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-  transition: 0.25s ease;
-  z-index: 999;
+  gap: 8px;
+}
+.rl-floating-text-btn iconify-icon { font-size: 20px; }
+.rl-floating-text-btn:hover {
+  background: linear-gradient(135deg, var(--orange-dk), var(--orange));
+  transform: translateY(-3px);
+  box-shadow: 0 14px 32px rgba(201,79,36,.45);
 }
 
-.rl-floating-refresh iconify-icon {
-  font-size: 28px;
-}
-
-.rl-floating-refresh:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 18px 35px rgba(0,0,0,0.25);
-}
-
-/* ส่วนขยายรูปภาพที่ผมเพิ่มให้ */
-.rl-modal-overlay {
+/* ── Image Preview Modal ──────────────────────────── */
+.rl-preview-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.85);
+  background: rgba(20,8,3,0.88);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 9999;
-}
-
-.rl-modal-content {
-  position: relative;
-  max-width: 90%;
-  max-height: 90vh;
-}
-
-.rl-modal-close {
-  position: absolute;
-  top: -15px;
-  right: -15px;
-  background: #fff;
-  border: none;
-  border-radius: 50%;
-  width: 35px;
-  height: 35px;
-  cursor: pointer;
-  color: #d3542b;
-  font-size: 24px;
-  font-weight: bold;
-}
-/* =========================================
-   ปุ่มต้องการสร้างรูปโลโก้ใหม่ (Floating Text Button)
-   ========================================= */
-.rl-floating-text-btn {
-  position: fixed;
-  bottom: 30px;
-  right: 30px;
-  background: #fff;
-  color: #d75a2a;
-  border: 2px solid #d75a2a;
-  padding: 12px 24px;
-  border-radius: 30px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-  transition: 0.25s ease;
-  z-index: 999;
-}
-
-.rl-floating-text-btn:hover {
-  background: #d75a2a;
-  color: #fff;
-}
-
-/* =========================================
-   Modal สำหรับกรอกฟอร์มใหม่ในหน้า Result
-   ========================================= */
-.rl-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 10000;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: rlFadeIn .2s ease;
 }
-.rl-modal-box {
-  background: #fff;
-  width: 90%;
-  max-width: 600px;
-  border-radius: 20px;
-  padding: 30px;
+@keyframes rlFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.rl-preview-content {
   position: relative;
+  max-width: 88%;
   max-height: 90vh;
-  overflow-y: auto;
+  animation: rlPopIn .3s cubic-bezier(.34,1.56,.64,1) both;
 }
-.rl-form-group {
-  margin-bottom: 20px;
-  text-align: left;
+@keyframes rlPopIn {
+  from { transform: scale(.88); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
 }
-.rl-form-group label {
-  display: block;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
-}
-.rl-step {
-  display: inline-block;
-  width: 24px;
-  height: 24px;
-  background: #d75a2a;
-  color: #fff;
+.rl-preview-close {
+  position: absolute;
+  top: -14px; right: -14px;
+  background: var(--surface);
+  border: none;
   border-radius: 50%;
-  text-align: center;
-  line-height: 24px;
-  font-size: 12px;
-  margin-right: 8px;
-}
-.rl-form-group input, .rl-form-group textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  font-family: inherit;
-  outline: none;
-}
-.rl-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-  border-top: 1px solid #eee;
-  padding-top: 20px;
-}
-.rl-btn-cancel {
-  padding: 10px 20px;
-  border: none;
-  background: #eee;
-  border-radius: 10px;
+  width: 36px; height: 36px;
   cursor: pointer;
-}
-.rl-btn-confirm {
-  padding: 10px 20px;
-  border: none;
-  background: #d75a2a;
-  color: #fff;
-  border-radius: 10px;
-  cursor: pointer;
+  color: var(--orange);
+  font-size: 22px;
   font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--sh-md);
+  transition: var(--trans);
+}
+.rl-preview-close:hover { background: var(--orange); color: #fff; }
+
+/* ── Responsive ───────────────────────────────────── */
+@media (max-width: 1200px) {
+  .rl-logo-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 760px) {
+  .rl-logo-grid { grid-template-columns: 1fr; }
+  .rl-main { padding: 20px; }
+  .rl-floating-text-btn { bottom: 20px; right: 20px; padding: 12px 20px; font-size: 14px; }
 }
