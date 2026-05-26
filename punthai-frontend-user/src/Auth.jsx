@@ -330,8 +330,7 @@ function Auth({ onLoginSuccess, onClose }) {
 }
 
 export default function AuthWithProvider(props) {
-  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-  if (!GOOGLE_CLIENT_ID) return <Auth {...props} />;
+  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'placeholder';
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <Auth {...props} />
