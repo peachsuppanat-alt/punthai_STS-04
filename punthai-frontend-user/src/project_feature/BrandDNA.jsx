@@ -121,7 +121,7 @@ export const BrandDNA = () => {
     if (imageFile) formData.append('image_product', imageFile);
 
     try {
-      const res = await fetch('${API_URL}/api/brand_product', {
+      const res = await fetch(`${API_URL}/api/brand_product`, {
         method: 'POST',
         body: formData,
       });
@@ -180,7 +180,7 @@ export const BrandDNA = () => {
           : `ลักษณะ: ${q4Form.type}, กลุ่ม: ${q4Form.tags.join(', ')}, รายละเอียดเพิ่มเติม: ${q4Form.desc}`
       };
 
-      const res = await fetch('${API_URL}/api/generate-brand-dna', {
+      const res = await fetch(`${API_URL}/api/generate-brand-dna`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

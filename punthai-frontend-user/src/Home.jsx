@@ -65,7 +65,7 @@ const Home = ({ user }) => {
     if (e) e.preventDefault();
     if (!user) { alert('กรุณาเข้าสู่ระบบก่อนสร้างแบรนด์!'); return; }
     try {
-      const res  = await fetch('${API_URL}/api/projects', {
+      const res  = await fetch(`${API_URL}/api/projects`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.user_id }),
       });

@@ -371,7 +371,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
     if (!selected) return;
     setSaving(true);
     try {
-      const res = await fetch('${API_URL}/api/package-catalog/like', {
+      const res = await fetch(`${API_URL}/api/package-catalog/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_id: selected, package_id: pkg.id, is_liked: true }),
@@ -525,7 +525,7 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ package_id: pkg.id }),
       });
-      const res2 = await fetch('${API_URL}/api/package-catalog', {
+      const res2 = await fetch(`${API_URL}/api/package-catalog`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

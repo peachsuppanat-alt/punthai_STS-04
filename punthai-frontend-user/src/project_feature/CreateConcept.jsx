@@ -648,7 +648,7 @@ export const CreateConcept = () => {
         benefit: nmForm.benefit, target: nmForm.target,
         tags: nmForm.tags, special: nmForm.special, use_dna: useDna
       };
-      const res  = await fetch('${API_URL}/api/generate-brand-names', {
+      const res  = await fetch(`${API_URL}/api/generate-brand-names`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -906,7 +906,7 @@ export const CreateConcept = () => {
           });
           setCncptRawFonts(googleFonts);
           // sync Google Fonts ลง table font (background, ไม่ block UI)
-          fetch('${API_URL}/api/fonts/sync-google', {
+          fetch(`${API_URL}/api/fonts/sync-google`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fonts: googleFonts.map(f => ({ font_name: f.name })) }),
           }).catch(err => console.warn('[sync-google]', err));
@@ -1239,7 +1239,7 @@ export const CreateConcept = () => {
                                       // 1. save-one เพื่อให้มี color_id + concept_id ก่อน (ถ้ายังไม่มีใน DB)
                                       let dbEntry = cncptDbMap[p.name];
                                       if (!dbEntry?.color_id) {
-                                        const saveRes = await fetch('${API_URL}/api/color-palettes/save-one', {
+                                        const saveRes = await fetch(`${API_URL}/api/color-palettes/save-one`, {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
                                           body: JSON.stringify({
@@ -1279,7 +1279,7 @@ export const CreateConcept = () => {
                                   if (!projectId) return;
                                   try {
                                     // save-one เสมอ — ได้ color_id + concept_id จาก DB โดยตรง (ไม่ต้องพึ่ง state)
-                                    const saveRes = await fetch('${API_URL}/api/color-palettes/save-one', {
+                                    const saveRes = await fetch(`${API_URL}/api/color-palettes/save-one`, {
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({
@@ -1451,7 +1451,7 @@ export const CreateConcept = () => {
                           setCncptSelectedFont(0);
                           if (!cncptFeaturedFont || !projectId) return;
                           try {
-                            const saveRes = await fetch('${API_URL}/api/fonts/save-one', {
+                            const saveRes = await fetch(`${API_URL}/api/fonts/save-one`, {
                               method: 'POST', headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ project_id: projectId, font_name: cncptFeaturedFont.name, file_font: cncptFeaturedFont.file||null }),
                             });
@@ -1505,7 +1505,7 @@ export const CreateConcept = () => {
                                     if (!projectId) return;
                                     try {
                                       // save-one ก่อนเสมอ เพื่อให้ได้ font_id + concept_id
-                                      const saveRes = await fetch('${API_URL}/api/fonts/save-one', {
+                                      const saveRes = await fetch(`${API_URL}/api/fonts/save-one`, {
                                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ project_id: projectId, font_name: f.name, file_font: f.file||null }),
                                       });
@@ -1527,7 +1527,7 @@ export const CreateConcept = () => {
                                     if (!projectId) return;
                                     try {
                                       // save-one ก่อนเสมอ เพื่อได้ font_id + concept_id จาก DB โดยตรง
-                                      const saveRes = await fetch('${API_URL}/api/fonts/save-one', {
+                                      const saveRes = await fetch(`${API_URL}/api/fonts/save-one`, {
                                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ project_id: projectId, font_name: f.name, file_font: f.file||null }),
                                       });
