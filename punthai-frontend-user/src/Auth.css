@@ -1,43 +1,408 @@
-/* Auth.css */
+/* =====================================================
+   Auth.css — aligned with brand design system
+   Brand: #c94f24  /  warm cream bg  /  Bai Jamjuree
+   ===================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+  --orange:     #c94f24;
+  --orange-dk:  #a83e1a;
+  --orange-lt:  #fff3ee;
+  --orange-mid: #fde0d0;
+  --surface:    #ffffff;
+  --surface-2:  #fdf9f6;
+  --line:       #ecddd3;
+  --line-dk:    #ddd0c4;
+  --charcoal:   #2a1f17;
+  --gray-2:     #5a4a40;
+  --gray-3:     #9a8880;
+  --gray-4:     #c4b5ab;
+  --radius-sm:  12px;
+  --radius-md:  18px;
+  --radius-lg:  24px;
+  --sh-sm:      0 2px 12px rgba(80,40,20,.07);
+  --sh-md:      0 8px 30px rgba(80,40,20,.10);
+  --sh-lg:      0 20px 56px rgba(80,40,20,.18);
+  --trans:      all .25s ease;
+}
+
+/* ── Overlay ──────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.6); /* พื้นหลังสีดำโปร่งใส */
+  inset: 0;
+  background: rgba(42,31,23,0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 9999; /* บังคับให้อยู่บนสุดของหน้าเว็บ */
+  z-index: 9999;
+  padding: 16px;
 }
 
+/* ── Modal Box — มี orb background เหมือน BrandDNA ── */
 .modal-content {
-  background-color: #ffffff;
-  padding: 30px;
-  border-radius: 12px;
+  background: #f5f2ec;
+  padding: 36px 32px 32px;
+  border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 500px;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--sh-lg);
+  border: 1px solid rgba(255,255,255,0.8);
+  font-family: 'Bai Jamjuree', sans-serif;
+  animation: authPopIn .3s cubic-bezier(.34,1.56,.64,1) forwards;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-dk) transparent;
 }
 
+/* Orb 1 — warm orange / top-left */
+.modal-content::before {
+  content: '';
+  position: absolute;
+  width: 320px; height: 320px;
+  top: -80px; left: -100px;
+  border-radius: 50%;
+  pointer-events: none; z-index: 0;
+  filter: blur(60px);
+  background: radial-gradient(circle, rgba(244,162,126,0.55) 0%, rgba(244,162,126,0) 70%);
+  animation: authOrb1 11s ease-in-out infinite alternate;
+}
+
+/* Orb 2 — sage green / bottom-right */
+.modal-content::after {
+  content: '';
+  position: absolute;
+  width: 280px; height: 280px;
+  bottom: -60px; right: -80px;
+  border-radius: 50%;
+  pointer-events: none; z-index: 0;
+  filter: blur(60px);
+  background: radial-gradient(circle, rgba(126,207,164,0.48) 0%, rgba(126,207,164,0) 70%);
+  animation: authOrb2 14s ease-in-out infinite alternate;
+}
+
+/* Orb 3 — sky blue / mid-right */
+.auth-orb3 {
+  position: absolute;
+  width: 240px; height: 240px;
+  top: 35%; right: -60px;
+  border-radius: 50%;
+  pointer-events: none; z-index: 0;
+  filter: blur(56px);
+  background: radial-gradient(circle, rgba(126,174,207,0.42) 0%, rgba(126,174,207,0) 70%);
+  animation: authOrb3 9s ease-in-out infinite alternate;
+}
+
+/* Orb 4 — lavender / center */
+.auth-orb4 {
+  position: absolute;
+  width: 180px; height: 180px;
+  top: 55%; left: 15%;
+  border-radius: 50%;
+  pointer-events: none; z-index: 0;
+  filter: blur(56px);
+  background: radial-gradient(circle, rgba(180,155,220,0.32) 0%, rgba(180,155,220,0) 70%);
+  animation: authOrb4 16s ease-in-out infinite alternate;
+}
+
+/* ให้ทุก element ใน modal อยู่เหนือ orb */
+.modal-content > * { position: relative; z-index: 1; }
+
+@keyframes authOrb1 {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  30%  { transform: translate(40px, 60px) scale(1.08); }
+  65%  { transform: translate(15px, 100px) scale(0.95); }
+  100% { transform: translate(60px, 40px) scale(1.12); }
+}
+@keyframes authOrb2 {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  40%  { transform: translate(-50px, -45px) scale(1.10); }
+  70%  { transform: translate(-25px, -75px) scale(0.92); }
+  100% { transform: translate(-70px, -30px) scale(1.06); }
+}
+@keyframes authOrb3 {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  35%  { transform: translate(-35px, 50px) scale(1.06); }
+  70%  { transform: translate(-60px, 18px) scale(0.96); }
+  100% { transform: translate(-18px, 60px) scale(1.09); }
+}
+@keyframes authOrb4 {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  50%  { transform: translate(40px, -55px) scale(1.16); }
+  100% { transform: translate(-30px, 40px) scale(0.88); }
+}
+
+.modal-content::-webkit-scrollbar { width: 4px; }
+.modal-content::-webkit-scrollbar-thumb { background: var(--line-dk); border-radius: 99px; }
+
+@keyframes authPopIn {
+  0%   { transform: scale(.92) translateY(16px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* ── Close Button ─────────────────────────────────── */
 .close-btn {
   position: absolute;
-  top: 15px;
-  right: 15px;
-  font-size: 24px;
-  border: none;
-  background: transparent;
+  top: 16px; right: 16px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
   cursor: pointer;
-  color: #888;
+  color: var(--gray-3);
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--trans);
   line-height: 1;
 }
 
 .close-btn:hover {
-  color: #ff4d4f;
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
 }
-.logo-login{
+
+/* ── Logo ─────────────────────────────────────────── */
+.logo-login { text-align: center; margin-bottom: 6px; }
+.logo-img { height: 48px; object-fit: contain; }
+
+/* ── Title ────────────────────────────────────────── */
+.auth-title {
   text-align: center;
-  margin: 10px 0;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 20px; font-weight: 700;
+  color: var(--charcoal);
+  margin-bottom: 20px;
 }
+
+/* ── Tab Login/Register ───────────────────────────── */
+.auth-tab-group {
+  display: flex;
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  padding: 4px;
+  margin-bottom: 20px;
+  gap: 4px;
+}
+
+.auth-tab-btn {
+  flex: 1;
+  border: none;
+  padding: 9px 16px;
+  border-radius: 99px;
+  cursor: pointer;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px; font-weight: 600;
+  transition: var(--trans);
+}
+
+.auth-tab-btn.active {
+  background: var(--orange);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(201,79,36,.28);
+}
+
+.auth-tab-btn.inactive {
+  background: transparent;
+  color: var(--gray-3);
+}
+
+.auth-tab-btn.inactive:hover { color: var(--gray-2); background: rgba(255,255,255,0.5); }
+
+/* ── Type Selector ────────────────────────────────── */
+.register-type-group { display: flex; gap: 10px; margin-bottom: 20px; }
+
+.register-type-btn {
+  flex: 1;
+  padding: 12px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px; font-weight: 600;
+  transition: var(--trans);
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+
+.register-type-btn.active {
+  border: 2px solid var(--orange);
+  background: rgba(255,255,255,0.7);
+  color: var(--orange);
+}
+
+.register-type-btn.inactive {
+  border: 1.5px solid var(--line);
+  background: rgba(255,255,255,0.4);
+  color: var(--gray-3);
+}
+
+.register-type-btn.inactive:hover { border-color: var(--orange-mid); color: var(--gray-2); }
+.register-type-btn .type-icon { font-size: 20px; }
+.register-type-btn .type-label { font-size: 12px; }
+
+/* ── Error Box ────────────────────────────────────── */
+.error-box {
+  color: var(--orange);
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 13px;
+  background: rgba(255,243,238,0.85);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--orange);
+  margin-bottom: 16px;
+}
+
+/* ── Inputs ───────────────────────────────────────── */
+.auth-input {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  background: rgba(255,255,255,0.7);
+  outline: none;
+  width: 100%; box-sizing: border-box;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px; color: var(--charcoal);
+  transition: var(--trans);
+}
+
+.auth-input::placeholder { color: var(--gray-4); }
+
+.auth-input:focus {
+  border-color: var(--orange);
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 0 0 4px rgba(201,79,36,.10);
+}
+
+/* ── Primary Button ───────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, var(--orange), #e8845a);
+  color: #fff; border: none;
+  border-radius: 99px; padding: 14px;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 15px; font-weight: 700;
+  letter-spacing: .3px;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center;
+  cursor: pointer; transition: var(--trans);
+  box-shadow: 0 4px 20px rgba(201,79,36,.28);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--orange-dk), var(--orange));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(201,79,36,.40);
+}
+
+.btn-primary:active { transform: translateY(0); }
+
+/* ── Divider OR ───────────────────────────────────── */
+.auth-divider {
+  text-align: center; margin: 4px 0;
+  color: var(--gray-4);
+  font-family: 'Bai Jamjuree', sans-serif; font-size: 12px;
+  position: relative;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: ''; position: absolute; top: 50%;
+  width: 35%; height: 1px; background: var(--line);
+}
+
+.auth-divider::before { left: 0; }
+.auth-divider::after  { right: 0; }
+
+/* ── File Upload ──────────────────────────────────── */
+.file-upload-label {
+  display: block;
+  cursor: pointer;
+}
+
+.file-upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 16px;
+  border: 2px dashed var(--line-dk);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.5);
+  transition: var(--trans);
+  text-align: center;
+}
+
+.file-upload-zone iconify-icon { color: var(--orange); transition: var(--trans); }
+
+.file-upload-label:hover .file-upload-zone {
+  border-color: var(--orange);
+  background: var(--orange-lt);
+}
+
+.file-upload-label:hover .file-upload-zone iconify-icon { transform: scale(1.1); }
+
+.file-upload-main {
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px; font-weight: 600;
+  color: var(--charcoal);
+}
+
+.file-upload-sub {
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 12px; color: var(--gray-3);
+}
+
+/* ── Printshop Join Button ────────────────────────── */
+.btn-printshop-join {
+  background: transparent;
+  color: var(--orange);
+  border: 2px solid var(--orange);
+  border-radius: 99px; padding: 13px;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; width: 100%; transition: var(--trans);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+
+.btn-printshop-join:hover {
+  background: var(--orange-lt);
+  transform: translateY(-1px);
+}
+
+/* ── Google Button ────────────────────────────────── */
+.btn-google {
+  width: 100%; padding: 13px;
+  border-radius: 99px;
+  border: 1.5px solid var(--line-dk);
+  background: rgba(255,255,255,0.8);
+  color: var(--charcoal);
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: var(--trans);
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+
+.btn-google:hover {
+  background: var(--surface);
+  border-color: var(--gray-3);
+  box-shadow: var(--sh-sm);
+  transform: translateY(-1px);
+}
+
+/* ── Back Button ──────────────────────────────────── */
+.btn-back-user {
+  background: none; border: none;
+  color: var(--orange);
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; text-align: left; padding: 0; margin-bottom: 4px;
+  transition: var(--trans);
+  display: flex; align-items: center; gap: 4px;
+}
+
+.btn-back-user:hover { opacity: 0.75; }

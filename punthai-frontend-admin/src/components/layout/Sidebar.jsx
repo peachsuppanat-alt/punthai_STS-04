@@ -1,7 +1,8 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, BarChart3, Bell, Package, LogOut, LayoutDashboard } from 'lucide-react';
+import { Home, BarChart3, Bell, Package, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import logo from '../../assets/logo.png';
 import styles from './Sidebar.module.css';
 
 const navItems = [
@@ -17,10 +18,8 @@ export default function Sidebar() {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.brand}>
-        <div className={styles.brandIcon}>
-          <LayoutDashboard size={22} />
-        </div>
-        <div>
+        <img src={logo} alt="Punthai Logo" className={styles.brandLogo} />
+        <div className={styles.brandInfo}>
           <div className={styles.brandName}>Punthai</div>
           <div className={styles.brandSub}>Admin Panel</div>
         </div>

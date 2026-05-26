@@ -18,10 +18,11 @@ import MarketPlanning from './MarketPlanning';
 import ContentOnline from './ContentOnline';
 import Subscription from './Subscription';
 import { Settings } from './Settings';
+import About from './About';
 
-// หน้าชั่วคราว
-const Shopping = () => <h2 style={{marginTop: '100px', textAlign: 'center'}}>Shopping Page</h2>;
-const About = () => <h2 style={{marginTop: '100px', textAlign: 'center'}}>About Page</h2>;
+
+
+
 
 function App() {
   const [user, setUser] = useState(null);       // (null = ยังไม่ Login)
@@ -72,9 +73,9 @@ function App() {
         <Route path="/content-online" element={<ContentOnline user={user} />} />
         <Route path="/subscription" element={<Subscription user={user} setUser={setUser} />} />
         <Route path="/settings" element={<Settings user={user} setUser={setUser} />} />
-        {/* <Route path="/shopping" element={<Shopping />} />
-        <Route path="/about" element={<About />} /> */}
+        <Route path="/about" element={<About />} />
       </Routes>
+
 
       {/* แสดง Popup เมื่อ showAuth เป็น true */}
       {showAuth && (

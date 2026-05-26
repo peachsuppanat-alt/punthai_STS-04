@@ -284,17 +284,21 @@ export const Profile = ({ user, setUser }) => {
               <div className="pf-stat-icon-wrap pf-orange">
                 <iconify-icon icon="mdi:folder-multiple-outline"></iconify-icon>
               </div>
-              <div className="pf-stat-num pf-orange">{projects.length}</div>
-              <div className="pf-stat-label">total projects</div>
+              <div className="pf-stat-body">
+                <div className="pf-stat-num pf-orange">{projects.length}</div>
+                <div className="pf-stat-label">total projects</div>
+              </div>
             </div>
             <div className="pf-stat-card">
-              <div className="pf-stat-icon-wrap" style={{ background: '#e8f5e9' }}>
-                <iconify-icon icon="mdi:chart-arc" style={{ color: '#4CAF50' }}></iconify-icon>
+              <div className="pf-stat-icon-wrap pf-orange">
+                <iconify-icon icon="mdi:chart-arc"></iconify-icon>
               </div>
-              <div className="pf-stat-num" style={{ color: '#4CAF50' }}>
-                {projects.length > 0 ? Math.round(Object.values(completions).reduce((a, b) => a + b, 0) / projects.length) : 0}%
+              <div className="pf-stat-body">
+                <div className="pf-stat-num pf-orange">
+                  {projects.length > 0 ? Math.round(Object.values(completions).reduce((a, b) => a + b, 0) / projects.length) : 0}%
+                </div>
+                <div className="pf-stat-label">avg completion</div>
               </div>
-              <div className="pf-stat-label">avg completion</div>
             </div>
           </div>
 
@@ -317,29 +321,26 @@ export const Profile = ({ user, setUser }) => {
                   )}
                 </div>
                 <h3>{proj.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ'}</h3>
-                <div style={{ width: '100%', padding: '0 10px', marginTop: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                    <span style={{ fontSize: '11px', color: '#aaa' }}>ความสำเร็จ</span>
-                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: (completions[proj.project_id] || 0) >= 75 ? '#4CAF50' : '#d75a2a' }}>
+                <div className="pf-progress-wrap">
+                  <div className="pf-progress-row">
+                    <span className="pf-progress-label">ความสำเร็จ</span>
+                    <span className={`pf-progress-pct ${(completions[proj.project_id] || 0) >= 75 ? 'high' : (completions[proj.project_id] || 0) >= 40 ? 'mid' : 'low'}`}>
                       {completions[proj.project_id] || 0}%
                     </span>
                   </div>
-                  <div style={{ width: '100%', height: '5px', background: '#f0f0f0', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{
-                      width: `${completions[proj.project_id] || 0}%`,
-                      height: '100%',
-                      background: (completions[proj.project_id] || 0) >= 75 ? '#4CAF50' : (completions[proj.project_id] || 0) >= 40 ? '#FF9800' : '#d75a2a',
-                      borderRadius: '3px',
-                      transition: 'width 0.8s ease-in-out'
-                    }} />
+                  <div className="pf-progress-track">
+                    <div
+                      className={`pf-progress-bar ${(completions[proj.project_id] || 0) >= 75 ? 'high' : (completions[proj.project_id] || 0) >= 40 ? 'mid' : 'low'}`}
+                      style={{ width: `${completions[proj.project_id] || 0}%` }}
+                    />
                   </div>
                 </div>
               </div>
             ))}
 
             <div className="pf-home-card pf-create-new" onClick={handleCreateProjectDirectly}>
-              <iconify-icon icon="line-md:plus-circle" style={{ fontSize: '50px', color: '#d75a2a' }}></iconify-icon>
-              <span style={{ color: '#d75a2a', fontWeight: 'bold', marginTop: '10px' }}>สร้างแบรนด์ใหม่</span>
+              <iconify-icon icon="line-md:plus-circle" style={{ fontSize: '48px' }}></iconify-icon>
+              <span className="pf-create-label">สร้างแบรนด์ใหม่</span>
             </div>
           </div>
         </main>

@@ -801,7 +801,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     }
 
     return (
-        <div style={{ display: 'flex', height: 'calc(100vh - 80px)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', height: 'calc(100vh - 80px - 61px)', overflow: 'hidden' }}>
             {/* === SIDEBAR === */}
             <div style={{ width: 320, minWidth: 320, borderRight: `1px solid ${C.border}`, overflowY: 'auto', background: '#fff', padding: 16 }}>
                 <button onClick={onBack} style={{ background: 'none', border: 'none', color: C.sub, cursor: 'pointer', marginBottom: 12, fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}>

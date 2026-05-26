@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './BrandDNA.css';
+import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
-import helpImg from '../assets/help.png';
 import { API_URL } from '../config';
 
 export const BrandDNA = () => {
@@ -14,8 +14,6 @@ export const BrandDNA = () => {
   //  ดึง user_id จาก LocalStorage (สมมติว่าคุณเก็บข้อมูล user ไว้ตอน Login)
   const userData = JSON.parse(localStorage.getItem('user') || '{}');
   const userId = userData.user_id || 0;
-
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   //สีและฟอนต์  
   const [recommendedColor, setRecommendedColor] = useState(null);
@@ -55,37 +53,13 @@ export const BrandDNA = () => {
   useEffect(() => {
     if (!projectId) {
       alert("ไม่พบรหัสโปรเจกต์ กรุณากลับไปเลือกโปรเจกต์ใหม่");
-      navigate('/');
-      return;
-    }
-    fetchProducts();
-    fetchExistingDNA(); // เช็คว่าเคยทำ DNA หรือยัง
-  }, [projectId, navigate]);
-
-  //  ฟังก์ชันเช็คผลลัพธ์เก่าจาก Database 
-  const fetchExistingDNA = async () => {
-    try {
-      // ใช้ endpoint ใหม่ที่คืน DNA + color + font ใน 1 call (0 Gemini)
-      const res = await fetch(`${API_URL}/api/brand-dna-full/${projectId}`);
-      const data = await res.json();
-      if (data.status === 'success' && data.dna) {
+      navigate('/`${API_URL}`success' && data.dna) {
         setDnaResult(data.dna);
         if (data.color) setRecommendedColor(data.color);
         if (data.font) setRecommendedFont(data.font);
         setShowResult(true);
         setShowWelcome(false);
-        console.log('[BrandDNA] Loaded from cache (0 Gemini calls)');
-      }
-    } catch (err) {
-      console.error("Fetch existing DNA error:", err);
-    }
-  };
-
-  const fetchProducts = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
-      const data = await res.json();
-      if (data.status === 'success') {
+        console.log('[BrandDNA] Loaded from cache (0 Gemini calls)`${API_URL}`success') {
         setProducts(data.products);
         if (data.products.length > 0) setHasNoProduct(false);
       }
@@ -123,7 +97,7 @@ export const BrandDNA = () => {
     if (imageFile) formData.append('image_product', imageFile);
 
     try {
-      const res = await fetch(`${API_URL}/api/brand_product`, {
+      const res = await fetch(`${API_URL}`, {
         method: 'POST',
         body: formData,
       });
@@ -182,7 +156,7 @@ export const BrandDNA = () => {
           : `ลักษณะ: ${q4Form.type}, กลุ่ม: ${q4Form.tags.join(', ')}, รายละเอียดเพิ่มเติม: ${q4Form.desc}`
       };
 
-      const res = await fetch(`${API_URL}/api/generate-brand-dna`, {
+      const res = await fetch(`${API_URL}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -195,119 +169,10 @@ export const BrandDNA = () => {
         if (data.data.color) setRecommendedColor(data.data.color);
         if (data.data.font) setRecommendedFont(data.data.font);
         setShowResult(true);
-        console.log('[BrandDNA] Generated all (1 Gemini call total)');
-      } else {
-        alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + data.message);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("เกิดปัญหาในการติดต่อ AI เซิร์ฟเวอร์");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleNext = () => {
-    let finalArchetype = archetype;
-    if (currentStep === 3) finalArchetype = calculateArchetype();
-
-    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handleSubmitDNA(finalArchetype);
-    }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1);
-  };
-
-  const toggleTag = (val) => {
-    if (q4Form.tags.includes(val)) {
-      setQ4Form({ ...q4Form, tags: q4Form.tags.filter(t => t !== val) });
-    } else {
-      setQ4Form({ ...q4Form, tags: [...q4Form.tags, val], noAudience: false });
-    }
-  };
-
-  //  ฟังก์ชันทำแบบทดสอบใหม่
-  const handleRetakeQuiz = () => {
-    setShowResult(false);
-    setShowWelcome(false);
-    setCurrentStep(1);
-    // เราไม่ Reset State คำตอบ เผื่อผู้ใช้แค่อยากแก้คำตอบบางข้อ
-  };
-
-
-  // =========================================================
-  // ฟังก์ชันสำหรับดึงข้อมูลและจัดการ AI แนะนำสี/ฟอนต์
-  // =========================================================
-  const [isColorLiked, setIsColorLiked] = useState(false);
-  const [isFontLiked, setIsFontLiked] = useState(false);
-
-  const fetchAiRecommendations = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/recommend-assets/${projectId}`);
-      const data = await res.json();
-      if (data.status === 'success') {
-        setRecommendedColor(data.color);
-        setRecommendedFont(data.font);
-      }
-    } catch (err) {
-      console.error("AI Recommend Error:", err);
-    }
-  };
-
-  // ❌ ลบ useEffect นี้ทิ้ง — auto-fire ทำให้สิ้นเปลือง token
-  // useEffect(() => {
-  //     if (showResult && dnaResult) {
-  //         fetchAiRecommendations();
-  //     }
-  // }, [showResult, dnaResult]);
-
-  const handleLikeColor = async () => {
-    if (!recommendedColor) return;
-    const newState = !isColorLiked;
-    setIsColorLiked(newState);
-    try {
-      await fetch(`${API_URL}/api/color-palettes/like/${recommendedColor.color_id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
-      });
-    } catch (err) { console.error(err); }
-  };
-
-  const handleSelectColor = async () => {
-    if (!recommendedColor) return;
-    try {
-      const res = await fetch(`${API_URL}/api/color-palettes/select/${recommendedColor.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId })
-      });
-      if (res.ok) alert("✅ เลือกชุดสีนี้เรียบร้อยแล้ว! สามารถไปดูได้ที่หน้า Projects");
-    } catch (err) { console.error(err); }
-  };
-
-  const handleLikeFont = async () => {
-    if (!recommendedFont) return;
-    const newState = !isFontLiked;
-    setIsFontLiked(newState);
-    try {
-      await fetch(`${API_URL}/api/fonts/like/${recommendedFont.font_id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
-      });
-    } catch (err) { console.error(err); }
-  };
-
-  const handleSelectFont = async () => {
-    if (!recommendedFont) return;
-    try {
-      const res = await fetch(`${API_URL}/api/fonts/select/${recommendedFont.id}`, {
-        method: 'PUT',
+        console.log('[BrandDNA] Generated all (1 Gemini call total)`${API_URL}`success`${API_URL}`PUT',
+        headers: { 'Content-Type': 'application/json`${API_URL}`PUT',
+        headers: { 'Content-Type': 'application/json`${API_URL}`PUT',
+        headers: { 'Content-Type': 'application/json`${API_URL}`PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: projectId })
       });
@@ -318,12 +183,16 @@ export const BrandDNA = () => {
   return (
     <div className="bdna-body">
 
+      {/* Soft Orbs background — fixed position, ไม่รบกวน layout */}
+      <div className="bdna-orb3" aria-hidden="true"></div>
+      <div className="bdna-orb4" aria-hidden="true"></div>
+
       {/* Loading Screen */}
       {isLoading && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(255,255,255,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <iconify-icon icon="line-md:loading-loop" style={{ fontSize: '60px', color: '#d75a2a' }}></iconify-icon>
-          <h2 style={{ marginTop: '20px', color: '#d75a2a' }}>Gemini AI กำลังวิเคราะห์ Brand DNA ของคุณ...</h2>
-          <p style={{ color: '#666' }}>อาจใช้เวลาประมาณ 5 - 10 วินาที กรุณารอสักครู่</p>
+        <div className="bdna-loading-overlay">
+          <iconify-icon icon="line-md:loading-loop"></iconify-icon>
+          <h2>Gemini AI กำลังวิเคราะห์ Brand DNA ของคุณ...</h2>
+          <p>อาจใช้เวลาประมาณ 5 - 10 วินาที กรุณารอสักครู่</p>
         </div>
       )}
 
@@ -337,41 +206,22 @@ export const BrandDNA = () => {
         </div>
       </header>
 
-      <div className="bdna-container">
+      <div className="bdna-layout">
+
         {/* Sidebar */}
-        <aside className={`bdna-sidebar ${isSidebarCollapsed ? 'bdna-collapsed' : ''}`} id="bdna-sidebar">
-          <button className="bdna-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>{isSidebarCollapsed ? '❯' : '❮'}</button>
-          <ul className="bdna-menu">
-            <li onClick={() => navigate('/project', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:view-dashboard-outline"></iconify-icon></span><span className="bdna-text">Projects</span></li>
-            <li className="bdna-active" style={{ background: '#f3f6ea', color: '#6b8e23' }}><span className="bdna-icon"><iconify-icon icon="mdi:palette-outline"></iconify-icon></span><span className="bdna-text">Brand DNA</span></li>
-            <li onClick={() => navigate('/create-concept', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:lightbulb-outline"></iconify-icon></span><span className="bdna-text">Create Concept</span></li>
-            <li onClick={() => navigate('/create-logo', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-              <span className="cncpt-text">Create Logo</span>
-            </li>
-            <li onClick={() => navigate('/result', { state: { projectId } })} style={{ cursor: 'pointer' }}>
-              <span className="cncpt-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span>
-              <span className="cncpt-text">Create Pictures</span>
-            </li>
-          </ul>
-          <hr className="bdna-hr" />
-          <ul className="bdna-menu">
-            <li onClick={() => navigate('/product', { state: { projectId } })}><span className="bdna-icon"><iconify-icon icon="mdi:folder-outline"></iconify-icon></span><span className="bdna-text">Yours Projects</span></li>
-          </ul>
-          <div className="bdna-help"><img src={helpImg} className="bdna-help-img" alt="help" /><p className="bdna-help-text">Having trouble?</p><a href="#" className="bdna-contact-link">Contact Us</a></div>
-        </aside>
+        <ProjectSidebar activePage="brand-dna" projectId={projectId} />
 
         <main className="bdna-main bdna-dna-main">
 
           {/* 👇 1. หน้าต่างต้อนรับ Welcome Screen 👇 */}
           {!showResult && showWelcome && (
-            <div style={{ textAlign: 'center', padding: '60px 20px', background: '#fff', borderRadius: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginTop: '20px' }}>
-              <iconify-icon icon="mdi:dna" style={{ fontSize: '80px', color: '#d75a2a' }}></iconify-icon>
-              <h1 style={{ color: '#d75a2a', fontSize: '32px', marginTop: '20px' }}>ค้นหา Brand DNA ในตัวคุณ</h1>
-              <p style={{ color: '#666', fontSize: '18px', maxWidth: '650px', margin: '20px auto 40px', lineHeight: '1.6' }}>
+            <div className="bdna-welcome-box">
+              <iconify-icon icon="mdi:dna"></iconify-icon>
+              <h1>ค้นหา Brand DNA ในตัวคุณ</h1>
+              <p>
                 Brand DNA คือแก่นแท้และจุดยืนของแบรนด์ที่จะช่วยสร้างความแตกต่างให้ธุรกิจของคุณ การทำแบบทดสอบนี้จะช่วยให้ <b>AI วิเคราะห์ตัวตนแบรนด์ แนะนำกลุ่มเป้าหมาย และทิศทางการออกแบบ</b> ที่เหมาะสมที่สุดสำหรับแบรนด์ของคุณ
               </p>
-              <button className="bdna-btn-next-form" style={{ padding: '15px 40px', fontSize: '18px' }} onClick={() => setShowWelcome(false)}>
+              <button className="bdna-btn-next-form" onClick={() => setShowWelcome(false)}>
                 เริ่มค้นหา Brand DNA ของคุณ
               </button>
             </div>
@@ -381,8 +231,8 @@ export const BrandDNA = () => {
           {!showResult && !showWelcome && (
             <>
               <div className="bdna-dna-header">
-                <h1 className="bdna-dna-title" lang="en">Define Your Brand DNA</h1>
-                <p className="bdna-dna-subtitle">Answer the questions below to help define your brand identity and goals</p>
+                <h1 className="bdna-dna-title">กำหนด Brand DNA ของคุณ</h1>
+                <p className="bdna-dna-subtitle">ตอบคำถามด้านล่างเพื่อช่วยกำหนดเอกลักษณ์และทิศทางของแบรนด์คุณ</p>
               </div>
 
               <div className="bdna-stepper">
@@ -428,7 +278,7 @@ export const BrandDNA = () => {
                         {products.map((product, index) => (
                           <div key={product.product_id || index} className="bdna-ai-card">
                             <div className="bdna-ai-card-header"><div className="bdna-step-number" style={{ background: '#c65428', color: 'white', width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>{index + 1}</div><h3 style={{ margin: 0, color: '#c65428' }}>{product.name_product}</h3></div>
-                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px' }}>{product.image_product ? (<img src={`${API_URL}/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
+                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px`${API_URL}`100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
                           </div>
                         ))}
                       </div>
@@ -635,6 +485,7 @@ export const BrandDNA = () => {
         <div className="bdna-modal" onClick={handleCloseModal}>
           <div className="bdna-modal-box" onClick={(e) => e.stopPropagation()}>
             <button className="bdna-close-modal" onClick={handleCloseModal}>&times;</button>
+            <div className="bdna-modal-inner">
             <div className="bdna-form-group">
               <label><span className="bdna-step-num">1</span> สินค้าของคุณคืออะไร</label>
               <input type="text" placeholder="เช่น โดนัท" value={productName} onChange={(e) => setProductName(e.target.value)} />
@@ -675,11 +526,7 @@ export const BrandDNA = () => {
             </div>
             <div style={{ textAlign: 'center', marginTop: '20px' }}>
               <button onClick={async () => {
-                if (!window.confirm('ขอคำแนะนำสี+ฟอนต์ใหม่จาก AI? (จะใช้ Gemini token)')) return;
-                try {
-                  const res = await fetch(`${API_URL}/api/recommend-assets/${projectId}?force=1`);
-                  const data = await res.json();
-                  if (data.status === 'success') {
+                if (!window.confirm('ขอคำแนะนำสี+ฟอนต์ใหม่จาก AI? (จะใช้ Gemini token)`${API_URL}`success') {
                     if (data.color) setRecommendedColor(data.color);
                     if (data.font) setRecommendedFont(data.font);
                   }
@@ -693,6 +540,7 @@ export const BrandDNA = () => {
               <button className="bdna-cancel" onClick={handleCloseModal}>ยกเลิก</button>
               <button className="bdna-confirm" onClick={handleAddProductSubmit}>ตกลง</button>
             </div>
+            </div>{/* end bdna-modal-inner */}
           </div>
         </div>
       )}

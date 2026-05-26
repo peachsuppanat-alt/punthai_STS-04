@@ -1,10 +1,14 @@
+.container{
+  background: linear-gradient(135deg, #d35325 0%, #e9b148 50%,#d35325 100%);
+}
 .page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f6fa 0%, #ede4db 100%);
+  background-image: url(../assets/4.png);
   padding: var(--spacing-lg);
+  
 }
 
 .card {
@@ -21,16 +25,12 @@
   margin-bottom: var(--spacing-xl);
 }
 
-.iconCircle {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.logo {
+  width: 90px;
+  height: 90px;
+  object-fit: contain;
   margin: 0 auto var(--spacing-md);
-  box-shadow: 0 8px 24px rgba(211, 83, 37, 0.3);
+  display: block;
 }
 
 .title {

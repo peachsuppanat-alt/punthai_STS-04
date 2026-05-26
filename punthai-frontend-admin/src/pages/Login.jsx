@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import logo from '../assets/logo.png';
 import styles from './Login.module.css';
 
 export default function Login() {
@@ -29,12 +29,11 @@ export default function Login() {
     setFormData((prev) => ({ ...prev, [field]: e.target.value }));
 
   return (
+    <div className={styles.container}>
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.header}>
-          <div className={styles.iconCircle}>
-            <Lock size={32} color="white" />
-          </div>
+          <img src={logo} alt="Punthai Logo" className={styles.logo} />
           <h1 className={styles.title}>Punthai Admin</h1>
           <p className={styles.subtitle}>เข้าสู่ระบบเพื่อจัดการแพลตฟอร์ม</p>
         </div>
@@ -80,6 +79,7 @@ export default function Login() {
           </button>
         </form>
       </div>
+    </div>
     </div>
   );
 }
