@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import './product.css';
+import './Product.css';
 
 import logoImg from '../assets/logo.png';
 import helpImg from '../assets/help.png';
