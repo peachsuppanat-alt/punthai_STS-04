@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import client from './api/client';
 import { Users, LogOut, BarChart2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -16,11 +17,11 @@ export default function Dashboard({ setIsAdmin }) {
   const fetchDashboardData = async () => {
     try {
       // ดึงจำนวน User
-      const userRes = await axios.get('http://localhost:3000/api/admin/users/count');
+      const userRes = await client.get('/api/admin/users/count');
       setUserCount(userRes.data.total);
 
       // ดึงข้อมูลกราฟ
-      const statsRes = await axios.get(`http://localhost:3000/api/admin/stats/api-usage?days=${days}`);
+      const statsRes = await client.get(`/api/admin/stats/api-usage?days=${days}`);
       
       // แปลงวันที่ให้อ่านง่ายขึ้น
       const formatData = (data) => data.map(item => ({

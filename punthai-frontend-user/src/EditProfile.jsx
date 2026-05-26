@@ -4,6 +4,7 @@ import './Profile.css';
 
 import logoImg from './assets/logo.png';
 import helpImg from './assets/help.png';
+import { API_URL } from './config';
 
 export const EditProfile = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -51,7 +52,7 @@ export const EditProfile = ({ user, setUser }) => {
     if (!imagePath || imagePath === 'null') return null;
     return imagePath.startsWith('http') 
       ? imagePath 
-      : `http://localhost:3000/uploads/${imagePath}`;
+      : `${API_URL}/uploads/${imagePath}`;
   };
 
   const handleInputChange = (e) => {
@@ -83,7 +84,7 @@ export const EditProfile = ({ user, setUser }) => {
       if (formData.password) submitData.append('password', formData.password);
       if (newImageFile) submitData.append('image_profile', newImageFile);
 
-      const res = await fetch(`http://localhost:3000/api/users/profile/${userData.user_id}`, {
+      const res = await fetch(`${API_URL}/api/users/profile/${userData.user_id}`, {
         method: 'PUT',
         body: submitData
       });

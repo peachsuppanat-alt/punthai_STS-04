@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import './Auth.css';
 import logo from "./assets/logo.png"
+import { API_URL } from './config';
 
 // --- ไอคอนตาเปิด (SVG) ---
 const EyeIcon = () => (
@@ -56,7 +57,7 @@ function Auth({ onLoginSuccess, onClose }) {
     e.preventDefault();
     setErrorMessage(''); // เคลียร์ Error ก่อนเริ่ม
     try {
-      const res = await fetch('http://localhost:3000/api/login', {
+      const res = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_name: loginUser, password: loginPass })
@@ -94,7 +95,7 @@ function Auth({ onLoginSuccess, onClose }) {
         formData.append('img_profile', imgProfile);
       }
 
-      const res = await fetch('http://localhost:3000/api/register', {
+      const res = await fetch(`${API_URL}/api/register`, {
         method: 'POST',
         body: formData
       });
@@ -102,7 +103,7 @@ function Auth({ onLoginSuccess, onClose }) {
 
       if (data.status === 'success') {
         // แอบทำการ Login ให้อัตโนมัติเมื่อสมัครเสร็จ
-        const loginRes = await fetch('http://localhost:3000/api/login', {
+        const loginRes = await fetch(`${API_URL}/api/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_name: regData.user_name, password: regData.password })
@@ -128,7 +129,7 @@ function Auth({ onLoginSuccess, onClose }) {
   const handleGoogleSuccess = async (credentialResponse) => {
     setErrorMessage('');
     try {
-      const res = await fetch('http://localhost:3000/api/auth/google', {
+      const res = await fetch(`${API_URL}/api/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: credentialResponse.credential })

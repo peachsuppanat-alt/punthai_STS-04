@@ -4,6 +4,7 @@ import './product.css';
 
 import logoImg from '../assets/logo.png';
 import helpImg from '../assets/help.png';
+import { API_URL } from '../config';
 
 export const Product = () => {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ export const Product = () => {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/brand_product/${projectId}`);
+      const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
       const data = await res.json();
       if (data.status === 'success') {
         setProducts(data.products);
@@ -104,7 +105,7 @@ export const Product = () => {
     }
 
     try {
-      const res = await fetch('http://localhost:3000/api/brand_product', {
+      const res = await fetch(`${API_URL}/api/brand_product`, {
         method: 'POST',
         body: formData, // ส่งเป็น FormData เพื่อรองรับไฟล์
       });
@@ -187,7 +188,7 @@ export const Product = () => {
                   <div className="yp-image-group">
                     <div className="yp-image-box">
                        {product.image_product ? (
-                          <img src={`http://localhost:3000/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} />
+                          <img src={`${API_URL}/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} />
                        ) : null}
                     </div>
                     {/* กล่องเปล่าเผื่อไว้ใส่รูป mockup ตามดีไซน์ของคุณ */}

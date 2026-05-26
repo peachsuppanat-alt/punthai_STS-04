@@ -6,6 +6,7 @@ import CircularProgress from '../components/CircularProgress';
 import logoImg from '../assets/logo.png';
 import helpImg from '../assets/help.png';
 import createImg from '../assets/create.png';
+import { API_URL } from '../config';
 
 export const MyProject = ({ user }) => {
     // 🟢 1. หัวใจสำคัญ: ดึงข้อมูล User มาตรงๆ แบบเดียวกับ Navbar (ไม่มี State ไม่ต้องรอโหลด)
@@ -32,7 +33,7 @@ export const MyProject = ({ user }) => {
     useEffect(() => {
         if (projectId) {
             // 1. ดึงชื่อโปรเจกต์, โลโก้, และชื่อแบรนด์
-            fetch(`http://localhost:3000/api/projects/detail/${projectId}`)
+            fetch(`${API_URL}/api/projects/detail/${projectId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -51,7 +52,7 @@ export const MyProject = ({ user }) => {
                 });
 
             // 2. ดึงรายการสินค้าของโปรเจกต์นี้
-            fetch(`http://localhost:3000/api/brand_product/${projectId}`)
+            fetch(`${API_URL}/api/brand_product/${projectId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -61,7 +62,7 @@ export const MyProject = ({ user }) => {
                 .catch(err => console.error("Fetch products error:", err));
 
             // 3. ดึง completion %
-            fetch(`http://localhost:3000/api/projects/${projectId}/completion`)
+            fetch(`${API_URL}/api/projects/${projectId}/completion`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -71,7 +72,7 @@ export const MyProject = ({ user }) => {
                 .catch(err => console.error("Fetch completion error:", err));
 
             // 4. ดึงข้อมูล สี และ ฟอนต์
-            fetch(`http://localhost:3000/api/projects/${projectId}/selected-assets`)
+            fetch(`${API_URL}/api/projects/${projectId}/selected-assets`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
@@ -102,7 +103,7 @@ export const MyProject = ({ user }) => {
     const handleSaveBrandName = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch(`http://localhost:3000/api/projects/${projectId}/brand-name`, {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}/brand-name`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ brand_name: editBrandNameInput })
@@ -122,7 +123,7 @@ export const MyProject = ({ user }) => {
     const handleSaveProjectName = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch(`http://localhost:3000/api/projects/${projectId}`, {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ project_name: editNameInput }) 
@@ -164,7 +165,7 @@ export const MyProject = ({ user }) => {
                     >
                         {currentUser && currentUser.image_profile && currentUser.image_profile !== 'null' ? (
                             <img
-                                src={currentUser.image_profile.startsWith('http') ? currentUser.image_profile : `http://localhost:3000/uploads/${currentUser.image_profile}`}
+                                src={currentUser.image_profile.startsWith('http') ? currentUser.image_profile : `${API_URL}/uploads/${currentUser.image_profile}`}
                                 alt="User"
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
                                 onError={(e) => {
@@ -253,7 +254,7 @@ export const MyProject = ({ user }) => {
                                 <CircularProgress percentage={completion.percentage} size={220} strokeWidth={8}>
                                     {projectLogo ? (
                                         <img
-                                            src={`http://localhost:3000${projectLogo}`}
+                                            src={`${API_URL}${projectLogo}`}
                                             alt="Project Logo"
                                             style={{ width: '180px', height: '180px', objectFit: 'contain', borderRadius: '50%', background: '#fff', padding: '10px' }}
                                         />
@@ -392,7 +393,7 @@ export const MyProject = ({ user }) => {
                                             <div key={index} className="mp-product-box">
                                                 {product && product.image_product ? (
                                                     <img
-                                                        src={`http://localhost:3000/uploads/${product.image_product}`}
+                                                        src={`${API_URL}/uploads/${product.image_product}`}
                                                         alt={product.name_product}
                                                         style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }}
                                                     />

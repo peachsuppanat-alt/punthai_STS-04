@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import './content-online.css';
 import { fetchSubscriptionStatus } from './utils/subscriptionGuard';
 import ProUpgradeModal from './components/ProUpgradeModal';
+import { API_URL } from './config';
 
-const API = 'http://localhost:3000';
+const API = `${API_URL}`;
 
 const PLATFORMS = [
   { id: 'facebook', name: 'Facebook Post', icon: 'logos:facebook', size: '1200x630' },

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect, useReducer } from 'react';
 import { useLocation } from 'react-router-dom';
+import { API_URL } from '../config';
 import './PackageCatalog.css';
 
 // ─── Categories – icons ทั้งหมดจาก mdi หรือ ph ที่ load แน่นอน ──
@@ -362,7 +363,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
   // Fetch products
   useEffect(() => {
     if (!projectId) { setLoading(false); return; }
-    fetch(`http://localhost:3000/api/brand_product/${projectId}`)
+    fetch(`${API_URL}/api/brand_product/${projectId}`)
       .then(r => r.json())
       .then(data => { if (data.status === 'success') setProducts(data.products); })
       .catch(console.error)
@@ -373,7 +374,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
     if (!selected) return;
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:3000/api/package-catalog/like', {
+      const res = await fetch(`${API_URL}/api/package-catalog/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_id: selected, package_id: pkg.id, is_liked: true }),
@@ -434,7 +435,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
             >
               <div className="pkc-like-picker-item-img">
                 {p.image_product
-                  ? <img src={`http://localhost:3000/uploads/${p.image_product}`} alt={p.name_product} />
+                  ? <img src={`${API_URL}/uploads/${p.image_product}`} alt={p.name_product} />
                   : <iconify-icon icon="mdi:image-off-outline" style={{ fontSize: '18px', color: '#ccc' }} />
                 }
               </div>
@@ -520,7 +521,7 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
 
   useEffect(() => {
     if (!projectId) { setLoading(false); return; }
-    fetch(`http://localhost:3000/api/brand_product/${projectId}`)
+    fetch(`${API_URL}/api/brand_product/${projectId}`)
       .then(r => r.json())
       .then(data => { if (data.status === 'success') setProducts(data.products); })
       .catch(console.error)
@@ -532,14 +533,14 @@ const handleConfirm = async () => {
   setSaving(true);
   try {
     // 1. อัปเดต brand_product.package_id
-    await fetch(`http://localhost:3000/api/brand_product/${selectedProductId}/package`, {
+    await fetch(`${API_URL}/api/brand_product/${selectedProductId}/package`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ package_id: pkg.id }),
     });
 
     // 2. บันทึกลง package_catalog
-    const res2 = await fetch('http://localhost:3000/api/package-catalog', {
+    const res2 = await fetch(`${API_URL}/api/package-catalog`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -612,7 +613,7 @@ const handleConfirm = async () => {
                   >
                     <div className="pkc-sp-product-img">
                       {product.image_product
-                        ? <img src={`http://localhost:3000/uploads/${product.image_product}`} alt={product.name_product} />
+                        ? <img src={`${API_URL}/uploads/${product.image_product}`} alt={product.name_product} />
                         : <iconify-icon icon="mdi:image-off-outline" style={{ fontSize: '32px', color: '#ccc' }} />
                       }
                     </div>

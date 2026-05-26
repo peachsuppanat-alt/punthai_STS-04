@@ -10,6 +10,7 @@ import img4 from './assets/4.png';
 import womenImg from './assets/women.png';
 import emptyImg from './assets/emtpy.png';
 import logoImg from './assets/logo.png';
+import { API_URL } from './config';
 
 const Home = ({ user }) => {
   const [activeCard, setActiveCard] = useState(null);
@@ -25,7 +26,7 @@ const Home = ({ user }) => {
 
   useEffect(() => {
     if (user) {
-      fetch(`http://localhost:3000/api/projects/${user.user_id}`)
+      fetch(`${API_URL}/api/projects/${user.user_id}`)
         .then(res => res.json())
         .then(data => {
           if (data.status === 'success') {
@@ -34,7 +35,7 @@ const Home = ({ user }) => {
         })
         .catch(err => console.error("Fetch projects error:", err));
 
-      fetch(`http://localhost:3000/api/users/${user.user_id}/completions`)
+      fetch(`${API_URL}/api/users/${user.user_id}/completions`)
         .then(res => res.json())
         .then(data => {
           if (data.status === 'success') {
@@ -58,7 +59,7 @@ const Home = ({ user }) => {
       return;
     }
     try {
-      const res = await fetch('http://localhost:3000/api/projects', {
+      const res = await fetch(`${API_URL}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.user_id })
@@ -87,7 +88,7 @@ const Home = ({ user }) => {
     
     if (window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบโปรเจกต์นี้? ข้อมูลทั้งหมดจะหายไป")) {
         try {
-            const res = await fetch(`http://localhost:3000/api/projects/${projectId}`, {
+            const res = await fetch(`${API_URL}/api/projects/${projectId}`, {
                 method: 'DELETE'
             });
             const data = await res.json();
@@ -115,7 +116,7 @@ const Home = ({ user }) => {
   const handleSaveEditName = async (e) => {
     e.preventDefault();
     try {
-        const res = await fetch(`http://localhost:3000/api/projects/${editProjectId}`, {
+        const res = await fetch(`${API_URL}/api/projects/${editProjectId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ project_name: editProjectName })
@@ -217,7 +218,7 @@ return (
                 >
                   {proj.image_logo ? (
                     <img 
-                      src={`http://localhost:3000${proj.image_logo}`} 
+                      src={`${API_URL}${proj.image_logo}`} 
                       alt="Project Logo" 
                       style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
                     />

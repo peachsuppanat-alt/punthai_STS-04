@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import client from './api/client';
 import { Lock } from 'lucide-react';
 
 export default function Login({ setIsAdmin }) {
@@ -9,7 +10,7 @@ export default function Login({ setIsAdmin }) {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://localhost:3000/api/admin/login', formData);
+      const res = await client.post('/api/admin/login', formData);
       if (res.data.status === 'success') {
         localStorage.setItem('adminData', JSON.stringify(res.data.admin));
         setIsAdmin(true);

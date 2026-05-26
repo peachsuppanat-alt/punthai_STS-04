@@ -6,6 +6,7 @@ import PackageCatalog from './PackageCatalog';
 import MockupEditor from './MockupEditor';
 import LabelEditor from './LabelEditor';
 import logoImg from '../assets/logo.png';
+import { API_URL } from '../config';
 
 export const Result = () => {
     const navigate = useNavigate();
@@ -50,7 +51,7 @@ export const Result = () => {
     // ============= FETCHERS =============
     const fetchProjectDetails = async () => {
         try {
-            const res = await fetch(`http://localhost:3000/api/projects/detail/${projectId}`);
+            const res = await fetch(`${API_URL}/api/projects/detail/${projectId}`);
             const data = await res.json();
             if (data.status === 'success') setProjectData(data.project);
         } catch (err) { }
@@ -58,7 +59,7 @@ export const Result = () => {
 
     const fetchPictures = async () => {
         try {
-            const res = await fetch(`http://localhost:3000/api/pictures/${projectId}`);
+            const res = await fetch(`${API_URL}/api/pictures/${projectId}`);
             const data = await res.json();
             if (data.status === 'success') setGeneratedItems(data.data);
         } catch (err) { }
@@ -71,7 +72,7 @@ export const Result = () => {
             project_id: projectId, user_id: userId, brand_name: projectData.project_name, category: currentTab,
             details: detailsInput, negative_prompt: negativeInput, use_imported_color: useImportedColor, use_imported_font: useImportedFont
         };
-        const res = await fetch('http://localhost:3000/api/generate-picture', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const res = await fetch(`${API_URL}/api/generate-picture`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         const data = await res.json();
         if (data.status === 'success') fetchPictures();
         setIsLoading(false);
@@ -80,7 +81,7 @@ export const Result = () => {
     const toggleFavorite = async (id, currentStatus) => {
         const newStatus = !currentStatus;
         setGeneratedItems(items => items.map(item => item.id === id ? { ...item, isFavorite: newStatus } : item));
-        await fetch(`http://localhost:3000/api/pictures/like/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFavorite: newStatus }) });
+        await fetch(`${API_URL}/api/pictures/like/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isFavorite: newStatus }) });
     };
 
     const activeItems = generatedItems.filter(item => item.category === currentTab);
