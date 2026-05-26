@@ -94,7 +94,7 @@ export const Product = () => {
     if (imageFile) formData.append('image_product', imageFile);
 
     try {
-      const res = await fetch(`${API_URL}/api/brand_product`, {
+      const res = await fetch('${API_URL}/api/brand_product', {
         method: 'POST',
         body: formData,
       });

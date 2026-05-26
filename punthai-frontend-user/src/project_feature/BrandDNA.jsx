@@ -121,7 +121,7 @@ export const BrandDNA = () => {
     if (imageFile) formData.append('image_product', imageFile);
 
     try {
-      const res = await fetch(`${API_URL}/api/brand_product`, {
+      const res = await fetch('${API_URL}/api/brand_product', {
         method: 'POST',
         body: formData,
       });
@@ -180,7 +180,7 @@ export const BrandDNA = () => {
           : `ลักษณะ: ${q4Form.type}, กลุ่ม: ${q4Form.tags.join(', ')}, รายละเอียดเพิ่มเติม: ${q4Form.desc}`
       };
 
-      const res = await fetch(`${API_URL}/api/generate-brand-dna`, {
+      const res = await fetch('${API_URL}/api/generate-brand-dna', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -411,7 +411,7 @@ export const BrandDNA = () => {
                         {products.map((product, index) => (
                           <div key={product.product_id || index} className="bdna-ai-card">
                             <div className="bdna-ai-card-header"><div className="bdna-step-number" style={{ background: '#c65428', color: 'white', width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>{index + 1}</div><h3 style={{ margin: 0, color: '#c65428' }}>{product.name_product}</h3></div>
-                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px` }}>{product.image_product ? (<img src={`${API_URL}/uploads/${product.image_product}`} alt={product.name_product} style={{ width: `100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
+                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px' }}>{product.image_product ? (<img src={`${API_URL}/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
                           </div>
                         ))}
                       </div>
