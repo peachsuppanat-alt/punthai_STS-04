@@ -545,7 +545,30 @@ export const CreateConcept = () => {
   const [useDna, setUseDna]   = useState(false);
   const [nmErrors, setNmErrors] = useState({});
   const [namesList, setNamesList] = useState([]);
-  const [customBrandName, setCustomBrandName] = useState('`${API_URL}`success`${API_URL}`success') {
+  const [customBrandName, setCustomBrandName] = useState('');
+  const [savingCustomName, setSavingCustomName] = useState(false);
+
+  useEffect(() => {
+    if (projectId) {
+      fetchNames();
+      fetch(`${API_URL}/api/projects/detail/${projectId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success' && data.project.brand_name) {
+            setCustomBrandName(data.project.brand_name);
+          }
+        })
+        .catch(err => console.error(err));
+    }
+  }, [projectId]);
+
+  // ดึง palette ที่ save แล้วจาก DB เพื่อเอา color_id / concept_id มาใช้กด Favorite & Select
+  const fetchDbPalettes = async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(`${API_URL}/api/color-palettes/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success') {
         const palettes = data.palettes || [];
         setCncptDbPalettes(palettes);
         // สร้าง lookup map: name_palette → { color_id, concept_id, is_liked, is_selected }
@@ -566,7 +589,17 @@ export const CreateConcept = () => {
         const selName = palettes.find(p => p.is_selected)?.name_palette || '';
         if (selName) setCncptSelectedPalette(selName);
       }
-    } catch(err) { console.error('fetchDbPalettes error:`${API_URL}`success') {
+    } catch(err) { console.error('fetchDbPalettes error:', err); }
+  };
+  useEffect(() => { if (projectId) fetchDbPalettes(); }, [projectId]);
+
+  // ดึง font ที่ save แล้วจาก DB พร้อม sync like/select state
+  const fetchDbFonts = async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(`${API_URL}/api/fonts/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success') {
         const map = {};
         const likedNames = new Set();
         data.fonts.forEach(f => {
@@ -578,7 +611,15 @@ export const CreateConcept = () => {
         const selFont = data.fonts.find(f => f.is_selected);
         if (selFont) setCncptSelectedFontName(selFont.font_name);
       }
-    } catch(err) { console.error('fetchDbFonts error:`${API_URL}`success') setNamesList(data.names);
+    } catch(err) { console.error('fetchDbFonts error:', err); }
+  };
+  useEffect(() => { if (projectId) fetchDbFonts(); }, [projectId]);
+
+  const fetchNames = async () => {
+    try {
+      const res  = await fetch(`${API_URL}/api/brand-names/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success') setNamesList(data.names);
     } catch (err) { console.error(err); }
   };
 
@@ -607,7 +648,7 @@ export const CreateConcept = () => {
         benefit: nmForm.benefit, target: nmForm.target,
         tags: nmForm.tags, special: nmForm.special, use_dna: useDna
       };
-      const res  = await fetch(`${API_URL}`, {
+      const res  = await fetch(`${API_URL}/api/generate-brand-names`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -618,16 +659,43 @@ export const CreateConcept = () => {
     } catch (err) {
       alert("ไม่สามารถติดต่อ AI ได้");
     } finally {
-      setLoading({ show: false, text: '`${API_URL}`PUT',
-        headers: { 'Content-Type': 'application/json`${API_URL}`PUT',
-        headers: { 'Content-Type': 'application/json`${API_URL}`success' && data.project.brand_name) {
+      setLoading({ show: false, text: '' });
+    }
+  };
+
+  const handleLike = async (conceptId, currentStatus) => {
+    try {
+      await fetch(`${API_URL}/api/brand-names/like/${conceptId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_liked: !currentStatus })
+      });
+      fetchNames();
+    } catch (err) { console.error(err); }
+  };
+
+  const handleSelect = async (conceptId) => {
+    try {
+      await fetch(`${API_URL}/api/brand-names/select/${conceptId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId })
+      });
+      fetchNames();
+      const res = await fetch(`${API_URL}/api/projects/detail/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success' && data.project.brand_name) {
         setCustomBrandName(data.project.brand_name);
       }
     } catch (err) { console.error(err); }
   };
 
   const handleSaveCustomBrandName = async () => {
-    if (!customBrandName.trim()) return alert('กรุณาระบุชื่อแบรนด์`${API_URL}`PUT',
+    if (!customBrandName.trim()) return alert('กรุณาระบุชื่อแบรนด์');
+    setSavingCustomName(true);
+    try {
+      const res = await fetch(`${API_URL}/api/projects/${projectId}/brand-name`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brand_name: customBrandName.trim() })
       });
@@ -838,7 +906,7 @@ export const CreateConcept = () => {
           });
           setCncptRawFonts(googleFonts);
           // sync Google Fonts ลง table font (background, ไม่ block UI)
-          fetch(`${API_URL}`, {
+          fetch(`${API_URL}/api/fonts/sync-google`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ fonts: googleFonts.map(f => ({ font_name: f.name })) }),
           }).catch(err => console.warn('[sync-google]', err));
@@ -1171,7 +1239,7 @@ export const CreateConcept = () => {
                                       // 1. save-one เพื่อให้มี color_id + concept_id ก่อน (ถ้ายังไม่มีใน DB)
                                       let dbEntry = cncptDbMap[p.name];
                                       if (!dbEntry?.color_id) {
-                                        const saveRes = await fetch(`${API_URL}`, {
+                                        const saveRes = await fetch(`${API_URL}/api/color-palettes/save-one`, {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
                                           body: JSON.stringify({
@@ -1185,7 +1253,15 @@ export const CreateConcept = () => {
                                           }),
                                         });
                                         const saveData = await saveRes.json();
-                                        if (saveData.status === 'success`${API_URL}`PUT',
+                                        if (saveData.status === 'success') {
+                                          dbEntry = { color_id: saveData.color_id, concept_id: saveData.concept_id, is_liked: false, is_selected: false };
+                                          setCncptDbMap(prev => ({ ...prev, [p.name]: dbEntry }));
+                                        }
+                                      }
+                                      // 2. กด like
+                                      if (dbEntry?.color_id) {
+                                        await fetch(`${API_URL}/api/color-palettes/like/${dbEntry.color_id}`, {
+                                          method: 'PUT',
                                           headers: { 'Content-Type': 'application/json' },
                                           body: JSON.stringify({ is_liked: newFav, project_id: projectId })
                                         });
@@ -1203,7 +1279,7 @@ export const CreateConcept = () => {
                                   if (!projectId) return;
                                   try {
                                     // save-one เสมอ — ได้ color_id + concept_id จาก DB โดยตรง (ไม่ต้องพึ่ง state)
-                                    const saveRes = await fetch(`${API_URL}`, {
+                                    const saveRes = await fetch(`${API_URL}/api/color-palettes/save-one`, {
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({
@@ -1229,7 +1305,9 @@ export const CreateConcept = () => {
                                     }));
 
                                     // select — ส่ง color_id ตรงจาก save-one response (ไม่ผ่าน state ที่อาจ stale)
-                                    console.log('[select] calling select API, concept_id:', freshConceptId, 'color_id:`${API_URL}`PUT',
+                                    console.log('[select] calling select API, concept_id:', freshConceptId, 'color_id:', freshColorId);
+                                    const selRes = await fetch(`${API_URL}/api/color-palettes/select/${freshConceptId}`, {
+                                      method: 'PUT',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ project_id: projectId, color_id: freshColorId })
                                     });
@@ -1373,12 +1451,15 @@ export const CreateConcept = () => {
                           setCncptSelectedFont(0);
                           if (!cncptFeaturedFont || !projectId) return;
                           try {
-                            const saveRes = await fetch(`${API_URL}`, {
+                            const saveRes = await fetch(`${API_URL}/api/fonts/save-one`, {
                               method: 'POST', headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ project_id: projectId, font_name: cncptFeaturedFont.name, file_font: cncptFeaturedFont.file||null }),
                             });
                             const saveData = await saveRes.json();
-                            if (saveData.status !== 'success`${API_URL}`PUT', headers: { 'Content-Type': 'application/json' },
+                            if (saveData.status !== 'success') return;
+                            setCncptSelectedFontName(cncptFeaturedFont.name);
+                            await fetch(`${API_URL}/api/fonts/select/${saveData.concept_id}`, {
+                              method: 'PUT', headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ project_id: projectId }),
                             });
                           } catch(err) { console.error('use-save font error:', err); }
@@ -1424,12 +1505,15 @@ export const CreateConcept = () => {
                                     if (!projectId) return;
                                     try {
                                       // save-one ก่อนเสมอ เพื่อให้ได้ font_id + concept_id
-                                      const saveRes = await fetch(`${API_URL}`, {
+                                      const saveRes = await fetch(`${API_URL}/api/fonts/save-one`, {
                                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ project_id: projectId, font_name: f.name, file_font: f.file||null }),
                                       });
                                       const saveData = await saveRes.json();
-                                      if (saveData.status !== 'success`${API_URL}`PUT', headers: { 'Content-Type': 'application/json' },
+                                      if (saveData.status !== 'success') return;
+                                      setCncptDbFontMap(prev => ({ ...prev, [f.name]: { ...prev[f.name], font_id: saveData.font_id, concept_id: saveData.concept_id } }));
+                                      await fetch(`${API_URL}/api/fonts/like/${saveData.font_id}`, {
+                                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ is_liked: newFav, project_id: projectId }),
                                       });
                                     } catch(err) { console.error('like font error:', err); }
@@ -1443,13 +1527,17 @@ export const CreateConcept = () => {
                                     if (!projectId) return;
                                     try {
                                       // save-one ก่อนเสมอ เพื่อได้ font_id + concept_id จาก DB โดยตรง
-                                      const saveRes = await fetch(`${API_URL}`, {
+                                      const saveRes = await fetch(`${API_URL}/api/fonts/save-one`, {
                                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ project_id: projectId, font_name: f.name, file_font: f.file||null }),
                                       });
                                       const saveData = await saveRes.json();
                                       console.log('[font select] save-one:', saveData);
-                                      if (saveData.status !== 'success`${API_URL}`PUT', headers: { 'Content-Type': 'application/json' },
+                                      if (saveData.status !== 'success') return;
+                                      setCncptDbFontMap(prev => ({ ...prev, [f.name]: { ...prev[f.name], font_id: saveData.font_id, concept_id: saveData.concept_id } }));
+                                      // select
+                                      const selRes = await fetch(`${API_URL}/api/fonts/select/${saveData.concept_id}`, {
+                                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ project_id: projectId }),
                                       });
                                       const selData = await selRes.json();

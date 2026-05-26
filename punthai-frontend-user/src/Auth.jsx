@@ -25,6 +25,7 @@ const eyeButtonStyle = {
 };
 
 function Auth({ onLoginSuccess, onClose }) {
+
   // 'login-user' | 'login-printshop' | 'register-user' | 'register-printshop'
   const [activeTab, setActiveTab] = useState('login-user');
   const [errorMessage, setErrorMessage] = useState('');
@@ -65,7 +66,10 @@ function Auth({ onLoginSuccess, onClose }) {
   // --- LOGIN ผู้ใช้ทั่วไป ---
   const handleLogin = async (e) => {
     e.preventDefault();
-    setErrorMessage('`${API_URL}`POST',
+    setErrorMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/login`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_name: loginUser, password: loginPass })
       });
@@ -78,7 +82,10 @@ function Auth({ onLoginSuccess, onClose }) {
   // --- LOGIN โรงพิมพ์ ---
   const handleLoginPrintshop = async (e) => {
     e.preventDefault();
-    setErrorMessage('`${API_URL}`POST',
+    setErrorMessage('');
+    try {
+      const res = await fetch(`${API_URL}/api/third-party/login`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginShopEmail, password: loginShopPass })
       });
@@ -103,9 +110,13 @@ function Auth({ onLoginSuccess, onClose }) {
       formData.append('email', regData.email);
       formData.append('first_name', regData.first_name);
       formData.append('last_name', regData.last_name);
-      if (imgProfile) formData.append('img_profile`${API_URL}`POST', body: formData });
+      if (imgProfile) formData.append('img_profile', imgProfile);
+
+      const res = await fetch(`${API_URL}/api/register`, { method: 'POST', body: formData });
       const data = await res.json();
-      if (data.status === 'success`${API_URL}`POST',
+      if (data.status === 'success') {
+        const loginRes = await fetch(`${API_URL}/api/login`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_name: regData.user_name, password: regData.password })
         });
@@ -128,9 +139,13 @@ function Auth({ onLoginSuccess, onClose }) {
       formData.append('email', shopData.email);
       formData.append('password', shopData.password);
       formData.append('phone', shopData.phone);
-      if (shopLogo) formData.append('image_profile`${API_URL}`POST', body: formData });
+      if (shopLogo) formData.append('image_profile', shopLogo);
+
+      const res = await fetch(`${API_URL}/api/third-party/register`, { method: 'POST', body: formData });
       const data = await res.json();
-      if (data.status === 'success`${API_URL}`POST',
+      if (data.status === 'success') {
+        const loginRes = await fetch(`${API_URL}/api/third-party/login`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: shopData.email, password: shopData.password })
         });
@@ -144,7 +159,10 @@ function Auth({ onLoginSuccess, onClose }) {
   // --- GOOGLE LOGIN ---
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      setErrorMessage('`${API_URL}`POST',
+      setErrorMessage('');
+      try {
+        const res = await fetch(`${API_URL}/api/auth/google`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: tokenResponse.access_token })
         });

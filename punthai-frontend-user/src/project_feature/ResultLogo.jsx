@@ -38,7 +38,14 @@ export const ResultLogo = () => {
         { id: 'combination', name: 'Combination', desc: '(ผสม)',             icon: 'mdi:puzzle-outline' },
         { id: 'emblem',      name: 'Emblem',      desc: '(ตราสัญลักษณ์)',    icon: 'mdi:shield-check-outline' },
         { id: 'mascot',      name: 'Mascot',      desc: '(มาสคอต)',          icon: 'mdi:teddy-bear' },
-        { id: 'minimal',     name: 'Minimal',     desc: '(มินิมอล)',         icon: 'mdi:shape-outline`${API_URL}`success') {
+        { id: 'minimal',     name: 'Minimal',     desc: '(มินิมอล)',         icon: 'mdi:shape-outline' }
+    ];
+
+    const fetchImages = () => {
+        fetch(`${API_URL}/api/generated-logos/${projectId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
                     const formattedImages = data.images.map(img => ({
                         id: img.history_id,
                         url: img.image_url,
@@ -70,7 +77,17 @@ export const ResultLogo = () => {
             }
         } else {
             alert('ไม่พบรหัสโปรเจกต์');
-            navigate('/`${API_URL}`PUT',
+            navigate('/');
+        }
+    }, [projectId, navigate]);
+
+    const handleLike = async (id) => {
+        const imgToUpdate = generatedImages.find(img => img.id === id);
+        const newLikeStatus = !imgToUpdate.isLiked;
+        setGeneratedImages(images => images.map(img => img.id === id ? { ...img, isLiked: newLikeStatus } : img));
+        try {
+            await fetch(`${API_URL}/api/like-generated-item/${id}`, {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_liked: newLikeStatus ? 1 : 0 })
             });
@@ -78,7 +95,14 @@ export const ResultLogo = () => {
     };
 
     const handleSelect = async (id, url, isCurrentlySelected) => {
-        const actionType = isCurrentlySelected ? 'deselect' : 'select`${API_URL}`PUT',
+        const actionType = isCurrentlySelected ? 'deselect' : 'select';
+        setGeneratedImages(images => images.map(img => {
+            if (img.id === id) return { ...img, isSelected: !isCurrentlySelected };
+            return { ...img, isSelected: false };
+        }));
+        try {
+            await fetch(`${API_URL}/api/generated-logos/select/${id}`, {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ project_id: projectId, image_url: url, action: actionType })
             });
@@ -89,8 +113,30 @@ export const ResultLogo = () => {
     const handleDownload = async (imgUrl, imgId, format) => {
         setDownloading(`${imgId}_${format}`);
         try {
-            const fullUrl = imgUrl.startsWith('http`${API_URL}`success' && data.data) setBrandValue(data.data.brand_value || '');
-            else alert('คุณยังไม่ได้ทำแบบทดสอบ Brand DNA ในโปรเจกต์นี้`${API_URL}`success' && data.products.length > 0) {
+            const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${API_URL}${imgUrl}`;
+            await downloadLogo(fullUrl, format, `logo_${imgId}`);
+            setDownloadMenuOpen(null);
+        } catch (err) {
+            alert(`ดาวน์โหลด ${format.toUpperCase()} ไม่สำเร็จ: ${err.message}`);
+        } finally {
+            setDownloading(null);
+        }
+    };
+
+    const handleImportBrandValue = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/brand_dna/${projectId}`);
+            const data = await res.json();
+            if (data.status === 'success' && data.data) setBrandValue(data.data.brand_value || '');
+            else alert('คุณยังไม่ได้ทำแบบทดสอบ Brand DNA ในโปรเจกต์นี้');
+        } catch (err) { console.error(err); }
+    };
+
+    const handleImportProducts = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
+            const data = await res.json();
+            if (data.status === 'success' && data.products.length > 0) {
                 setImportedProducts(data.products);
                 alert(`ดึงข้อมูลสินค้ามาแล้ว ${data.products.length} รายการ`);
             } else alert('ยังไม่มีรายการสินค้าในโปรเจกต์นี้');
@@ -106,7 +152,32 @@ export const ResultLogo = () => {
 
         const userData = JSON.parse(localStorage.getItem('user') || '{}');
         const productsText = Array.isArray(importedProducts)
-            ? importedProducts.map(p => p.name_product || p).join(', `${API_URL}`progress', (e) => {
+            ? importedProducts.map(p => p.name_product || p).join(', ')
+            : importedProducts;
+
+        const payload = {
+            project_id: projectId,
+            user_id: userData.user_id || 0,
+            brand_name: brandName,
+            brand_value: brandValue,
+            products: productsText,
+            styles: selectedStyle,
+            details: detailsInput,
+            negative_prompt: negativeInput,
+            use_imported_color: useImportedColor,
+            use_imported_font: useImportedFont
+        };
+
+        localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
+
+        const params = new URLSearchParams();
+        Object.entries(payload).forEach(([k, v]) => {
+            if (v !== undefined && v !== null) params.append(k, String(v));
+        });
+
+        const eventSource = new EventSource(`${API_URL}/api/generate-logo?${params.toString()}`);
+
+        eventSource.addEventListener('progress', (e) => {
             try { const data = JSON.parse(e.data); setLoadingMessage(data.message); } catch {}
         });
 
@@ -173,7 +244,13 @@ export const ResultLogo = () => {
                     ) : (
                         <div className="rl-logo-grid">
                             {generatedImages.map((img, index) => (
-                                <div key={img.id} className={`rl-logo-card${img.isSelected ? ' rl-logo-card--selected' : '`${API_URL}`relative' }}>
+                                <div key={img.id} className={`rl-logo-card${img.isSelected ? ' rl-logo-card--selected' : ''}`}>
+                                    <div className="rl-logo-actions">
+                                        <button className="rl-action-btn" onClick={() => setSelectedImage(`${API_URL}${img.url}`)}>
+                                            <iconify-icon icon="wordpress:fullscreen"></iconify-icon>
+                                        </button>
+
+                                        <div style={{ position: 'relative' }}>
                                             <button className="rl-action-btn" onClick={() => setDownloadMenuOpen(downloadMenuOpen === img.id ? null : img.id)}>
                                                 <iconify-icon icon="mynaui:download"></iconify-icon>
                                             </button>
@@ -211,7 +288,15 @@ export const ResultLogo = () => {
                                         </button>
 
                                         <button className={`rl-action-btn${img.isSelected ? ' rl-select-btn--active' : ''}`} onClick={() => handleSelect(img.id, img.url, img.isSelected)}>
-                                            <iconify-icon icon={img.isSelected ? 'mdi:check-circle' : 'mdi:check-circle-outline`${API_URL}`100%', height: '100%', objectFit: 'contain', borderRadius: '12px' }}
+                                            <iconify-icon icon={img.isSelected ? 'mdi:check-circle' : 'mdi:check-circle-outline'}></iconify-icon>
+                                        </button>
+                                    </div>
+
+                                    <div className="rl-logo-box">
+                                        <img
+                                            src={`${API_URL}${img.url}`}
+                                            alt={`Logo ${index + 1}`}
+                                            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '12px' }}
                                         />
                                     </div>
                                 </div>

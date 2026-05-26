@@ -37,7 +37,15 @@ export const Product = () => {
       fetchProducts();
     } else {
       alert('ไม่พบรหัสโปรเจกต์ กรุณากลับไปเลือกโปรเจกต์ใหม่');
-      navigate('/`${API_URL}`success') setProducts(data.products);
+      navigate('/');
+    }
+  }, [projectId]);
+
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success') setProducts(data.products);
     } catch (err) {
       console.error('Fetch products error:', err);
     }
@@ -86,7 +94,7 @@ export const Product = () => {
     if (imageFile) formData.append('image_product', imageFile);
 
     try {
-      const res = await fetch(`${API_URL}`, {
+      const res = await fetch(`${API_URL}/api/brand_product`, {
         method: 'POST',
         body: formData,
       });
@@ -120,7 +128,101 @@ export const Product = () => {
         <div className="pd-nav-icons">
           <button className="pd-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
           <button className="pd-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
-          <button className="pd-btn-users" onClick={() => navigate('/profile`${API_URL}` cncpt-open' : ''}`}>
+          <button className="pd-btn-users" onClick={() => navigate('/profile')}><iconify-icon icon="solar:user-linear"></iconify-icon></button>
+        </div>
+      </header>
+
+      <div className="pd-container">
+
+        {/* Sidebar */}
+        <ProductSidebar projectId={projectId} />
+
+        {/* Main Content */}
+        <main className="pd-main">
+
+          <h1 className="pd-page-title" lang="en">My Products</h1>
+          <p className="pd-page-subtitle">จัดการรายการสินค้าของโปรเจกต์คุณ</p>
+
+          {products.length === 0 ? (
+            <div className="pd-empty-state">
+              <div className="pd-empty-icon">
+                <iconify-icon icon="mdi:package-variant-closed"></iconify-icon>
+              </div>
+              <p className="pd-empty-title">ยังไม่มีสินค้าในโปรเจกต์นี้</p>
+              <button className="pd-add-first-btn" onClick={handleOpenModal}>
+                <iconify-icon icon="mdi:plus"></iconify-icon> เพิ่มสินค้าแรก
+              </button>
+            </div>
+          ) : (
+            <div className="pd-cards-grid">
+              {products.map((product, index) => (
+                <div key={product.product_id || index} className="pd-product-card">
+                  <div className="pd-card-index">{index + 1}</div>
+                  <div className="pd-card-image-row">
+                    <div className="pd-image-box pd-image-main">
+                      {product.image_product ? (
+                        <img
+                          src={`${API_URL}/uploads/${product.image_product}`}
+                          alt={product.name_product}
+                        />
+                      ) : (
+                        <iconify-icon icon="mdi:image-outline"></iconify-icon>
+                      )}
+                    </div>
+                    <div className="pd-image-box pd-image-placeholder"></div>
+                    <div className="pd-image-box pd-image-placeholder"></div>
+                  </div>
+                  <div className="pd-card-footer">
+                    <h3 className="pd-card-name">{product.name_product}</h3>
+                    {product.type_product && (
+                      <span className="pd-card-type">{product.type_product}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Add More Card */}
+              <div className="pd-product-card pd-add-card" onClick={handleOpenModal}>
+                <iconify-icon icon="mdi:plus-circle-outline"></iconify-icon>
+                <p>เพิ่มสินค้าใหม่</p>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* FAB */}
+      {products.length > 0 && (
+        <button className="pd-fab" onClick={handleOpenModal}>
+          <iconify-icon icon="tabler:plus" width="28" height="28"></iconify-icon>
+        </button>
+      )}
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="cncpt-cc-modal" onClick={handleCloseModal}>
+          <div className="cncpt-cc-modal-box" onClick={(e) => e.stopPropagation()}>
+            <button className="cncpt-cc-close" onClick={handleCloseModal}>✕</button>
+
+            {/* Step 1 */}
+            <div className="cncpt-form-group">
+              <label>
+                <span className="cncpt-step">1</span>
+                สินค้าของคุณคืออะไร
+                <span className="cncpt-req-star">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="เช่น โดนัท"
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+              />
+            </div>
+
+            {/* Step 2 */}
+            <div className="cncpt-form-group">
+              <label><span className="cncpt-step">2</span> ประเภทสินค้า <span className="cncpt-req-star">*</span></label>
+              <div className={`cncpt-cc-dd${isDropdownOpen ? ' cncpt-open' : ''}`}>
                 <div
                   className="cncpt-cc-dd-sel"
                   onClick={(e) => { e.stopPropagation(); setIsDropdownOpen(!isDropdownOpen); }}

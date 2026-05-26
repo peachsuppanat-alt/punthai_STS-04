@@ -355,7 +355,14 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
       if (pickerRef.current && !pickerRef.current.contains(e.target)) onClose();
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown`${API_URL}`success') setProducts(data.products); })
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!projectId) { setLoading(false); return; }
+    fetch(`${API_URL}/api/brand_product/${projectId}`)
+      .then(r => r.json())
+      .then(data => { if (data.status === 'success') setProducts(data.products); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [projectId]);
@@ -364,7 +371,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
     if (!selected) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}`, {
+      const res = await fetch(`${API_URL}/api/package-catalog/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_id: selected, package_id: pkg.id, is_liked: true }),
@@ -413,7 +420,13 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
           return (
             <div
               key={p.product_id}
-              className={`pkc-like-picker-item${isActive ? ' pkc-like-picker-item-active' : '`${API_URL}`18px', color: '#ccc' }} />
+              className={`pkc-like-picker-item${isActive ? ' pkc-like-picker-item-active' : ''}`}
+              onClick={() => setSelected(p.product_id)}
+            >
+              <div className="pkc-like-picker-item-img">
+                {p.image_product
+                  ? <img src={`${API_URL}/uploads/${p.image_product}`} alt={p.name_product} />
+                  : <iconify-icon icon="mdi:image-off-outline" style={{ fontSize: '18px', color: '#ccc' }} />
                 }
               </div>
               <span className="pkc-like-picker-item-name">{p.name_product}</span>
@@ -492,17 +505,27 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [loading, setLoading]                     = useState(true);
   const [saving, setSaving]                       = useState(false);
-  const [successMsg, setSuccessMsg]               = useState('`${API_URL}`success') setProducts(data.products); })
+  const [successMsg, setSuccessMsg]               = useState('');
+
+  useEffect(() => {
+    if (!projectId) { setLoading(false); return; }
+    fetch(`${API_URL}/api/brand_product/${projectId}`)
+      .then(r => r.json())
+      .then(data => { if (data.status === 'success') setProducts(data.products); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [projectId]);
 
   const handleConfirm = async () => {
-    if (!selectedProductId) return alert('กรุณาเลือกสินค้าก่อน`${API_URL}`PATCH',
+    if (!selectedProductId) return alert('กรุณาเลือกสินค้าก่อน');
+    setSaving(true);
+    try {
+      await fetch(`${API_URL}/api/brand_product/${selectedProductId}/package`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ package_id: pkg.id }),
       });
-      const res2 = await fetch(`${API_URL}`, {
+      const res2 = await fetch(`${API_URL}/api/package-catalog`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -566,7 +589,13 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
                 return (
                   <div
                     key={product.product_id || idx}
-                    className={`pkc-sp-product-card${isSelected ? ' pkc-sp-selected' : '`${API_URL}`32px', color: '#ccc' }} />
+                    className={`pkc-sp-product-card${isSelected ? ' pkc-sp-selected' : ''}`}
+                    onClick={() => setSelectedProductId(product.product_id)}
+                  >
+                    <div className="pkc-sp-product-img">
+                      {product.image_product
+                        ? <img src={`${API_URL}/uploads/${product.image_product}`} alt={product.name_product} />
+                        : <iconify-icon icon="mdi:image-off-outline" style={{ fontSize: '32px', color: '#ccc' }} />
                       }
                     </div>
                     <div className="pkc-sp-product-info">

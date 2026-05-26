@@ -53,13 +53,37 @@ export const BrandDNA = () => {
   useEffect(() => {
     if (!projectId) {
       alert("ไม่พบรหัสโปรเจกต์ กรุณากลับไปเลือกโปรเจกต์ใหม่");
-      navigate('/`${API_URL}`success' && data.dna) {
+      navigate('/');
+      return;
+    }
+    fetchProducts();
+    fetchExistingDNA(); // เช็คว่าเคยทำ DNA หรือยัง
+  }, [projectId, navigate]);
+
+  //  ฟังก์ชันเช็คผลลัพธ์เก่าจาก Database 
+  const fetchExistingDNA = async () => {
+    try {
+      // ใช้ endpoint ใหม่ที่คืน DNA + color + font ใน 1 call (0 Gemini)
+      const res = await fetch(`${API_URL}/api/brand-dna-full/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success' && data.dna) {
         setDnaResult(data.dna);
         if (data.color) setRecommendedColor(data.color);
         if (data.font) setRecommendedFont(data.font);
         setShowResult(true);
         setShowWelcome(false);
-        console.log('[BrandDNA] Loaded from cache (0 Gemini calls)`${API_URL}`success') {
+        console.log('[BrandDNA] Loaded from cache (0 Gemini calls)');
+      }
+    } catch (err) {
+      console.error("Fetch existing DNA error:", err);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success') {
         setProducts(data.products);
         if (data.products.length > 0) setHasNoProduct(false);
       }
@@ -97,7 +121,7 @@ export const BrandDNA = () => {
     if (imageFile) formData.append('image_product', imageFile);
 
     try {
-      const res = await fetch(`${API_URL}`, {
+      const res = await fetch(`${API_URL}/api/brand_product`, {
         method: 'POST',
         body: formData,
       });
@@ -156,7 +180,7 @@ export const BrandDNA = () => {
           : `ลักษณะ: ${q4Form.type}, กลุ่ม: ${q4Form.tags.join(', ')}, รายละเอียดเพิ่มเติม: ${q4Form.desc}`
       };
 
-      const res = await fetch(`${API_URL}`, {
+      const res = await fetch(`${API_URL}/api/generate-brand-dna`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -169,10 +193,119 @@ export const BrandDNA = () => {
         if (data.data.color) setRecommendedColor(data.data.color);
         if (data.data.font) setRecommendedFont(data.data.font);
         setShowResult(true);
-        console.log('[BrandDNA] Generated all (1 Gemini call total)`${API_URL}`success`${API_URL}`PUT',
-        headers: { 'Content-Type': 'application/json`${API_URL}`PUT',
-        headers: { 'Content-Type': 'application/json`${API_URL}`PUT',
-        headers: { 'Content-Type': 'application/json`${API_URL}`PUT',
+        console.log('[BrandDNA] Generated all (1 Gemini call total)');
+      } else {
+        alert("ข้อผิดพลาดจากเซิร์ฟเวอร์: " + data.message);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("เกิดปัญหาในการติดต่อ AI เซิร์ฟเวอร์");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNext = () => {
+    let finalArchetype = archetype;
+    if (currentStep === 3) finalArchetype = calculateArchetype();
+
+    if (currentStep < 4) {
+      setCurrentStep(currentStep + 1);
+    } else {
+      handleSubmitDNA(finalArchetype);
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
+  };
+
+  const toggleTag = (val) => {
+    if (q4Form.tags.includes(val)) {
+      setQ4Form({ ...q4Form, tags: q4Form.tags.filter(t => t !== val) });
+    } else {
+      setQ4Form({ ...q4Form, tags: [...q4Form.tags, val], noAudience: false });
+    }
+  };
+
+  //  ฟังก์ชันทำแบบทดสอบใหม่
+  const handleRetakeQuiz = () => {
+    setShowResult(false);
+    setShowWelcome(false);
+    setCurrentStep(1);
+    // เราไม่ Reset State คำตอบ เผื่อผู้ใช้แค่อยากแก้คำตอบบางข้อ
+  };
+
+
+  // =========================================================
+  // ฟังก์ชันสำหรับดึงข้อมูลและจัดการ AI แนะนำสี/ฟอนต์
+  // =========================================================
+  const [isColorLiked, setIsColorLiked] = useState(false);
+  const [isFontLiked, setIsFontLiked] = useState(false);
+
+  const fetchAiRecommendations = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/recommend-assets/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success') {
+        setRecommendedColor(data.color);
+        setRecommendedFont(data.font);
+      }
+    } catch (err) {
+      console.error("AI Recommend Error:", err);
+    }
+  };
+
+  // ❌ ลบ useEffect นี้ทิ้ง — auto-fire ทำให้สิ้นเปลือง token
+  // useEffect(() => {
+  //     if (showResult && dnaResult) {
+  //         fetchAiRecommendations();
+  //     }
+  // }, [showResult, dnaResult]);
+
+  const handleLikeColor = async () => {
+    if (!recommendedColor) return;
+    const newState = !isColorLiked;
+    setIsColorLiked(newState);
+    try {
+      await fetch(`${API_URL}/api/color-palettes/like/${recommendedColor.color_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
+      });
+    } catch (err) { console.error(err); }
+  };
+
+  const handleSelectColor = async () => {
+    if (!recommendedColor) return;
+    try {
+      const res = await fetch(`${API_URL}/api/color-palettes/select/${recommendedColor.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId })
+      });
+      if (res.ok) alert("✅ เลือกชุดสีนี้เรียบร้อยแล้ว! สามารถไปดูได้ที่หน้า Projects");
+    } catch (err) { console.error(err); }
+  };
+
+  const handleLikeFont = async () => {
+    if (!recommendedFont) return;
+    const newState = !isFontLiked;
+    setIsFontLiked(newState);
+    try {
+      await fetch(`${API_URL}/api/fonts/like/${recommendedFont.font_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
+      });
+    } catch (err) { console.error(err); }
+  };
+
+  const handleSelectFont = async () => {
+    if (!recommendedFont) return;
+    try {
+      const res = await fetch(`${API_URL}/api/fonts/select/${recommendedFont.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: projectId })
       });
@@ -278,7 +411,7 @@ export const BrandDNA = () => {
                         {products.map((product, index) => (
                           <div key={product.product_id || index} className="bdna-ai-card">
                             <div className="bdna-ai-card-header"><div className="bdna-step-number" style={{ background: '#c65428', color: 'white', width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>{index + 1}</div><h3 style={{ margin: 0, color: '#c65428' }}>{product.name_product}</h3></div>
-                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px`${API_URL}`100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
+                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px` }}>{product.image_product ? (<img src={`${API_URL}/uploads/${product.image_product}`} alt={product.name_product} style={{ width: `100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
                           </div>
                         ))}
                       </div>
@@ -526,7 +659,11 @@ export const BrandDNA = () => {
             </div>
             <div style={{ textAlign: 'center', marginTop: '20px' }}>
               <button onClick={async () => {
-                if (!window.confirm('ขอคำแนะนำสี+ฟอนต์ใหม่จาก AI? (จะใช้ Gemini token)`${API_URL}`success') {
+                if (!window.confirm('ขอคำแนะนำสี+ฟอนต์ใหม่จาก AI? (จะใช้ Gemini token)')) return;
+                try {
+                  const res = await fetch(`${API_URL}/api/recommend-assets/${projectId}?force=1`);
+                  const data = await res.json();
+                  if (data.status === 'success') {
                     if (data.color) setRecommendedColor(data.color);
                     if (data.font) setRecommendedFont(data.font);
                   }

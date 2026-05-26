@@ -27,7 +27,15 @@ export const Result = () => {
     const [projectData, setProjectData] = useState({});
 
     useEffect(() => {
-        if (!projectId) { alert("\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e23\u0e2b\u0e31\u0e2a\u0e42\u0e1b\u0e23\u0e40\u0e08\u0e01\u0e15\u0e4c"); navigate('/`${API_URL}`success') setProjectData(data.project);
+        if (!projectId) { alert("\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e23\u0e2b\u0e31\u0e2a\u0e42\u0e1b\u0e23\u0e40\u0e08\u0e01\u0e15\u0e4c"); navigate('/'); return; }
+        fetchProjectDetails();
+    }, [projectId]);
+
+    const fetchProjectDetails = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/projects/detail/${projectId}`);
+            const data = await res.json();
+            if (data.status === 'success') setProjectData(data.project);
         } catch (err) { }
     };
 

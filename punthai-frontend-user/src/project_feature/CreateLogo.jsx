@@ -6,8 +6,8 @@ import ProUpgradeModal from '../components/ProUpgradeModal';
 import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
-//import createLogoImg from './assets/create logo.png';
 import { API_URL } from '../config';
+//import createLogoImg from './assets/create logo.png';
 
 export const CreateLogo = () => {
   const navigate = useNavigate();
@@ -41,9 +41,81 @@ export const CreateLogo = () => {
     { id: 'combination', name: 'Combination', desc: '(ผสม)', icon: 'mdi:puzzle-outline' },
     { id: 'emblem', name: 'Emblem', desc: '(ตราสัญลักษณ์)', icon: 'mdi:shield-check-outline' },
     { id: 'mascot', name: 'Mascot', desc: '(มาสคอต)', icon: 'mdi:teddy-bear' },
-    { id: 'minimal', name: 'Minimal', desc: '(มินิมอล)', icon: 'mdi:shape-outline`${API_URL}`success' && data.images && data.images.length > 0) {
-                  navigate('/result-logo`${API_URL}`success`${API_URL}`success' && data.data) {
-        setBrandValue(data.data.brand_value || '`${API_URL}`success' && data.products.length > 0) {
+    { id: 'minimal', name: 'Minimal', desc: '(มินิมอล)', icon: 'mdi:shape-outline' }
+  ];
+
+  const [useImportedColor, setUseImportedColor] = useState(false);
+  const [useImportedFont, setUseImportedFont] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
+  const [usageInfo, setUsageInfo] = useState(null);
+
+  useEffect(() => {
+    if (userId) {
+      fetchSubscriptionStatus(userId).then(data => {
+        if (data) setUsageInfo(data);
+      });
+    }
+  }, [userId]);
+  
+  // ================= 🚨 เพิ่มฟังก์ชันตรวจสอบรูปภาพอัตโนมัติ =================
+  useEffect(() => {
+      // ถ้าไม่มี projectId หรือ ผู้ใช้จงใจกดปุ่มเจนใหม่ (forceCreate) ให้อยู่หน้านี้ต่อ
+      if (!projectId || forceCreate) {
+          setIsChecking(false);
+          return;
+      }
+
+      // ตรวจสอบว่าโปรเจกต์นี้มีโลโก้ในระบบหรือยัง
+      fetch(`${API_URL}/api/generated-logos/${projectId}`)
+          .then(res => res.json())
+          .then(data => {
+              // ถ้ามีรูปโลโก้อยู่แล้ว ให้เด้งไปหน้า Result อัตโนมัติ
+              if (data.status === 'success' && data.images && data.images.length > 0) {
+                  navigate('/result-logo', { state: { projectId } });
+              } else {
+                  // ถ้ายังไม่มีรูป ให้อยู่หน้า CreateLogo ต่อไป
+                  setIsChecking(false);
+              }
+          })
+          .catch(err => {
+              console.error("Error checking generated logos:", err);
+              setIsChecking(false); // ถึงจะ error ก็ปล่อยให้อยู่หน้านี้เพื่อทำงานต่อ
+          });
+  }, [projectId, forceCreate, navigate]);
+
+  // ================= ฟังก์ชันนำเข้าข้อมูลจาก DB =================
+  const handleImportBrandName = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/brand-names/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success' && data.names) {
+        const selected = data.names.find(n => n.is_selected === 1 || n.is_selected === true);
+        if (selected) {
+          setBrandName(selected.brand_name);
+        } else {
+          alert("ยังไม่มีชื่อแบรนด์ที่ถูกเลือกในโปรเจกต์นี้");
+        }
+      }
+    } catch (err) { console.error(err); alert("ไม่สามารถเชื่อมต่อฐานข้อมูลได้"); }
+  };
+
+  const handleImportBrandValue = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/brand_dna/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success' && data.data) {
+        setBrandValue(data.data.brand_value || '');
+      } else {
+        alert("คุณยังไม่ได้ทำแบบทดสอบ Brand DNA ในโปรเจกต์นี้");
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const handleImportProducts = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success' && data.products.length > 0) {
         setImportedProducts(data.products);
         alert(`ดึงข้อมูลสินค้ามาแล้ว ${data.products.length} รายการ`);
       } else {
@@ -88,7 +160,29 @@ export const CreateLogo = () => {
     setLoadingMessage('กำลังเตรียมข้อมูล...');
 
     const productsText = Array.isArray(importedProducts)
-      ? importedProducts.map(p => p.name_product || p).join(', `${API_URL}`progress', (e) => {
+      ? importedProducts.map(p => p.name_product || p).join(', ')
+      : importedProducts;
+
+    const payload = {
+      project_id: projectId,
+      user_id: userId,
+      brand_name: brandName,
+      brand_value: brandValue,
+      products: productsText,
+      styles: selectedStyle,
+      details: detailsInput,
+      negative_prompt: negativeInput,
+      use_imported_color: useImportedColor,
+      use_imported_font: useImportedFont
+    };
+    localStorage.setItem(`lastLogoForm_${projectId}`, JSON.stringify(payload));
+
+    const params = new URLSearchParams();
+    Object.entries(payload).forEach(([k, v]) => { if (v !== undefined && v !== null) params.append(k, v); });
+
+    const eventSource = new EventSource(`${API_URL}/api/generate-logo?${params.toString()}`);
+
+    eventSource.addEventListener('progress', (e) => {
       try {
         const data = JSON.parse(e.data);
         setLoadingMessage(data.message || 'กำลังดำเนินการ...');

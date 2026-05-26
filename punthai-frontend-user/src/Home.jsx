@@ -35,8 +35,20 @@ const Home = ({ user }) => {
   const [openMenuId, setOpenMenuId]           = useState(null);
   const [showEditPopup, setShowEditPopup]     = useState(false);
   const [editProjectId, setEditProjectId]     = useState(null);
-  const [editProjectName, setEditProjectName] = useState('`${API_URL}`success') setProjects(d.projects); })
-        .catch(err => console.error('Fetch projects error:`${API_URL}`success') {
+  const [editProjectName, setEditProjectName] = useState('');
+  const [completions, setCompletions]         = useState({});
+
+  useEffect(() => {
+    if (user) {
+      fetch(`${API_URL}/api/projects/${user.user_id}`)
+        .then(r => r.json())
+        .then(d => { if (d.status === 'success') setProjects(d.projects); })
+        .catch(err => console.error('Fetch projects error:', err));
+
+      fetch(`${API_URL}/api/users/${user.user_id}/completions`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.status === 'success') {
             const map = {};
             d.projects.forEach(p => { map[p.project_id] = p.percentage; });
             setCompletions(map);
@@ -53,7 +65,7 @@ const Home = ({ user }) => {
     if (e) e.preventDefault();
     if (!user) { alert('กรุณาเข้าสู่ระบบก่อนสร้างแบรนด์!'); return; }
     try {
-      const res  = await fetch(`${API_URL}`, {
+      const res  = await fetch(`${API_URL}/api/projects`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.user_id }),
       });
@@ -67,7 +79,9 @@ const Home = ({ user }) => {
 
   const handleDeleteProject = async (e, id) => {
     e.stopPropagation(); setOpenMenuId(null);
-    if (!window.confirm('ลบโปรเจกต์นี้? ข้อมูลทั้งหมดจะหายไป`${API_URL}`DELETE' });
+    if (!window.confirm('ลบโปรเจกต์นี้? ข้อมูลทั้งหมดจะหายไป')) return;
+    try {
+      const res  = await fetch(`${API_URL}/api/projects/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.status === 'success') setProjects(projects.filter(p => p.project_id !== id));
       else alert('❌ ' + data.message);
@@ -77,7 +91,15 @@ const Home = ({ user }) => {
   const handleOpenEditPopup = (e, proj) => {
     e.stopPropagation(); setOpenMenuId(null);
     setEditProjectId(proj.project_id);
-    setEditProjectName(proj.project_name || '`${API_URL}`PUT', headers: { 'Content-Type': 'application/json' },
+    setEditProjectName(proj.project_name || '');
+    setShowEditPopup(true);
+  };
+
+  const handleSaveEditName = async (e) => {
+    e.preventDefault();
+    try {
+      const res  = await fetch(`${API_URL}/api/projects/${editProjectId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_name: editProjectName }),
       });
       const data = await res.json();
@@ -149,7 +171,9 @@ const Home = ({ user }) => {
                     </div>
                   </div>
                 )}
-                <div className="proj-icon" style={{ width:72,height:72,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',borderRadius:14,background:proj.image_logo?'transparent':'#f9f5f2`${API_URL}`100%',height:'100%',objectFit:'contain' }} />
+                <div className="proj-icon" style={{ width:72,height:72,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',borderRadius:14,background:proj.image_logo?'transparent':'#f9f5f2' }}>
+                  {proj.image_logo
+                    ? <img src={`${API_URL}${proj.image_logo}`} alt="logo" style={{ width:'100%',height:'100%',objectFit:'contain' }} />
                     : <iconify-icon icon="solar:folder-with-files-bold-duotone"></iconify-icon>}
                 </div>
                 <h3>{proj.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ'}</h3>
