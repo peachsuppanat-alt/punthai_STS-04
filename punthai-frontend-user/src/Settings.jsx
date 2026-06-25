@@ -4,8 +4,9 @@ import { fetchSubscriptionStatus } from './utils/subscriptionGuard';
 import './Settings.css';
 
 import logoImg from './assets/logo.png';
+import { API_URL, OMISE_PUBLIC_KEY } from './config';
 
-const OMISE_PUBLIC_KEY = 'pkey_test_67qqeg96mv9vq9d7jxg';
+
 
 export const Settings = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -91,7 +92,7 @@ export const Settings = ({ user, setUser }) => {
 
   const getProfileImage = (imagePath) => {
     if (!imagePath || imagePath === 'null') return null;
-    return imagePath.startsWith('http') ? imagePath : `http://localhost:3000/uploads/${imagePath}`;
+    return imagePath.startsWith('http') ? imagePath : `${API_URL}/uploads/${imagePath}`;
   };
 
   const isPro = userData.subscription_status === 'PRO' && subStatus?.subscription_status === 'PRO';
@@ -105,7 +106,7 @@ export const Settings = ({ user, setUser }) => {
       amount: 0,
       onCreateTokenSuccess: async (nonce) => {
         try {
-          const res = await fetch('http://localhost:3000/api/subscription/update-card', {
+          const res = await fetch(`${API_URL}/api/subscription/update-card`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: userData.user_id, token: nonce }),
@@ -125,7 +126,7 @@ export const Settings = ({ user, setUser }) => {
 
   const handleSaveNotifications = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/users/settings/notifications', {
+      const res = await fetch(`${API_URL}/api/users/settings/notifications`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userData.user_id, ...notifications }),
@@ -139,7 +140,7 @@ export const Settings = ({ user, setUser }) => {
 
   const handleSavePrivacy = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/users/settings/privacy', {
+      const res = await fetch(`${API_URL}/api/users/settings/privacy`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userData.user_id, ...privacy }),
@@ -184,7 +185,7 @@ export const Settings = ({ user, setUser }) => {
       if (formData.password) submitData.append('password', formData.password);
       if (newImageFile) submitData.append('image_profile', newImageFile);
 
-      const res = await fetch(`http://localhost:3000/api/users/profile/${userData.user_id}`, {
+      const res = await fetch(`${API_URL}/api/users/profile/${userData.user_id}`, {
         method: 'PUT', body: submitData
       });
       const data = await res.json();

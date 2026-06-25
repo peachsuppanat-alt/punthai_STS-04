@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import "./Navbar.css";
 import logo from "./assets/logo.png"
+import { API_URL } from './config';
 
 const Navbar = ({ user, onOpenLogin, onLogout }) => {
     const navigate = useNavigate();
@@ -64,7 +65,7 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                         {user && user.image_profile && user.image_profile !== 'null' ? (
                             <img
                                 // 🟢 เช็คว่าถ้าเป็นลิงก์ http (จาก Google) ให้ใช้เลย ถ้าไม่ใช่ให้ดึงจากโฟลเดอร์ uploads
-                                src={user.image_profile.startsWith('http') ? user.image_profile : `http://localhost:3000/uploads/${user.image_profile}`}
+                                src={user.image_profile.startsWith('http') ? user.image_profile : `${API_URL}/uploads/${user.image_profile}`}
                                 alt="User"
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
                                 onError={(e) => {

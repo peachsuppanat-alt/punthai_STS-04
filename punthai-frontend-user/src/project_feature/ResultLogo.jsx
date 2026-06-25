@@ -7,6 +7,7 @@ import ProUpgradeModal from '../components/ProUpgradeModal';
 import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
+import { API_URL } from '../config';
 
 export const ResultLogo = () => {
     const navigate = useNavigate();
@@ -41,7 +42,7 @@ export const ResultLogo = () => {
     ];
 
     const fetchImages = () => {
-        fetch(`http://localhost:3000/api/generated-logos/${projectId}`)
+        fetch(`${API_URL}/api/generated-logos/${projectId}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
@@ -85,7 +86,7 @@ export const ResultLogo = () => {
         const newLikeStatus = !imgToUpdate.isLiked;
         setGeneratedImages(images => images.map(img => img.id === id ? { ...img, isLiked: newLikeStatus } : img));
         try {
-            await fetch(`http://localhost:3000/api/like-generated-item/${id}`, {
+            await fetch(`${API_URL}/api/like-generated-item/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_liked: newLikeStatus ? 1 : 0 })
@@ -100,7 +101,7 @@ export const ResultLogo = () => {
             return { ...img, isSelected: false };
         }));
         try {
-            await fetch(`http://localhost:3000/api/generated-logos/select/${id}`, {
+            await fetch(`${API_URL}/api/generated-logos/select/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ project_id: projectId, image_url: url, action: actionType })
@@ -112,7 +113,7 @@ export const ResultLogo = () => {
     const handleDownload = async (imgUrl, imgId, format) => {
         setDownloading(`${imgId}_${format}`);
         try {
-            const fullUrl = imgUrl.startsWith('http') ? imgUrl : `http://localhost:3000${imgUrl}`;
+            const fullUrl = imgUrl.startsWith('http') ? imgUrl : `${API_URL}${imgUrl}`;
             await downloadLogo(fullUrl, format, `logo_${imgId}`);
             setDownloadMenuOpen(null);
         } catch (err) {
@@ -124,7 +125,7 @@ export const ResultLogo = () => {
 
     const handleImportBrandValue = async () => {
         try {
-            const res = await fetch(`http://localhost:3000/api/brand_dna/${projectId}`);
+            const res = await fetch(`${API_URL}/api/brand_dna/${projectId}`);
             const data = await res.json();
             if (data.status === 'success' && data.data) setBrandValue(data.data.brand_value || '');
             else alert('คุณยังไม่ได้ทำแบบทดสอบ Brand DNA ในโปรเจกต์นี้');
@@ -133,7 +134,7 @@ export const ResultLogo = () => {
 
     const handleImportProducts = async () => {
         try {
-            const res = await fetch(`http://localhost:3000/api/brand_product/${projectId}`);
+            const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
             const data = await res.json();
             if (data.status === 'success' && data.products.length > 0) {
                 setImportedProducts(data.products);
@@ -174,7 +175,7 @@ export const ResultLogo = () => {
             if (v !== undefined && v !== null) params.append(k, String(v));
         });
 
-        const eventSource = new EventSource(`http://localhost:3000/api/generate-logo?${params.toString()}`);
+        const eventSource = new EventSource(`${API_URL}/api/generate-logo?${params.toString()}`);
 
         eventSource.addEventListener('progress', (e) => {
             try { const data = JSON.parse(e.data); setLoadingMessage(data.message); } catch {}
@@ -245,7 +246,7 @@ export const ResultLogo = () => {
                             {generatedImages.map((img, index) => (
                                 <div key={img.id} className={`rl-logo-card${img.isSelected ? ' rl-logo-card--selected' : ''}`}>
                                     <div className="rl-logo-actions">
-                                        <button className="rl-action-btn" onClick={() => setSelectedImage(`http://localhost:3000${img.url}`)}>
+                                        <button className="rl-action-btn" onClick={() => setSelectedImage(`${API_URL}${img.url}`)}>
                                             <iconify-icon icon="wordpress:fullscreen"></iconify-icon>
                                         </button>
 
@@ -293,7 +294,7 @@ export const ResultLogo = () => {
 
                                     <div className="rl-logo-box">
                                         <img
-                                            src={`http://localhost:3000${img.url}`}
+                                            src={`${API_URL}${img.url}`}
                                             alt={`Logo ${index + 1}`}
                                             style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '12px' }}
                                         />

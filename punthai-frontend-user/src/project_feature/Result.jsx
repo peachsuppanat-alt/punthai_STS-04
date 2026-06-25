@@ -7,6 +7,7 @@ import MockupEditor from './MockupEditor';
 import LabelEditor from './LabelEditor';
 import logoImg from '../assets/logo.png';
 import { ProjectSidebar } from '../components/sidebar';
+import { API_URL } from '../config';
 
 const TABS = [
   { id: 'package', label: 'Package' },
@@ -32,7 +33,7 @@ export const Result = () => {
 
     const fetchProjectDetails = async () => {
         try {
-            const res = await fetch(`http://localhost:3000/api/projects/detail/${projectId}`);
+            const res = await fetch(`${API_URL}/api/projects/detail/${projectId}`);
             const data = await res.json();
             if (data.status === 'success') setProjectData(data.project);
         } catch (err) { }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchSubscriptionStatus } from './utils/subscriptionGuard';
+import { API_URL, OMISE_PUBLIC_KEY } from './config';
 import './Subscription.css';
 
-const OMISE_PUBLIC_KEY = 'pkey_test_67qqeg96mv9vq9d7jxg';
+
 
 const Subscription = ({ user, setUser }) => {
     const navigate = useNavigate();
@@ -48,7 +49,7 @@ const Subscription = ({ user, setUser }) => {
         setError('');
         for (let i = 0; i < 20; i++) {
             try {
-                const res = await fetch(`http://localhost:3000/api/subscription/check-payment/${chargeId}`);
+                const res = await fetch(`${API_URL}/api/subscription/check-payment/${chargeId}`);
                 const data = await res.json();
                 if (data.payment_status === 'successful') {
                     setUser(data.user);
@@ -77,7 +78,7 @@ const Subscription = ({ user, setUser }) => {
         setError('');
         try {
             const isSource = nonce.startsWith('src_');
-            const res = await fetch('http://localhost:3000/api/subscription/create-charge', {
+            const res = await fetch(`${API_URL}/api/subscription/create-charge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -108,7 +109,7 @@ const Subscription = ({ user, setUser }) => {
     const handleCancelSubscription = async () => {
         setCancelLoading(true);
         try {
-            const res = await fetch('http://localhost:3000/api/subscription/cancel', {
+            const res = await fetch(`${API_URL}/api/subscription/cancel`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.user_id }),

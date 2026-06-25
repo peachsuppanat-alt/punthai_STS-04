@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './Product.css';
 import { ProductSidebar } from '../components/ProductSidebar';
 import logoImg from '../assets/logo.png';
+import { API_URL } from '../config';
 
 export const Product = () => {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ export const Product = () => {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/brand_product/${projectId}`);
+      const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
       const data = await res.json();
       if (data.status === 'success') setProducts(data.products);
     } catch (err) {
@@ -93,7 +94,7 @@ export const Product = () => {
     if (imageFile) formData.append('image_product', imageFile);
 
     try {
-      const res = await fetch('http://localhost:3000/api/brand_product', {
+      const res = await fetch(`${API_URL}/api/brand_product`, {
         method: 'POST',
         body: formData,
       });
@@ -161,7 +162,7 @@ export const Product = () => {
                     <div className="pd-image-box pd-image-main">
                       {product.image_product ? (
                         <img
-                          src={`http://localhost:3000/uploads/${product.image_product}`}
+                          src={`${API_URL}/uploads/${product.image_product}`}
                           alt={product.name_product}
                         />
                       ) : (

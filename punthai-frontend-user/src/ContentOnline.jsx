@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './content-online.css';
+import { API_URL } from './config';
 
-const API = 'http://localhost:3000';
 
 const PLATFORMS = [
   { id: 'facebook', name: 'Facebook Post', icon: 'logos:facebook', size: '1200x630' },
@@ -85,7 +85,7 @@ const ContentOnline = ({ user }) => {
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch(`${API}/api/projects/${user.user_id}`);
+      const res = await fetch(`${API_URL}/api/projects/${user.user_id}`);
       const data = await res.json();
       if (data.status === 'success') setProjects(data.projects);
     } catch (err) { console.error(err); }
@@ -93,7 +93,7 @@ const ContentOnline = ({ user }) => {
 
   const fetchProducts = async (projId) => {
     try {
-      const res = await fetch(`${API}/api/brand_product/${projId}`);
+      const res = await fetch(`${API_URL}/api/brand_product/${projId}`);
       const data = await res.json();
       if (data.status === 'success') setProducts(data.products);
     } catch (err) { console.error(err); }
@@ -101,7 +101,7 @@ const ContentOnline = ({ user }) => {
 
   const fetchTemplates = async () => {
     try {
-      const res = await fetch(`${API}/api/ad-templates`);
+      const res = await fetch(`${API_URL}/api/ad-templates`);
       const data = await res.json();
       if (data.status === 'success') setTemplates(data.templates);
     } catch (err) { console.error(err); }
@@ -109,7 +109,7 @@ const ContentOnline = ({ user }) => {
 
   const fetchImages = async (projId, prodId) => {
     try {
-      const res = await fetch(`${API}/api/content-online/images/${projId}/${prodId}`);
+      const res = await fetch(`${API_URL}/api/content-online/images/${projId}/${prodId}`);
       const data = await res.json();
       if (data.status === 'success') {
         setProductImages(data.product_images);
@@ -120,7 +120,7 @@ const ContentOnline = ({ user }) => {
 
   const fetchHistory = async (projId, prodId) => {
     try {
-      const res = await fetch(`${API}/api/content-online/history/${projId}/${prodId}`);
+      const res = await fetch(`${API_URL}/api/content-online/history/${projId}/${prodId}`);
       const data = await res.json();
       if (data.status === 'success') setHistory(data.history);
     } catch (err) { console.error(err); }
@@ -179,7 +179,7 @@ const ContentOnline = ({ user }) => {
     if (newProductImage) fd.append('image_product', newProductImage);
 
     try {
-      const res = await fetch(`${API}/api/brand_product`, { method: 'POST', body: fd });
+      const res = await fetch(`${API_URL}/api/brand_product`, { method: 'POST', body: fd });
       const data = await res.json();
       if (data.status === 'success') {
         fetchProducts(selectedProjectId);
@@ -201,7 +201,7 @@ const ContentOnline = ({ user }) => {
     const fd = new FormData();
     fd.append('image', file);
     try {
-      const res = await fetch(`${API}/api/content-online/upload-image`, { method: 'POST', body: fd });
+      const res = await fetch(`${API_URL}/api/content-online/upload-image`, { method: 'POST', body: fd });
       const data = await res.json();
       if (data.status === 'success') {
         setUploadedImageUrl(data.image_url);
@@ -234,7 +234,7 @@ const ContentOnline = ({ user }) => {
     };
 
     try {
-      const response = await fetch(`${API}/api/content-online/generate`, {
+      const response = await fetch(`${API_URL}/api/content-online/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -297,7 +297,7 @@ const ContentOnline = ({ user }) => {
 
   const handleDownload = async (imageUrl) => {
     try {
-      const res = await fetch(`${API}${imageUrl}`);
+      const res = await fetch(`${API_URL}${imageUrl}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -312,7 +312,7 @@ const ContentOnline = ({ user }) => {
 
   // ===== Share =====
   const handleShareFacebook = () => {
-    const imgFullUrl = `${API}${result.image_url}`;
+    const imgFullUrl = `${API_URL}${result.image_url}`;
     const caption = result.caption_th || '';
     const fbAppId = import.meta.env.VITE_FACEBOOK_APP_ID || '';
     if (fbAppId) {
@@ -384,7 +384,7 @@ const ContentOnline = ({ user }) => {
               <button className="co-btn-primary" style={{ margin: '15px auto 0' }}
                 onClick={async () => {
                   try {
-                    const res = await fetch(`${API}/api/projects`, {
+                    const res = await fetch(`${API_URL}/api/projects`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ user_id: user.user_id }),
@@ -405,7 +405,7 @@ const ContentOnline = ({ user }) => {
                   className={`co-card ${selectedProjectId === proj.project_id ? 'selected' : ''}`}
                   onClick={() => handleSelectProject(proj.project_id)}>
                   {proj.image_logo ? (
-                    <img src={`${API}${proj.image_logo}`} alt="" className="co-card-img" />
+                    <img src={`${API_URL}${proj.image_logo}`} alt="" className="co-card-img" />
                   ) : (
                     <iconify-icon icon="solar:folder-with-files-bold-duotone" style={{ fontSize: '50px', color: '#ccc' }}></iconify-icon>
                   )}
@@ -432,7 +432,7 @@ const ContentOnline = ({ user }) => {
                 className={`co-card ${selectedProductId === prod.product_id ? 'selected' : ''}`}
                 onClick={() => handleSelectProduct(prod)}>
                 {prod.image_product ? (
-                  <img src={`${API}/uploads/${prod.image_product}`} alt="" className="co-card-img" />
+                  <img src={`${API_URL}/uploads/${prod.image_product}`} alt="" className="co-card-img" />
                 ) : (
                   <iconify-icon icon="mdi:package-variant" style={{ fontSize: '50px', color: '#ccc' }}></iconify-icon>
                 )}
@@ -485,7 +485,7 @@ const ContentOnline = ({ user }) => {
                 onClick={() => handleSelectTemplate(tpl.template_id)}>
                 <div className="co-template-thumb">
                   {tpl.thumbnail_url ? (
-                    <img src={`${API}${tpl.thumbnail_url}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={`${API_URL}${tpl.thumbnail_url}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <iconify-icon icon="mdi:image-filter-vintage"></iconify-icon>
                   )}
@@ -564,7 +564,7 @@ const ContentOnline = ({ user }) => {
                   <div key={`prod-${i}`}
                     className={`co-image-option ${selectedImageUrl === img.url && selectedImageType === 'product' ? 'selected' : ''}`}
                     onClick={() => handleSelectImage(img.url, 'product')}>
-                    <img src={`${API}${img.url}`} alt="" />
+                    <img src={`${API_URL}${img.url}`} alt="" />
                     <div className="co-check"><iconify-icon icon="mdi:check"></iconify-icon></div>
                   </div>
                 ))}
@@ -583,7 +583,7 @@ const ContentOnline = ({ user }) => {
                   <div key={`mock-${i}`}
                     className={`co-image-option ${selectedImageUrl === img.url && selectedImageType === 'mockup' ? 'selected' : ''}`}
                     onClick={() => handleSelectImage(img.url, 'mockup')}>
-                    <img src={`${API}${img.url}`} alt="" />
+                    <img src={`${API_URL}${img.url}`} alt="" />
                     <div className="co-check"><iconify-icon icon="mdi:check"></iconify-icon></div>
                   </div>
                 ))}
@@ -601,7 +601,7 @@ const ContentOnline = ({ user }) => {
               <div className="co-image-grid">
                 <div className={`co-image-option ${selectedImageType === 'upload' ? 'selected' : ''}`}
                   onClick={() => handleSelectImage(uploadedImageUrl, 'upload')}>
-                  <img src={`${API}${uploadedImageUrl}`} alt="" />
+                  <img src={`${API_URL}${uploadedImageUrl}`} alt="" />
                   <div className="co-check"><iconify-icon icon="mdi:check"></iconify-icon></div>
                 </div>
                 <div className="co-upload-zone" onClick={() => fileInputRef.current.click()} style={{ aspectRatio: '1' }}>
@@ -651,7 +651,7 @@ const ContentOnline = ({ user }) => {
             {/* รูปโฆษณา */}
             <div className="co-result-image">
               {result.image_url && (
-                <img src={`${API}${result.image_url}`} alt="Ad Result" />
+                <img src={`${API_URL}${result.image_url}`} alt="Ad Result" />
               )}
             </div>
 
@@ -728,7 +728,7 @@ const ContentOnline = ({ user }) => {
               <div key={h.marketing_content_id} className="co-history-card"
                 onClick={() => setHistoryDetail(h)}>
                 {h.image_content && (
-                  <img src={`${API}${h.image_content}`} alt="" />
+                  <img src={`${API_URL}${h.image_content}`} alt="" />
                 )}
                 <div className="co-history-info">
                   <span className="template-tag">{h.template_name_th || 'ไม่ระบุ'}</span>
@@ -751,7 +751,7 @@ const ContentOnline = ({ user }) => {
               onClick={() => setHistoryDetail(null)}>&times;</button>
             <h2>รายละเอียดโฆษณา</h2>
             {historyDetail.image_content && (
-              <img src={`${API}${historyDetail.image_content}`} alt="" />
+              <img src={`${API_URL}${historyDetail.image_content}`} alt="" />
             )}
             {historyDetail.caption_th && (
               <div className="co-caption-box" style={{ marginBottom: '10px' }}>

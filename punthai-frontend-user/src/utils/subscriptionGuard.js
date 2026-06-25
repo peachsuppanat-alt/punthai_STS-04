@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 export const isProUser = (user) => {
     if (!user) return false;
     if (user.subscription_status !== 'PRO') return false;
@@ -28,7 +29,7 @@ export const isFormatAllowed = (feature, format, user) => {
 
 export const fetchSubscriptionStatus = async (userId) => {
     try {
-        const res = await fetch(`http://localhost:3000/api/subscription/status/${userId}`);
+        const res = await fetch(`${API_URL}/api/subscription/status/${userId}`);
         const data = await res.json();
         if (data.status === 'success') return data.subscription;
         return null;

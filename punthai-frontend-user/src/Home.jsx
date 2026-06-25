@@ -26,6 +26,7 @@ import panelMarket      from './assets/home/panelmarket.png'
 import elementContent   from './assets/home/element_content.png'
 import bgHeadHome       from './assets/home/BG-headhome.png'
 import homeLogo         from './assets/home/homelogo.png'
+import { API_URL } from './config';
 
 const Home = ({ user }) => {
   const [activeCard, setActiveCard]           = useState(null);
@@ -39,12 +40,12 @@ const Home = ({ user }) => {
 
   useEffect(() => {
     if (user) {
-      fetch(`http://localhost:3000/api/projects/${user.user_id}`)
+      fetch(`${API_URL}/api/projects/${user.user_id}`)
         .then(r => r.json())
         .then(d => { if (d.status === 'success') setProjects(d.projects); })
         .catch(err => console.error('Fetch projects error:', err));
 
-      fetch(`http://localhost:3000/api/users/${user.user_id}/completions`)
+      fetch(`${API_URL}/api/users/${user.user_id}/completions`)
         .then(r => r.json())
         .then(d => {
           if (d.status === 'success') {
@@ -64,7 +65,7 @@ const Home = ({ user }) => {
     if (e) e.preventDefault();
     if (!user) { alert('กรุณาเข้าสู่ระบบก่อนสร้างแบรนด์!'); return; }
     try {
-      const res  = await fetch('http://localhost:3000/api/projects', {
+      const res  = await fetch(`${API_URL}/api/projects`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.user_id }),
       });
@@ -80,7 +81,7 @@ const Home = ({ user }) => {
     e.stopPropagation(); setOpenMenuId(null);
     if (!window.confirm('ลบโปรเจกต์นี้? ข้อมูลทั้งหมดจะหายไป')) return;
     try {
-      const res  = await fetch(`http://localhost:3000/api/projects/${id}`, { method: 'DELETE' });
+      const res  = await fetch(`${API_URL}/api/projects/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.status === 'success') setProjects(projects.filter(p => p.project_id !== id));
       else alert('❌ ' + data.message);
@@ -97,7 +98,7 @@ const Home = ({ user }) => {
   const handleSaveEditName = async (e) => {
     e.preventDefault();
     try {
-      const res  = await fetch(`http://localhost:3000/api/projects/${editProjectId}`, {
+      const res  = await fetch(`${API_URL}/api/projects/${editProjectId}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_name: editProjectName }),
       });
@@ -172,7 +173,7 @@ const Home = ({ user }) => {
                 )}
                 <div className="proj-icon" style={{ width:72,height:72,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',borderRadius:14,background:proj.image_logo?'transparent':'#f9f5f2' }}>
                   {proj.image_logo
-                    ? <img src={`http://localhost:3000${proj.image_logo}`} alt="logo" style={{ width:'100%',height:'100%',objectFit:'contain' }} />
+                    ? <img src={`${API_URL}${proj.image_logo}`} alt="logo" style={{ width:'100%',height:'100%',objectFit:'contain' }} />
                     : <iconify-icon icon="solar:folder-with-files-bold-duotone"></iconify-icon>}
                 </div>
                 <h3>{proj.project_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ'}</h3>

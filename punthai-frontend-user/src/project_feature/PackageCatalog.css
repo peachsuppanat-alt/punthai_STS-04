@@ -1328,8 +1328,7 @@
   .pkc-modal-inner { grid-template-columns: 1fr; }
   .pkc-modal { padding: 22px; }
 }
-
-/* ── Poster bar (โรงพิมพ์ที่โพสต์ package) ───────────────────── */
+/* ── Poster bar (โรงพิมพ์ที่โพสต์ package) — Third Party ─────── */
 .pkc-poster-bar {
   display: flex; align-items: center; gap: 10px;
   width: 100%; margin: 6px 0 16px;

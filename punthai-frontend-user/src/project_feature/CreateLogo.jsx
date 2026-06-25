@@ -6,6 +6,7 @@ import ProUpgradeModal from '../components/ProUpgradeModal';
 import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
+import { API_URL } from '../config';
 //import createLogoImg from './assets/create logo.png';
 
 export const CreateLogo = () => {
@@ -65,7 +66,7 @@ export const CreateLogo = () => {
       }
 
       // ตรวจสอบว่าโปรเจกต์นี้มีโลโก้ในระบบหรือยัง
-      fetch(`http://localhost:3000/api/generated-logos/${projectId}`)
+      fetch(`${API_URL}/api/generated-logos/${projectId}`)
           .then(res => res.json())
           .then(data => {
               // ถ้ามีรูปโลโก้อยู่แล้ว ให้เด้งไปหน้า Result อัตโนมัติ
@@ -85,7 +86,7 @@ export const CreateLogo = () => {
   // ================= ฟังก์ชันนำเข้าข้อมูลจาก DB =================
   const handleImportBrandName = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/brand-names/${projectId}`);
+      const res = await fetch(`${API_URL}/api/brand-names/${projectId}`);
       const data = await res.json();
       if (data.status === 'success' && data.names) {
         const selected = data.names.find(n => n.is_selected === 1 || n.is_selected === true);
@@ -100,7 +101,7 @@ export const CreateLogo = () => {
 
   const handleImportBrandValue = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/brand_dna/${projectId}`);
+      const res = await fetch(`${API_URL}/api/brand_dna/${projectId}`);
       const data = await res.json();
       if (data.status === 'success' && data.data) {
         setBrandValue(data.data.brand_value || '');
@@ -112,7 +113,7 @@ export const CreateLogo = () => {
 
   const handleImportProducts = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/brand_product/${projectId}`);
+      const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
       const data = await res.json();
       if (data.status === 'success' && data.products.length > 0) {
         setImportedProducts(data.products);
@@ -179,7 +180,7 @@ export const CreateLogo = () => {
     const params = new URLSearchParams();
     Object.entries(payload).forEach(([k, v]) => { if (v !== undefined && v !== null) params.append(k, v); });
 
-    const eventSource = new EventSource(`http://localhost:3000/api/generate-logo?${params.toString()}`);
+    const eventSource = new EventSource(`${API_URL}/api/generate-logo?${params.toString()}`);
 
     eventSource.addEventListener('progress', (e) => {
       try {

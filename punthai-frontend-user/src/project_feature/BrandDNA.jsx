@@ -4,6 +4,7 @@ import './BrandDNA.css';
 import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
+import { API_URL } from '../config';
 
 export const BrandDNA = () => {
   const navigate = useNavigate();
@@ -63,7 +64,7 @@ export const BrandDNA = () => {
   const fetchExistingDNA = async () => {
     try {
       // ใช้ endpoint ใหม่ที่คืน DNA + color + font ใน 1 call (0 Gemini)
-      const res = await fetch(`http://localhost:3000/api/brand-dna-full/${projectId}`);
+      const res = await fetch(`${API_URL}/api/brand-dna-full/${projectId}`);
       const data = await res.json();
       if (data.status === 'success' && data.dna) {
         setDnaResult(data.dna);
@@ -80,7 +81,7 @@ export const BrandDNA = () => {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/brand_product/${projectId}`);
+      const res = await fetch(`${API_URL}/api/brand_product/${projectId}`);
       const data = await res.json();
       if (data.status === 'success') {
         setProducts(data.products);
@@ -120,7 +121,7 @@ export const BrandDNA = () => {
     if (imageFile) formData.append('image_product', imageFile);
 
     try {
-      const res = await fetch('http://localhost:3000/api/brand_product', {
+      const res = await fetch(`${API_URL}/api/brand_product`, {
         method: 'POST',
         body: formData,
       });
@@ -179,7 +180,7 @@ export const BrandDNA = () => {
           : `ลักษณะ: ${q4Form.type}, กลุ่ม: ${q4Form.tags.join(', ')}, รายละเอียดเพิ่มเติม: ${q4Form.desc}`
       };
 
-      const res = await fetch('http://localhost:3000/api/generate-brand-dna', {
+      const res = await fetch(`${API_URL}/api/generate-brand-dna`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -244,7 +245,7 @@ export const BrandDNA = () => {
 
   const fetchAiRecommendations = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/recommend-assets/${projectId}`);
+      const res = await fetch(`${API_URL}/api/recommend-assets/${projectId}`);
       const data = await res.json();
       if (data.status === 'success') {
         setRecommendedColor(data.color);
@@ -267,7 +268,7 @@ export const BrandDNA = () => {
     const newState = !isColorLiked;
     setIsColorLiked(newState);
     try {
-      await fetch(`http://localhost:3000/api/color-palettes/like/${recommendedColor.color_id}`, {
+      await fetch(`${API_URL}/api/color-palettes/like/${recommendedColor.color_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
@@ -278,7 +279,7 @@ export const BrandDNA = () => {
   const handleSelectColor = async () => {
     if (!recommendedColor) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/color-palettes/select/${recommendedColor.id}`, {
+      const res = await fetch(`${API_URL}/api/color-palettes/select/${recommendedColor.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: projectId })
@@ -292,7 +293,7 @@ export const BrandDNA = () => {
     const newState = !isFontLiked;
     setIsFontLiked(newState);
     try {
-      await fetch(`http://localhost:3000/api/fonts/like/${recommendedFont.font_id}`, {
+      await fetch(`${API_URL}/api/fonts/like/${recommendedFont.font_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_liked: newState ? 1 : 0, project_id: projectId })
@@ -303,7 +304,7 @@ export const BrandDNA = () => {
   const handleSelectFont = async () => {
     if (!recommendedFont) return;
     try {
-      const res = await fetch(`http://localhost:3000/api/fonts/select/${recommendedFont.id}`, {
+      const res = await fetch(`${API_URL}/api/fonts/select/${recommendedFont.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: projectId })
@@ -410,7 +411,7 @@ export const BrandDNA = () => {
                         {products.map((product, index) => (
                           <div key={product.product_id || index} className="bdna-ai-card">
                             <div className="bdna-ai-card-header"><div className="bdna-step-number" style={{ background: '#c65428', color: 'white', width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>{index + 1}</div><h3 style={{ margin: 0, color: '#c65428' }}>{product.name_product}</h3></div>
-                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px' }}>{product.image_product ? (<img src={`http://localhost:3000/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
+                            <div style={{ height: '150px', background: '#f5f5f5', borderRadius: '12px', overflow: 'hidden', marginTop: '15px' }}>{product.image_product ? (<img src={`${API_URL}/uploads/${product.image_product}`} alt={product.name_product} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>ไม่มีรูปภาพ</div>}</div>
                           </div>
                         ))}
                       </div>
@@ -660,7 +661,7 @@ export const BrandDNA = () => {
               <button onClick={async () => {
                 if (!window.confirm('ขอคำแนะนำสี+ฟอนต์ใหม่จาก AI? (จะใช้ Gemini token)')) return;
                 try {
-                  const res = await fetch(`http://localhost:3000/api/recommend-assets/${projectId}?force=1`);
+                  const res = await fetch(`${API_URL}/api/recommend-assets/${projectId}?force=1`);
                   const data = await res.json();
                   if (data.status === 'success') {
                     if (data.color) setRecommendedColor(data.color);

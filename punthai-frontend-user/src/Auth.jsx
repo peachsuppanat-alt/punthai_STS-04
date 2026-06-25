@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import './Auth.css';
 import logo from "./assets/logo.png"
+import { API_URL } from './config';
 
 const EyeIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -24,7 +25,6 @@ const eyeButtonStyle = {
 };
 
 function Auth({ onLoginSuccess, onClose }) {
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
   // 'login-user' | 'login-printshop' | 'register-user' | 'register-printshop'
   const [activeTab, setActiveTab] = useState('login-user');
@@ -276,7 +276,7 @@ function Auth({ onLoginSuccess, onClose }) {
 }
 
 export default function AuthWithProvider(props) {
-  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'placeholder';
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <Auth {...props} />

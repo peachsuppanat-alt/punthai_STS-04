@@ -5,8 +5,9 @@ import './PrintshopProfile.css';
 import logoImg from './assets/logo.png';
 import { PackageDetailModal, resolveImg } from './project_feature/PackageCatalog';
 import { getStoredUser, isPrintshop } from './utils/auth';
+import { API_URL } from './config';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE = API_URL;
 
 const CONTACT_FIELDS = [
   { key: 'phone',      label: 'เบอร์โทรศัพท์', icon: 'mdi:phone',          type: 'text' },

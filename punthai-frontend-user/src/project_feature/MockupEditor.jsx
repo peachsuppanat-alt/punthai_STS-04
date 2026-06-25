@@ -7,8 +7,9 @@ import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import { getUserFromStorage, isProUser } from '../utils/subscriptionGuard';
 import ProUpgradeModal from '../components/ProUpgradeModal';
+import { API_URL } from '../config';
 
-const API = 'http://localhost:3000';
+const API = `${API_URL}`;
 
 // Color palette (match other pages)
 const C = {

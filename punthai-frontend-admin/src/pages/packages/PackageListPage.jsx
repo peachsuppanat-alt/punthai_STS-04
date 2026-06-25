@@ -69,7 +69,7 @@ export default function PackageListPage() {
             <div key={pkg.id} className={styles.card}>
               <div className={styles.cardThumb}>
                 {pkg.thumbnail ? (
-                  <img src={`http://localhost:3000${pkg.thumbnail}`} alt={pkg.name} />
+                  <img src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${pkg.thumbnail}`} alt={pkg.name} />
                 ) : (
                   <span className={styles.thumbPlaceholder}><Package size={40} /></span>
                 )}

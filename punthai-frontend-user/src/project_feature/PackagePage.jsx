@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import PackageCatalog from './PackageCatalog';
 import { CATEGORIES } from './PackageCatalog';
 import { getStoredUser, isPrintshop } from '../utils/auth';
+import { API_URL } from '../config';
 import './PackagePage.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE = API_URL;
 const PACKAGE_TYPES = [
   { id: 'flat', label: 'แบน (Flat) — ถุง/ฉลากแบน' },
   { id: 'wrap', label: 'หุ้มรอบ (Wrap) — ขวด/กระป๋อง/หลอด' },

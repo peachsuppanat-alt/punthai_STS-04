@@ -4,6 +4,7 @@ import './Profile.css';
 
 // อิมพอร์ตรูปภาพ
 import logoImg from './assets/logo.png';
+import { API_URL } from './config';
 
 export const Profile = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export const Profile = ({ user, setUser }) => {
       setUserData(currentUser);
 
       // ดึงข้อมูลโปรเจกต์
-      fetch(`http://localhost:3000/api/projects/${currentUser.user_id}`)
+      fetch(`${API_URL}/api/projects/${currentUser.user_id}`)
         .then(res => res.json())
         .then(data => {
           if (data.status === 'success') {
@@ -37,7 +38,7 @@ export const Profile = ({ user, setUser }) => {
         .catch(err => console.error("Fetch projects error:", err));
 
       // ดึง completion %
-      fetch(`http://localhost:3000/api/users/${currentUser.user_id}/completions`)
+      fetch(`${API_URL}/api/users/${currentUser.user_id}/completions`)
         .then(res => res.json())
         .then(data => {
           if (data.status === 'success') {
@@ -49,7 +50,7 @@ export const Profile = ({ user, setUser }) => {
         .catch(err => console.error("Fetch completions error:", err));
 
       // ดึง notifications จริงจาก API
-      fetch(`http://localhost:3000/api/user/notifications/${currentUser.user_id}`)
+      fetch(`${API_URL}/api/user/notifications/${currentUser.user_id}`)
         .then(res => res.json())
         .then(data => {
           if (data.status === 'success') {
@@ -73,7 +74,7 @@ export const Profile = ({ user, setUser }) => {
   const handleCreateProjectDirectly = async (e) => {
     if (e) e.preventDefault();
     try {
-      const res = await fetch('http://localhost:3000/api/projects', {
+      const res = await fetch(`${API_URL}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userData.user_id })
@@ -94,7 +95,7 @@ export const Profile = ({ user, setUser }) => {
     if (!imagePath || imagePath === 'null') return null;
     return imagePath.startsWith('http')
       ? imagePath
-      : `http://localhost:3000/uploads/${imagePath}`;
+      : `${API_URL}/uploads/${imagePath}`;
   };
 
   const handleLogout = () => {
@@ -119,7 +120,7 @@ export const Profile = ({ user, setUser }) => {
   const markAllRead = async () => {
     if (!userData.user_id) return;
     try {
-      await fetch(`http://localhost:3000/api/user/notifications/${userData.user_id}/read-all`, { method: 'PUT' });
+      await fetch(`${API_URL}/api/user/notifications/${userData.user_id}/read-all`, { method: 'PUT' });
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch (err) {
       console.error("Mark all read error:", err);
@@ -162,7 +163,7 @@ export const Profile = ({ user, setUser }) => {
                       <div key={notif.id} className={`pf-notif-item ${!notif.read ? 'pf-notif-unread' : ''}`}
                         onClick={() => {
                           if (!notif.read) {
-                            fetch(`http://localhost:3000/api/user/notifications/${notif.id}/read`, { method: 'PUT' });
+                            fetch(`${API_URL}/api/user/notifications/${notif.id}/read`, { method: 'PUT' });
                             setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
                           }
                         }}
@@ -322,7 +323,7 @@ export const Profile = ({ user, setUser }) => {
               >
                 <div className="pf-home-card-icon">
                   {proj.image_logo ? (
-                    <img src={`http://localhost:3000${proj.image_logo}`} alt="Logo" className="pf-home-logo-img" />
+                    <img src={`${API_URL}${proj.image_logo}`} alt="Logo" className="pf-home-logo-img" />
                   ) : (
                     <iconify-icon icon="solar:folder-with-files-bold-duotone"></iconify-icon>
                   )}

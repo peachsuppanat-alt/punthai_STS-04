@@ -2,9 +2,10 @@ import React, { useState, useMemo, useCallback, useRef, useEffect, useReducer } 
 import { useLocation, useNavigate } from 'react-router-dom';
 import './PackageCatalog.css';
 import { getStoredUser } from '../utils/auth';
+import { API_URL } from '../config';
 
 // Base ของ API (รูปที่โรงพิมพ์อัปโหลดจะถูกเสิร์ฟจาก backend /uploads)
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE = API_URL;
 
 // แปลง path รูปให้ถูกต้อง: asset ใน public (/package/...) ใช้ตรง ๆ,
 // ไฟล์ที่อัปโหลด (/uploads/... หรือชื่อไฟล์ล้วน) ชี้ไป backend
@@ -373,7 +374,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
 
   useEffect(() => {
     if (!projectId) { setLoading(false); return; }
-    fetch(`http://localhost:3000/api/brand_product/${projectId}`)
+    fetch(`${API_BASE}/api/brand_product/${projectId}`)
       .then(r => r.json())
       .then(data => { if (data.status === 'success') setProducts(data.products); })
       .catch(console.error)
@@ -384,7 +385,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
     if (!selected) return;
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:3000/api/package-catalog/like', {
+      const res = await fetch(`${API_BASE}/api/package-catalog/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_id: selected, package_id: pkg.id, is_liked: true }),
@@ -438,7 +439,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
             >
               <div className="pkc-like-picker-item-img">
                 {p.image_product
-                  ? <img src={`http://localhost:3000/uploads/${p.image_product}`} alt={p.name_product} />
+                  ? <img src={`${API_BASE}/uploads/${p.image_product}`} alt={p.name_product} />
                   : <iconify-icon icon="mdi:image-off-outline" style={{ fontSize: '18px', color: '#ccc' }} />
                 }
               </div>
@@ -560,12 +561,12 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
     if (!selectedProductId) return alert('กรุณาเลือกสินค้าก่อน');
     setSaving(true);
     try {
-      await fetch(`http://localhost:3000/api/brand_product/${selectedProductId}/package`, {
+      await fetch(`${API_BASE}/api/brand_product/${selectedProductId}/package`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ package_id: pkg.id }),
       });
-      const res2 = await fetch('http://localhost:3000/api/package-catalog', {
+      const res2 = await fetch(`${API_BASE}/api/package-catalog`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -677,7 +678,7 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
                   >
                     <div className="pkc-sp-product-img">
                       {product.image_product
-                        ? <img src={`http://localhost:3000/uploads/${product.image_product}`} alt={product.name_product} />
+                        ? <img src={`${API_BASE}/uploads/${product.image_product}`} alt={product.name_product} />
                         : <iconify-icon icon="mdi:image-off-outline" style={{ fontSize: '32px', color: '#ccc' }} />
                       }
                     </div>
