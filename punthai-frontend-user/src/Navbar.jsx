@@ -27,6 +27,7 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
             <div className="menu">
                 <NavLink to="/">HOME</NavLink>
                 <NavLink to="/market-planning">Market</NavLink>
+                <NavLink to="/package">Package</NavLink>
                 <NavLink to="/content-online">Content Online</NavLink>
                 <NavLink to="/about">About Us</NavLink>
             </div>

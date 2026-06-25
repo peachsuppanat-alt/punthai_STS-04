@@ -35,11 +35,6 @@ function Auth({ onLoginSuccess, onClose }) {
   const [loginPass, setLoginPass] = useState('');
   const [showLoginPass, setShowLoginPass] = useState(false);
 
-  // Login printshop fields
-  const [loginShopEmail, setLoginShopEmail] = useState('');
-  const [loginShopPass, setLoginShopPass] = useState('');
-  const [showLoginShopPass, setShowLoginShopPass] = useState(false);
-
   // Register user fields
   const [showRegPass, setShowRegPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
@@ -63,7 +58,7 @@ function Auth({ onLoginSuccess, onClose }) {
 
   const isLoginTab = activeTab.startsWith('login');
 
-  // --- LOGIN ผู้ใช้ทั่วไป ---
+  // --- LOGIN ช่องเดียว (username หรือ email) — ระบบเช็คเองว่าเป็น user ทั่วไป หรือ โรงพิมพ์ ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -71,29 +66,12 @@ function Auth({ onLoginSuccess, onClose }) {
       const res = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_name: loginUser, password: loginPass })
+        body: JSON.stringify({ identifier: loginUser, password: loginPass })
       });
       const data = await res.json();
+      // data.user จะมี role: 'printshop' มาด้วยถ้าเป็นบัญชีโรงพิมพ์
       if (data.status === 'success') { onLoginSuccess(data.user); onClose(); }
       else setErrorMessage(data.message);
-    } catch { setErrorMessage('เชื่อมต่อ Server ไม่ได้'); }
-  };
-
-  // --- LOGIN โรงพิมพ์ ---
-  const handleLoginPrintshop = async (e) => {
-    e.preventDefault();
-    setErrorMessage('');
-    try {
-      const res = await fetch(`${API_URL}/api/third-party/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginShopEmail, password: loginShopPass })
-      });
-      const data = await res.json();
-      if (data.status === 'success') {
-        onLoginSuccess({ ...data.third_party, role: 'printshop' });
-        onClose();
-      } else setErrorMessage(data.message);
     } catch { setErrorMessage('เชื่อมต่อ Server ไม่ได้'); }
   };
 
@@ -150,8 +128,8 @@ function Auth({ onLoginSuccess, onClose }) {
           body: JSON.stringify({ email: shopData.email, password: shopData.password })
         });
         const loginData = await loginRes.json();
-        if (loginData.status === 'success') { onLoginSuccess({ ...loginData.third_party, role: 'printshop' }); onClose(); }
-        else { setErrorMessage('สมัครสำเร็จ กรุณาเข้าสู่ระบบ'); switchTab('login-printshop'); }
+        if (loginData.status === 'success') { onLoginSuccess(loginData.user || { ...loginData.third_party, role: 'printshop' }); onClose(); }
+        else { setErrorMessage('สมัครสำเร็จ กรุณาเข้าสู่ระบบ'); switchTab('login-user'); }
       } else setErrorMessage(data.message);
     } catch { setErrorMessage('เชื่อมต่อ Server ไม่ได้'); }
   };
@@ -195,31 +173,13 @@ function Auth({ onLoginSuccess, onClose }) {
             <button onClick={() => switchTab('register-user')} className={`auth-tab-btn ${!isLoginTab ? 'active' : 'inactive'}`}>Register</button>
           </div>
 
-          {/* Tab รอง: ผู้ใช้ทั่วไป / โรงพิมพ์ (แสดงเฉพาะตอน Login) */}
-          {isLoginTab && (
-            <div className="register-type-group">
-              <button type="button"
-                className={`register-type-btn ${activeTab === 'login-user' ? 'active' : 'inactive'}`}
-                onClick={() => switchTab('login-user')}>
-                <span className="type-icon"><iconify-icon icon="lucide:users" width="20"></iconify-icon></span>
-                <span className="type-label">ผู้ใช้ทั่วไป</span>
-              </button>
-              <button type="button"
-                className={`register-type-btn ${activeTab === 'login-printshop' ? 'active' : 'inactive'}`}
-                onClick={() => switchTab('login-printshop')}>
-                <span className="type-icon"><iconify-icon icon="lucide:printer" width="20"></iconify-icon></span>
-                <span className="type-label">โรงพิมพ์</span>
-              </button>
-            </div>
-          )}
-
           {/* Error */}
           {errorMessage && <div className="error-box">{errorMessage}</div>}
 
           {/* ===== LOGIN: ผู้ใช้ทั่วไป ===== */}
           {activeTab === 'login-user' && (
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <input className="auth-input" type="text" placeholder="Username" value={loginUser} onChange={e => setLoginUser(e.target.value)} required />
+              <input className="auth-input" type="text" placeholder="Username หรือ Email" value={loginUser} onChange={e => setLoginUser(e.target.value)} required />
               <div style={{ position: 'relative' }}>
                 <input className="auth-input" type={showLoginPass ? "text" : "password"} placeholder="Password" value={loginPass} onChange={e => setLoginPass(e.target.value)} required />
                 <button type="button" onClick={() => setShowLoginPass(!showLoginPass)} style={eyeButtonStyle}>
@@ -231,20 +191,6 @@ function Auth({ onLoginSuccess, onClose }) {
                 <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
                 เข้าสู่ระบบด้วย Google
               </button>
-              <button type="submit" className="btn-primary" style={{ width: '100%' }}>เข้าสู่ระบบ</button>
-            </form>
-          )}
-
-          {/* ===== LOGIN: โรงพิมพ์ ===== */}
-          {activeTab === 'login-printshop' && (
-            <form onSubmit={handleLoginPrintshop} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <input className="auth-input" type="email" placeholder="Email" value={loginShopEmail} onChange={e => setLoginShopEmail(e.target.value)} required />
-              <div style={{ position: 'relative' }}>
-                <input className="auth-input" type={showLoginShopPass ? "text" : "password"} placeholder="Password" value={loginShopPass} onChange={e => setLoginShopPass(e.target.value)} required />
-                <button type="button" onClick={() => setShowLoginShopPass(!showLoginShopPass)} style={eyeButtonStyle}>
-                  {showLoginShopPass ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
               <button type="submit" className="btn-primary" style={{ width: '100%' }}>เข้าสู่ระบบ</button>
             </form>
           )}

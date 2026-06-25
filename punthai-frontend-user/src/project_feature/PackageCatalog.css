@@ -1328,3 +1328,48 @@
   .pkc-modal-inner { grid-template-columns: 1fr; }
   .pkc-modal { padding: 22px; }
 }
+
+/* ── Poster bar (โรงพิมพ์ที่โพสต์ package) ───────────────────── */
+.pkc-poster-bar {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; margin: 6px 0 16px;
+  padding: 10px 12px; border: 1.5px solid #e8b89c; border-radius: 14px;
+  background: linear-gradient(135deg, #fff4ec, #ffe9da);
+  cursor: pointer; transition: all .15s; text-align: left;
+  box-shadow: 0 2px 8px rgba(201,79,36,.08);
+}
+.pkc-poster-bar:hover {
+  border-color: #c94f24; box-shadow: 0 4px 14px rgba(201,79,36,.22);
+  transform: translateY(-1px);
+}
+.pkc-poster-avatar {
+  width: 42px; height: 42px; border-radius: 50%; object-fit: cover;
+  flex-shrink: 0; background: #fff; border: 2px solid #f0d9cb;
+}
+.pkc-poster-avatar-fallback {
+  display: flex; align-items: center; justify-content: center;
+  color: #c94f24; font-size: 22px;
+}
+.pkc-poster-info { display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 0; }
+.pkc-poster-by { font-size: 11px; color: #b07a5c; }
+.pkc-poster-name {
+  font-size: 15px; font-weight: 800; color: #5a3b2a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pkc-poster-cta {
+  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+  background: #c94f24; color: #fff; font-size: 12px; font-weight: 700;
+  padding: 6px 12px; border-radius: 20px; white-space: nowrap;
+}
+.pkc-poster-bar:hover .pkc-poster-cta { background: #a83e18; }
+
+/* ── ปุ่มลอย + เพิ่ม package (เฉพาะโรงพิมพ์) ─────────────────── */
+.pkc-fab-add {
+  position: fixed; right: 28px; bottom: 28px; z-index: 60;
+  width: 58px; height: 58px; border-radius: 50%; border: none;
+  background: linear-gradient(135deg, #e8763d, #c94f24); color: #fff;
+  font-size: 30px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 6px 18px rgba(201,79,36,.45);
+  transition: transform .15s, box-shadow .15s;
+}
+.pkc-fab-add:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 8px 22px rgba(201,79,36,.55); }

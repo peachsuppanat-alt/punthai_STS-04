@@ -1,6 +1,20 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect, useReducer } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './PackageCatalog.css';
+import { getStoredUser } from '../utils/auth';
+
+// Base ของ API (รูปที่โรงพิมพ์อัปโหลดจะถูกเสิร์ฟจาก backend /uploads)
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// แปลง path รูปให้ถูกต้อง: asset ใน public (/package/...) ใช้ตรง ๆ,
+// ไฟล์ที่อัปโหลด (/uploads/... หรือชื่อไฟล์ล้วน) ชี้ไป backend
+export function resolveImg(p) {
+  if (!p) return '';
+  if (p.startsWith('http')) return p;
+  if (p.startsWith('/uploads')) return API_BASE + p;
+  if (p.startsWith('/')) return p;
+  return `${API_BASE}/uploads/${p}`;
+}
 
 // ─── Categories – icons ทั้งหมดจาก mdi หรือ ph ที่ load แน่นอน ──
 export const CATEGORIES = [
@@ -401,7 +415,7 @@ function LikeProductPicker({ pkg, anchorRect, onClose, onLiked }) {
         </button>
       </div>
       <div className="pkc-like-picker-pkg">
-        <img src={pkg.thumbnail} alt={pkg.name} className="pkc-like-picker-pkg-img" />
+        <img src={resolveImg(pkg.thumbnail)} alt={pkg.name} className="pkc-like-picker-pkg-img" />
         <span className="pkc-like-picker-pkg-name">{pkg.name}</span>
       </div>
       <div className="pkc-like-picker-list">
@@ -498,22 +512,49 @@ function Lightbox({ images, startIdx, onClose }) {
 // ─── Select Product Modal ──────────────────────────────────────
 function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
   const location = useLocation();
-  const projectId = location.state?.projectId;
+  const routeProjectId = location.state?.projectId;
+  const user = getStoredUser();
 
+  // ถ้ามาจากในโปรเจกต์ใช้ projectId เดิม; ถ้ามาจากหน้า /package ต้องเลือกโปรเจกต์ก่อน (feature 2)
+  const [projectId, setProjectId]                 = useState(routeProjectId || null);
+  const [projects, setProjects]                   = useState([]);
+  const [loadingProjects, setLoadingProjects]     = useState(false);
   const [products, setProducts]                   = useState([]);
   const [selectedProductId, setSelectedProductId] = useState(null);
-  const [loading, setLoading]                     = useState(true);
+  const [loading, setLoading]                     = useState(!!routeProjectId);
   const [saving, setSaving]                       = useState(false);
   const [successMsg, setSuccessMsg]               = useState('');
 
+  // โหลดรายการโปรเจกต์ของผู้ใช้ (เมื่อยังไม่ได้เลือกโปรเจกต์)
   useEffect(() => {
-    if (!projectId) { setLoading(false); return; }
-    fetch(`http://localhost:3000/api/brand_product/${projectId}`)
+    if (projectId) return;
+    if (!user.user_id) { setLoadingProjects(false); return; }
+    setLoadingProjects(true);
+    fetch(`${API_BASE}/api/projects/${user.user_id}`)
+      .then(r => r.json())
+      .then(data => { if (data.status === 'success') setProjects(data.projects); })
+      .catch(console.error)
+      .finally(() => setLoadingProjects(false));
+  }, [projectId]);
+
+  // โหลดสินค้าเมื่อมี projectId แล้ว
+  useEffect(() => {
+    if (!projectId) return;
+    setLoading(true);
+    setSelectedProductId(null);
+    fetch(`${API_BASE}/api/brand_product/${projectId}`)
       .then(r => r.json())
       .then(data => { if (data.status === 'success') setProducts(data.products); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [projectId]);
+
+  // เลือกโปรเจกต์มาจากหน้า /package -> ย้อนกลับไปเลือกโปรเจกต์ใหม่ได้
+  const canPickProject = !routeProjectId;
+  const handleBack = () => {
+    if (canPickProject && projectId) { setProjectId(null); setProducts([]); }
+    else onBack();
+  };
 
   const handleConfirm = async () => {
     if (!selectedProductId) return alert('กรุณาเลือกสินค้าก่อน');
@@ -551,14 +592,16 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
     <div className="pkc-modal-backdrop" onClick={onClose}>
       <div className="pkc-select-product-modal" onClick={e => e.stopPropagation()}>
         <div className="pkc-sp-header">
-          <button className="pkc-sp-back-btn" onClick={onBack}>
+          <button className="pkc-sp-back-btn" onClick={handleBack}>
             <iconify-icon icon="mdi:arrow-left" />
           </button>
           <div className="pkc-sp-title-wrap">
             <p className="pkc-sp-subtitle">
               Package: <strong>{pkg.name}</strong>{selectedSize ? ` · ${selectedSize}` : ''}
             </p>
-            <h3 className="pkc-sp-title">เลือกสินค้าที่ต้องการใช้ Package นี้</h3>
+            <h3 className="pkc-sp-title">
+              {!projectId ? 'เลือกโปรเจกต์ที่ต้องการใช้ Package นี้' : 'เลือกสินค้าที่ต้องการใช้ Package นี้'}
+            </h3>
           </div>
           <button className="pkc-modal-close" onClick={onClose}>
             <iconify-icon icon="mdi:close" />
@@ -570,6 +613,47 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
               <iconify-icon icon="mdi:check-circle" style={{ fontSize: '52px', color: '#4caf50' }} />
               <p>{successMsg}</p>
             </div>
+          ) : !projectId ? (
+            /* ── ขั้นตอนเลือกโปรเจกต์ (มาจากหน้า /package) ── */
+            loadingProjects ? (
+              <div className="pkc-sp-loading">
+                <iconify-icon icon="mdi:loading" style={{ fontSize: '36px', color: '#c94f24', animation: 'pkc-spin 1s linear infinite' }} />
+                <p>กำลังโหลดโปรเจกต์...</p>
+              </div>
+            ) : !user.user_id ? (
+              <div className="pkc-sp-empty">
+                <iconify-icon icon="mdi:account-alert-outline" style={{ fontSize: '48px', color: '#ccc' }} />
+                <p>กรุณาเข้าสู่ระบบก่อน</p>
+                <span>ต้องเข้าสู่ระบบเพื่อเลือก Package ให้สินค้าในโปรเจกต์ของคุณ</span>
+              </div>
+            ) : projects.length === 0 ? (
+              <div className="pkc-sp-empty">
+                <iconify-icon icon="mdi:folder-alert-outline" style={{ fontSize: '48px', color: '#ccc' }} />
+                <p>ยังไม่มีโปรเจกต์</p>
+                <span>กรุณาสร้างโปรเจกต์ใน "Your Projects" ก่อน</span>
+              </div>
+            ) : (
+              <div className="pkc-sp-product-grid">
+                {projects.map((proj) => (
+                  <div
+                    key={proj.project_id}
+                    className="pkc-sp-product-card"
+                    onClick={() => setProjectId(proj.project_id)}
+                  >
+                    <div className="pkc-sp-product-img">
+                      {proj.image_logo
+                        ? <img src={resolveImg(proj.image_logo)} alt={proj.project_name} />
+                        : <iconify-icon icon="mdi:folder-outline" style={{ fontSize: '32px', color: '#ccc' }} />
+                      }
+                    </div>
+                    <div className="pkc-sp-product-info">
+                      <p className="pkc-sp-product-type">โปรเจกต์</p>
+                      <h4 className="pkc-sp-product-name">{proj.project_name || proj.brand_name || 'โปรเจกต์ยังไม่ได้ตั้งชื่อ'}</h4>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           ) : loading ? (
             <div className="pkc-sp-loading">
               <iconify-icon icon="mdi:loading" style={{ fontSize: '36px', color: '#c94f24', animation: 'pkc-spin 1s linear infinite' }} />
@@ -614,7 +698,7 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
         </div>
         {!successMsg && !loading && products.length > 0 && (
           <div className="pkc-sp-footer">
-            <button className="pkc-sp-cancel-btn" onClick={onBack}>ย้อนกลับ</button>
+            <button className="pkc-sp-cancel-btn" onClick={handleBack}>ย้อนกลับ</button>
             <button
               className="pkc-sp-confirm-btn"
               onClick={handleConfirm}
@@ -634,12 +718,22 @@ function SelectProductModal({ pkg, selectedSize, onBack, onClose }) {
 
 // ─── Package Detail Modal ──────────────────────────────────────
 function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
+  const navigate = useNavigate();
   const [activeMaterialIdx, setActiveMaterialIdx] = useState(0);
   const [activeImgIdx, setActiveImgIdx]           = useState(0);
   const [activeSize, setActiveSize]               = useState(null);
   const [lightboxOpen, setLightboxOpen]           = useState(false);
   const [showSelectProduct, setShowSelectProduct] = useState(false);
-  const mat = pkg.materials[activeMaterialIdx];
+  const mat = pkg.materials[activeMaterialIdx] || { images: [], sizes: [] };
+  const matImages = (mat.images || []).map(resolveImg);
+
+  // กดที่โปรไฟล์ผู้โพสต์ -> ไปหน้าโปรไฟล์โรงพิมพ์ (feature 4)
+  const goToPoster = () => {
+    if (pkg.poster?.third_party_id) {
+      onClose();
+      navigate(`/printshop/${pkg.poster.third_party_id}`);
+    }
+  };
 
   const handleMaterial = useCallback((idx) => {
     setActiveMaterialIdx(idx);
@@ -669,7 +763,7 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
   return (
     <>
     {lightboxOpen && (
-      <Lightbox images={mat.images} startIdx={activeImgIdx} onClose={() => setLightboxOpen(false)} />
+      <Lightbox images={matImages} startIdx={activeImgIdx} onClose={() => setLightboxOpen(false)} />
     )}
     <div className="pkc-modal-backdrop" onClick={onClose}>
       <div className="pkc-modal" onClick={e => e.stopPropagation()}>
@@ -684,7 +778,7 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
           <div className="pkc-modal-left">
             <div className="pkc-main-img-wrap" onClick={() => setLightboxOpen(true)} style={{cursor:'zoom-in'}}>
               <img
-                src={mat.images[activeImgIdx]}
+                src={matImages[activeImgIdx]}
                 alt={pkg.name}
                 className="pkc-main-img"
                 loading="lazy"
@@ -694,7 +788,7 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
               </button>
             </div>
             <div className="pkc-thumbs">
-              {mat.images.map((img, i) => (
+              {matImages.map((img, i) => (
                 <button
                   key={i}
                   className={`pkc-thumb-btn${activeImgIdx === i ? ' pkc-thumb-active' : ''}`}
@@ -710,6 +804,20 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
             <CategoryBadges categories={pkg.categories} />
             <p className="pkc-modal-type">{pkg.type}</p>
             <h2 className="pkc-modal-name">{pkg.name}</h2>
+            {/* ผู้โพสต์ (โรงพิมพ์) — กดเพื่อไปหน้าโปรไฟล์ (feature 4) */}
+            {pkg.poster && (
+              <button type="button" className="pkc-poster-bar" onClick={goToPoster} title="ดูโปรไฟล์โรงพิมพ์">
+                {pkg.poster.image_profile
+                  ? <img src={resolveImg(pkg.poster.image_profile)} alt={pkg.poster.third_party_name} className="pkc-poster-avatar" />
+                  : <span className="pkc-poster-avatar pkc-poster-avatar-fallback"><iconify-icon icon="solar:shop-2-linear" /></span>
+                }
+                <span className="pkc-poster-info">
+                  <span className="pkc-poster-by">โพสต์โดยโรงพิมพ์</span>
+                  <span className="pkc-poster-name">{pkg.poster.third_party_name}</span>
+                </span>
+                <span className="pkc-poster-cta">ดูโปรไฟล์ <iconify-icon icon="mdi:arrow-right" /></span>
+              </button>
+            )}
             {pkg.materials.length > 1 && (
               <div className="pkc-section">
                 <p className="pkc-section-label">วัสดุ</p>
@@ -756,7 +864,7 @@ function PackageDetailModal({ pkg, liked, onToggleLike, onClose }) {
 
 // ─── Package Card with hold-to-cycle ──────────────────────────
 function PackageCard({ pkg, liked, onToggleLike, onOpen }) {
-  const images = pkg.materials[0].images;
+  const images = (pkg.materials[0]?.images || []).map(resolveImg);
   const imgIdxRef = useRef(0);
   const [imgIdx, setImgIdx] = useState(0);
   const intervalRef = useRef(null);
@@ -862,16 +970,38 @@ function PackageCard({ pkg, liked, onToggleLike, onOpen }) {
 }
 
 // ─── PackageCatalog — content only (no navbar/sidebar/tabs) ───
-export function PackageCatalog() {
+export function PackageCatalog({ refreshSignal = 0 } = {}) {
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [likedIds, setLikedIds] = useState(new Set());
+  const [packages, setPackages] = useState([]);
+  const [loadingPkgs, setLoadingPkgs] = useState(true);
+
+  // ดึง package ทั้งหมดจาก API (admin + โรงพิมพ์) แทน data hardcoded
+  useEffect(() => {
+    let alive = true;
+    setLoadingPkgs(true);
+    fetch(`${API_BASE}/api/packages`)
+      .then(r => r.json())
+      .then(data => {
+        if (!alive) return;
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          // กรองเฉพาะ package ที่มี material อย่างน้อย 1 (กัน card พัง)
+          setPackages(data.data.filter(p => p.materials && p.materials.length > 0));
+        } else {
+          setPackages(PACKAGES); // fallback
+        }
+      })
+      .catch(() => { if (alive) setPackages(PACKAGES); })
+      .finally(() => { if (alive) setLoadingPkgs(false); });
+    return () => { alive = false; };
+  }, [refreshSignal]);
 
   const filtered = useMemo(() =>
     activeFilter === 'all'
-      ? PACKAGES
-      : PACKAGES.filter(p => p.categories.includes(activeFilter)),
-    [activeFilter]
+      ? packages
+      : packages.filter(p => p.categories.includes(activeFilter)),
+    [activeFilter, packages]
   );
 
   const toggleLike = useCallback((id) => {
@@ -895,7 +1025,12 @@ export function PackageCatalog() {
           )}
         </div>
         <div className="pkc-grid">
-          {filtered.length === 0 ? (
+          {loadingPkgs ? (
+            <div className="pkc-empty">
+              <iconify-icon icon="mdi:loading" class="pkc-empty-icon" style={{ animation: 'pkc-spin 1s linear infinite' }} />
+              <div className="pkc-empty-text">กำลังโหลด Package...</div>
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="pkc-empty">
               <iconify-icon icon="mdi:package-variant-remove" class="pkc-empty-icon" />
               <div className="pkc-empty-text">ไม่พบ Package ในหมวดนี้</div>

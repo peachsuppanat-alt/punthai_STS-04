@@ -214,7 +214,15 @@ export const Profile = ({ user, setUser }) => {
               <span className="pf-icon"><iconify-icon icon="solar:user-linear"></iconify-icon></span>
               <span className="pf-text">Profile</span>
             </li>
-            
+
+            {/* เมนูเฉพาะโรงพิมพ์ (Third Party) */}
+            {(userData.role === 'printshop' || userData.account_type === 'printshop') && (
+              <li onClick={() => navigate('/my-package')} style={{ cursor: 'pointer' }}>
+                <span className="pf-icon"><iconify-icon icon="mdi:package-variant-closed"></iconify-icon></span>
+                <span className="pf-text">My Package</span>
+              </li>
+            )}
+
             <li onClick={() => navigate('/settings')} style={{ cursor: 'pointer' }}>
               <span className="pf-icon"><iconify-icon icon="mdi:cog-outline"></iconify-icon></span>
               <span className="pf-text">Settings</span>

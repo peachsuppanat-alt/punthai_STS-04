@@ -135,10 +135,18 @@ app.post('/api/register', upload.single('img_profile'), async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-    const { user_name, password } = req.body;
+    // รองรับช่อง login เดียว: รับได้ทั้ง username หรือ email (feature 1)
+    const identifier = req.body.identifier || req.body.user_name || req.body.email;
+    const { password } = req.body;
+    if (!identifier || !password) {
+        return res.status(400).json({ status: 'error', message: 'กรุณากรอกชื่อผู้ใช้/อีเมล และรหัสผ่าน' });
+    }
     try {
         const connection = await pool.getConnection();
-        const [rows] = await connection.query('SELECT * FROM user_profile WHERE user_name = ?', [user_name]);
+        const [rows] = await connection.query(
+            'SELECT * FROM user_profile WHERE user_name = ? OR email = ?',
+            [identifier, identifier]
+        );
 
         if (rows.length > 0) {
             const user = rows[0];
@@ -161,7 +169,7 @@ app.post('/api/login', async (req, res) => {
                         const salt = await bcrypt.genSalt(10);
                         const newHashedPassword = await bcrypt.hash(password, salt);
                         await connection.query('UPDATE user_profile SET password = ? WHERE user_id = ?', [newHashedPassword, user.user_id]);
-                        console.log(`✅ อัปเกรดความปลอดภัยให้บัญชีเก่า: ${user_name} เรียบร้อยแล้ว!`);
+                        console.log(`✅ อัปเกรดความปลอดภัยให้บัญชีเก่า: ${user.user_name} เรียบร้อยแล้ว!`);
                     } catch (hashErr) {
                         console.error("Auto-migrate password error:", hashErr);
                     }
@@ -173,6 +181,21 @@ app.post('/api/login', async (req, res) => {
                 try {
                     await connection.query('UPDATE user_profile SET last_active_at = NOW() WHERE user_id = ?', [user.user_id]);
                 } catch (e) { /* column อาจยังไม่มี */ }
+
+                // ถ้าเป็นบัญชีโรงพิมพ์ (Third Party) แนบ role + third_party_id ให้ Frontend (feature 1)
+                if (user.account_type === 'printshop') {
+                    try {
+                        const [tpRows] = await connection.query(
+                            'SELECT third_party_id, phone, address, map_url, line_id, facebook, website, about, open_hours FROM third_party WHERE user_id = ?',
+                            [user.user_id]
+                        );
+                        if (tpRows.length > 0) {
+                            user.role = 'printshop';
+                            user.third_party_id = tpRows[0].third_party_id;
+                            Object.assign(user, tpRows[0]);
+                        }
+                    } catch (e) { /* third_party.user_id อาจยังไม่ได้ migrate */ }
+                }
             }
             connection.release();
 
@@ -665,6 +688,7 @@ ${productsText}
         });
     } catch (err) {
         console.error("Brand DNA Full Error:", err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/generate-brand-dna', usageType: 'text', modelName: 'gemini-2.5-flash', feature: 'brand_dna', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         res.status(500).json({ status: 'error', message: 'AI processing error' });
     }
 });
@@ -796,6 +820,7 @@ app.get('/api/recommend-assets/:projectId', async (req, res) => {
         });
     } catch (err) {
         console.error("Recommend assets error:", err);
+        logGeminiUsage({ userId: null, projectId: req.body?.project_id, endpoint: '/api/recommend-assets', usageType: 'text', modelName: 'gemini-2.5-flash', feature: 'recommend_assets', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -905,6 +930,7 @@ app.post('/api/generate-brand-names', async (req, res) => {
         res.json({ status: 'success', message: 'สร้างชื่อสำเร็จ' });
     } catch (err) {
         console.error("Generate Name Error:", err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/generate-brand-names', usageType: 'text', modelName: 'gemini-2.5-flash', feature: 'brand_names', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการสร้างชื่อ' });
     }
 });
@@ -1422,6 +1448,7 @@ app.get('/api/generate-logo', async (req, res) => {
         res.end();
     } catch (err) {
         console.error("Generate Logo Error:", err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/generate-logo', usageType: 'image', modelName: 'gemini-2.5-flash', feature: 'logo', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         sendEvent('error', { status: 'error', message: 'เกิดข้อผิดพลาดในการสร้างโลโก้: ' + (err.message || 'Unknown error') });
         res.end();
     }
@@ -1542,6 +1569,160 @@ app.post('/api/package-catalog', async (req, res) => {
         res.json({ status: 'success' });
     } catch (err) {
         console.error('Package catalog error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ================= API PACKAGES (public list + third-party create) =================
+// GET /api/packages — รายการ package ทั้งหมดที่ active (admin + โรงพิมพ์)
+// คืนรูปแบบเดียวกับ PACKAGES array เดิมใน Frontend + ข้อมูลผู้โพสต์ (poster)
+app.get('/api/packages', async (req, res) => {
+    const { thirdparty_id } = req.query;
+    try {
+        const connection = await pool.getConnection();
+
+        let where = 'WHERE p.is_active = 1';
+        const params = [];
+        if (thirdparty_id) { where += ' AND p.thirdparty_id = ?'; params.push(thirdparty_id); }
+
+        const [pkgs] = await connection.query(
+            `SELECT p.id, p.name, p.type, p.categories, p.thumbnail, p.thirdparty_id,
+                    tp.third_party_name AS poster_name, tp.image_profile AS poster_image
+             FROM packages p
+             LEFT JOIN third_party tp ON p.thirdparty_id = tp.third_party_id
+             ${where}
+             ORDER BY p.created_at DESC`, params
+        );
+
+        if (pkgs.length === 0) { connection.release(); return res.json({ status: 'success', data: [] }); }
+
+        const pkgIds = pkgs.map(p => p.id);
+        const [materials] = await connection.query(
+            `SELECT id, package_id, name, detail, package_type, sort_order,
+                    dieline_width_mm, dieline_height_mm, panels_json, bleed_mm, safe_zone_mm
+             FROM package_materials WHERE package_id IN (?) ORDER BY sort_order ASC`, [pkgIds]
+        );
+        const matIds = materials.map(m => m.id);
+        let sizes = [], images = [];
+        if (matIds.length > 0) {
+            [sizes] = await connection.query(
+                `SELECT material_id, size_label FROM package_material_sizes WHERE material_id IN (?) ORDER BY sort_order ASC`, [matIds]
+            );
+            [images] = await connection.query(
+                `SELECT material_id, image_path FROM package_material_images WHERE material_id IN (?) ORDER BY sort_order ASC`, [matIds]
+            );
+        }
+        connection.release();
+
+        const data = pkgs.map(p => {
+            const mats = materials.filter(m => m.package_id === p.id).map(m => ({
+                name: m.name,
+                detail: m.detail,
+                package_type: m.package_type,
+                images: images.filter(i => i.material_id === m.id).map(i => i.image_path),
+                sizes: sizes.filter(s => s.material_id === m.id).map(s => s.size_label),
+            }));
+            let cats = [];
+            try { cats = typeof p.categories === 'string' ? JSON.parse(p.categories) : (p.categories || []); } catch (e) { cats = []; }
+            return {
+                id: p.id,
+                name: p.name,
+                type: p.type,
+                categories: cats,
+                thumbnail: p.thumbnail,
+                thirdparty_id: p.thirdparty_id,
+                poster: p.thirdparty_id ? {
+                    third_party_id: p.thirdparty_id,
+                    third_party_name: p.poster_name,
+                    image_profile: p.poster_image,
+                } : null,
+                materials: mats,
+            };
+        });
+        res.json({ status: 'success', data });
+    } catch (err) {
+        console.error('Packages list error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// POST /api/packages — โรงพิมพ์เพิ่ม package เอง (feature 3)
+// multipart: thumbnail (1 ไฟล์) + images[] (รูป material) + fields (JSON บางส่วน)
+app.post('/api/packages', upload.fields([{ name: 'thumbnail', maxCount: 1 }, { name: 'images', maxCount: 12 }]), async (req, res) => {
+    const { thirdparty_id, name, type } = req.body;
+    if (!thirdparty_id || !name || !type) {
+        return res.status(400).json({ status: 'error', message: 'กรุณากรอก ชื่อ, ประเภท และต้องเป็นบัญชีโรงพิมพ์' });
+    }
+
+    // parse JSON fields
+    const parseJSON = (v, fb) => { try { return v ? JSON.parse(v) : fb; } catch (e) { return fb; } };
+    const categories = parseJSON(req.body.categories, []);
+    const sizes = parseJSON(req.body.sizes, []);          // array ของ label เช่น ["50g","100g"]
+    const material_name = req.body.material_name || name;
+    const material_detail = req.body.material_detail || '';
+    const package_type = req.body.package_type || 'flat';
+    const dieline_width_mm = req.body.dieline_width_mm || null;
+    const dieline_height_mm = req.body.dieline_height_mm || null;
+
+    // panels_json: ถ้าโรงพิมพ์ไม่ได้ส่งมา และมีขนาด ให้สร้าง panel เริ่มต้น 1 ช่อง
+    // เพื่อให้ใช้กับ Label Editor ได้ (feature: โพสต์แบบเต็ม)
+    let panels_json = req.body.panels_json || null;
+    if (!panels_json && dieline_width_mm && dieline_height_mm) {
+        panels_json = JSON.stringify([
+            { id: 'front', label: 'ด้านหน้า', x_mm: 0, y_mm: 0,
+              w_mm: Number(dieline_width_mm), h_mm: Number(dieline_height_mm), is_label_target: true }
+        ]);
+    }
+
+    const thumbFile = req.files?.thumbnail?.[0];
+    const imageFiles = req.files?.images || [];
+    const thumbPath = thumbFile ? `/uploads/${thumbFile.filename}` : '';
+    const imagePaths = imageFiles.map(f => `/uploads/${f.filename}`);
+    // ใช้รูปแรกเป็น thumbnail ถ้าไม่ได้อัปโหลด thumbnail แยก
+    const finalThumb = thumbPath || imagePaths[0] || '';
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const [pkgResult] = await connection.query(
+            `INSERT INTO packages (name, type, categories, thumbnail, thirdparty_id, is_active)
+             VALUES (?, ?, ?, ?, ?, 1)`,
+            [name, type, JSON.stringify(categories), finalThumb, thirdparty_id]
+        );
+        const packageId = pkgResult.insertId;
+
+        const [matResult] = await connection.query(
+            `INSERT INTO package_materials
+                (package_id, name, detail, sort_order, package_type, dieline_width_mm, dieline_height_mm, panels_json)
+             VALUES (?, ?, ?, 0, ?, ?, ?, ?)`,
+            [packageId, material_name, material_detail, package_type, dieline_width_mm, dieline_height_mm, panels_json]
+        );
+        const materialId = matResult.insertId;
+
+        for (let j = 0; j < sizes.length; j++) {
+            const label = typeof sizes[j] === 'string' ? sizes[j] : sizes[j].size_label;
+            if (label) {
+                await connection.query(
+                    `INSERT INTO package_material_sizes (material_id, size_label, sort_order) VALUES (?, ?, ?)`,
+                    [materialId, label, j]
+                );
+            }
+        }
+        for (let k = 0; k < imagePaths.length; k++) {
+            await connection.query(
+                `INSERT INTO package_material_images (material_id, image_path, sort_order) VALUES (?, ?, ?)`,
+                [materialId, imagePaths[k], k]
+            );
+        }
+
+        await connection.commit();
+        connection.release();
+        res.json({ status: 'success', message: 'เพิ่ม package สำเร็จ', packageId });
+    } catch (err) {
+        try { await connection.rollback(); } catch (e) {}
+        connection.release();
+        console.error('Create Package (third-party) error:', err);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -2051,6 +2232,78 @@ app.get('/api/admin/gemini/summary', async (req, res) => {
     }
 });
 
+// Gemini error timeline (grouped by error_code per day)
+app.get('/api/admin/gemini/error-timeline', async (req, res) => {
+    const days = parseInt(req.query.days) || 30;
+    try {
+        const connection = await pool.getConnection();
+        const [rows] = await connection.query(`
+            SELECT DATE(created_at) as date,
+                   COALESCE(error_code, 500) as error_code,
+                   COUNT(*) as count
+            FROM gemini_usage_logs
+            WHERE status = 'failed'
+              AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY DATE(created_at), COALESCE(error_code, 500)
+            ORDER BY date ASC, error_code ASC
+        `, [days]);
+        connection.release();
+        res.json({ status: 'success', data: rows });
+    } catch (err) {
+        console.error("Gemini Error Timeline Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Gemini error summary (total errors, by code, by feature)
+app.get('/api/admin/gemini/error-summary', async (req, res) => {
+    const days = parseInt(req.query.days) || 30;
+    try {
+        const connection = await pool.getConnection();
+        const [total] = await connection.query(`
+            SELECT COUNT(*) as count FROM gemini_usage_logs
+            WHERE status = 'failed' AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        `, [days]);
+        const [byCode] = await connection.query(`
+            SELECT COALESCE(error_code, 500) as error_code, COUNT(*) as count
+            FROM gemini_usage_logs
+            WHERE status = 'failed' AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY COALESCE(error_code, 500) ORDER BY count DESC
+        `, [days]);
+        const [byFeature] = await connection.query(`
+            SELECT feature, COUNT(*) as count
+            FROM gemini_usage_logs
+            WHERE status = 'failed' AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+            GROUP BY feature ORDER BY count DESC
+        `, [days]);
+        const [recentErrors] = await connection.query(`
+            SELECT g.*, u.user_name
+            FROM gemini_usage_logs g
+            LEFT JOIN user_profile u ON g.user_id = u.user_id
+            WHERE g.status = 'failed'
+            ORDER BY g.created_at DESC LIMIT 20
+        `);
+        const [todayCount] = await connection.query(`
+            SELECT COUNT(*) as count FROM gemini_usage_logs
+            WHERE status = 'failed' AND DATE(created_at) = CURDATE()
+        `);
+        connection.release();
+        res.json({
+            status: 'success',
+            data: {
+                total: total[0].count,
+                today: todayCount[0].count,
+                byCode,
+                byFeature,
+                recentErrors
+            }
+        });
+    } catch (err) {
+        console.error("Gemini Error Summary Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
 // Subscription signups over time
 app.get('/api/admin/subscriptions/signups', async (req, res) => {
     const days = parseInt(req.query.days) || 30;
@@ -2125,22 +2378,134 @@ app.get('/api/admin/payments', async (req, res) => {
     }
 });
 
-// Omise webhook logs (paginated)
+// Payment error summary for admin dashboard
+app.get('/api/admin/payment-errors/summary', async (req, res) => {
+    const days = parseInt(req.query.days) || 30;
+    try {
+        const connection = await pool.getConnection();
+        const [total] = await connection.query(
+            `SELECT COUNT(*) as count FROM payment_error_logs WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`, [days]
+        );
+        const [today] = await connection.query(
+            `SELECT COUNT(*) as count FROM payment_error_logs WHERE DATE(created_at) = CURDATE()`
+        );
+        const [byType] = await connection.query(
+            `SELECT error_type, COUNT(*) as count FROM payment_error_logs
+             WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+             GROUP BY error_type ORDER BY count DESC`, [days]
+        );
+        const [byEndpoint] = await connection.query(
+            `SELECT endpoint, COUNT(*) as count FROM payment_error_logs
+             WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+             GROUP BY endpoint ORDER BY count DESC`, [days]
+        );
+        const [timeline] = await connection.query(
+            `SELECT DATE(created_at) as date, error_type, COUNT(*) as count
+             FROM payment_error_logs
+             WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+             GROUP BY DATE(created_at), error_type
+             ORDER BY date ASC`, [days]
+        );
+        const [recent] = await connection.query(
+            `SELECT e.*, u.user_name, u.email
+             FROM payment_error_logs e
+             LEFT JOIN user_profile u ON e.user_id = u.user_id
+             ORDER BY e.created_at DESC LIMIT 20`
+        );
+        connection.release();
+        res.json({
+            status: 'success',
+            data: { total: total[0].count, today: today[0].count, byType, byEndpoint, timeline, recent }
+        });
+    } catch (err) {
+        console.error("Payment Error Summary:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Omise webhook logs (paginated + parsed)
 app.get('/api/admin/webhooks', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
+    const eventFilter = req.query.event || '';
     const offset = (page - 1) * limit;
     try {
         const connection = await pool.getConnection();
-        const [countRows] = await connection.query("SELECT COUNT(*) as total FROM omise_webhook_logs");
+        const whereClause = eventFilter ? 'WHERE event_key = ?' : '';
+        const whereParams = eventFilter ? [eventFilter] : [];
+
+        const [countRows] = await connection.query(
+            `SELECT COUNT(*) as total FROM omise_webhook_logs ${whereClause}`, whereParams
+        );
         const [rows] = await connection.query(
-            "SELECT * FROM omise_webhook_logs ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            [limit, offset]
+            `SELECT * FROM omise_webhook_logs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+            [...whereParams, limit, offset]
         );
         connection.release();
-        res.json({ status: 'success', data: rows, total: countRows[0].total, page, limit });
+
+        // Parse JSON data to extract useful fields
+        const parsed = rows.map(row => {
+            let chargeStatus = null, chargeAmount = null, userId = null, failureCode = null, paymentMethod = null;
+            try {
+                const d = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+                if (d?.data) {
+                    chargeStatus = d.data.status || null;
+                    chargeAmount = d.data.amount ? (d.data.amount / 100) : null;
+                    userId = d.data.metadata?.user_id || null;
+                    failureCode = d.data.failure_code || null;
+                    paymentMethod = d.data.source?.type || (d.data.card ? 'credit_card' : null);
+                }
+            } catch {}
+            return { ...row, charge_status: chargeStatus, charge_amount: chargeAmount, metadata_user_id: userId, failure_code: failureCode, payment_method: paymentMethod };
+        });
+
+        res.json({ status: 'success', data: parsed, total: countRows[0].total, page, limit });
     } catch (err) {
         console.error("Webhooks Error:", err);
+        res.status(500).json({ status: 'error' });
+    }
+});
+
+// Omise webhook summary (for dashboard charts)
+app.get('/api/admin/webhooks/summary', async (req, res) => {
+    const days = parseInt(req.query.days) || 30;
+    try {
+        const connection = await pool.getConnection();
+        const [total] = await connection.query('SELECT COUNT(*) as count FROM omise_webhook_logs');
+        const [today] = await connection.query('SELECT COUNT(*) as count FROM omise_webhook_logs WHERE DATE(created_at) = CURDATE()');
+        const [byEvent] = await connection.query(
+            `SELECT event_key, COUNT(*) as count FROM omise_webhook_logs
+             WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+             GROUP BY event_key ORDER BY count DESC`, [days]
+        );
+        const [timeline] = await connection.query(
+            `SELECT DATE(created_at) as date, event_key, COUNT(*) as count
+             FROM omise_webhook_logs
+             WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+             GROUP BY DATE(created_at), event_key ORDER BY date ASC`, [days]
+        );
+        // Count successful vs failed charges from webhook data
+        const [chargeResults] = await connection.query(
+            `SELECT
+                SUM(CASE WHEN JSON_UNQUOTE(JSON_EXTRACT(data, '$.data.status')) = 'successful' THEN 1 ELSE 0 END) as successful,
+                SUM(CASE WHEN JSON_UNQUOTE(JSON_EXTRACT(data, '$.data.status')) = 'failed' THEN 1 ELSE 0 END) as failed,
+                SUM(CASE WHEN JSON_UNQUOTE(JSON_EXTRACT(data, '$.data.status')) NOT IN ('successful','failed') THEN 1 ELSE 0 END) as other
+             FROM omise_webhook_logs
+             WHERE event_key = 'charge.complete' AND created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`, [days]
+        );
+        connection.release();
+        res.json({
+            status: 'success',
+            data: {
+                total: total[0].count,
+                today: today[0].count,
+                byEvent,
+                timeline,
+                chargeResults: chargeResults[0] || { successful: 0, failed: 0, other: 0 }
+            }
+        });
+    } catch (err) {
+        console.error("Webhook Summary Error:", err);
         res.status(500).json({ status: 'error' });
     }
 });
@@ -2383,6 +2748,7 @@ app.post('/api/generate-label-content', async (req, res) => {
         res.json({ status: 'success', data: aiData });
     } catch (err) {
         console.error("Gemini Label Error:", err);
+        logGeminiUsage({ userId: null, projectId: null, endpoint: '/api/generate-label-content', usageType: 'text', modelName: 'gemini-1.5-flash-8b', feature: 'label_content', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         res.status(500).json({ status: 'error', message: 'เกิดข้อผิดพลาดในการประมวลผลข้อความ' });
     }
 });
@@ -2402,7 +2768,7 @@ app.get('/api/bg-presets', async (req, res) => {
     }
 });
 
-// 3. Generate label background ด้วย DALL-E 3
+// 3. Generate label background
 app.post('/api/generate-label-background', async (req, res) => {
     const { project_id, user_id, style = 'minimal', tone = 'auto', density = 'medium' } = req.body;
     if (!project_id) return res.status(400).json({ status: 'error', message: 'project_id is required' });
@@ -2437,6 +2803,7 @@ app.post('/api/generate-label-background', async (req, res) => {
             ? [colorRows[0].color_code_1, colorRows[0].color_code_2, colorRows[0].color_code_3,
             colorRows[0].color_code_4, colorRows[0].color_code_5].filter(Boolean).join(', ')
             : '#F5E6D3, #C9A678, #8B6F47';
+            // ใช่สีพื้นหลังใช่ไหม?
 
         connection.release();
         connection = null;
@@ -2511,6 +2878,7 @@ ${toneMap[tone] ? 'TONE: ' + toneMap[tone] : ''}
     } catch (err) {
         if (connection) connection.release();
         console.error("Generate Label BG Error:", err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/generate-label-background', usageType: 'image', modelName: 'gemini-2.5-flash-image', feature: 'label_bg', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         res.status(500).json({ status: 'error', message: err.message || 'DALL-E error' });
     }
 });
@@ -2862,6 +3230,7 @@ STRICT RULES:
     } catch (err) {
         if (conn) conn.release();
         console.error('Pattern Gen Error:', err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/mockup/generate-pattern', usageType: 'image', modelName: 'gemini-2.5-flash-image', feature: 'mockup_pattern', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -2943,6 +3312,7 @@ STRICT RULES:
     } catch (err) {
         if (conn) conn.release();
         console.error('Dieline BG Gen Error:', err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/mockup/generate-dieline-bg', usageType: 'image', modelName: 'gemini-2.5-flash-image', feature: 'dieline_bg', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -3193,6 +3563,7 @@ PHOTOGRAPHY: Professional studio photo, soft lighting, shadow under product, sha
         res.end();
     } catch (err) {
         console.error('Package Mockup Error:', err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/mockup/generate-package-mockup', usageType: 'image', modelName: 'gemini-3.1-flash-image-preview', feature: 'package_mockup', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         sendEvent('error', { message: err.message });
         res.end();
     }
@@ -3475,6 +3846,7 @@ app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
         c2.release();
 
         // Send file directly as download
+        
         const mimeType = format === 'ai' ? 'application/illustrator' : 'application/pdf';
         res.setHeader('Content-Type', mimeType);
         res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
@@ -3787,6 +4159,7 @@ Professional studio photography, white background, soft lighting, no people/hand
         res.end();
     } catch (err) {
         console.error('AI Mockup Error:', err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/mockup/generate-ai-image', usageType: 'image', modelName: 'gemini-3.1-flash-image-preview', feature: 'mockup_ai', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         sendEvent('error', { message: err.message });
         res.end();
     }
@@ -4307,6 +4680,7 @@ app.post('/api/content-online/generate', async (req, res) => {
 
     } catch (err) {
         console.error('Content-online generate error:', err);
+        logGeminiUsage({ userId: req.body?.user_id, projectId: req.body?.project_id, endpoint: '/api/content-online/generate', usageType: 'image', modelName: 'gemini-3.1-flash-image-preview', feature: 'content_online', status: 'failed', errorCode: extractErrorCode(err), errorMessage: err.message });
         sendEvent('error', { message: err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่' });
         res.end();
     }
@@ -4440,6 +4814,29 @@ app.put('/api/user/notifications/:userId/read-all', async (req, res) => {
     }
 });
 
+// ================= PAYMENT ERROR LOGGING =================
+
+async function logPaymentError({ userId, endpoint, errorType, errorCode, errorMessage, chargeId, amount, metadata }) {
+    try {
+        const conn = await pool.getConnection();
+        try {
+            await conn.query(
+                `INSERT INTO payment_error_logs (user_id, endpoint, error_type, error_code, error_message, charge_id, amount, metadata)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId || null, endpoint, errorType || 'unknown', errorCode || null,
+                 typeof errorMessage === 'string' ? errorMessage.substring(0, 2000) : null,
+                 chargeId || null, amount || null, metadata ? JSON.stringify(metadata) : null]
+            );
+        } catch (colErr) {
+            // Table may not exist yet — silently skip
+            console.warn('logPaymentError: table may not exist:', colErr.message);
+        }
+        conn.release();
+    } catch (err) {
+        console.warn('logPaymentError warning:', err.message);
+    }
+}
+
 // ================= SUBSCRIPTION & PAYMENT (Omise) =================
 
 const QUOTA_LIMITS = {
@@ -4564,21 +4961,47 @@ async function trackGeneration(userId, feature, projectId, usageType = 'image') 
     }
 })();
 
-async function logGeminiUsage({ userId, projectId, endpoint, usageType, modelName, feature, promptSent, responseSummary, status = 'success' }) {
+async function logGeminiUsage({ userId, projectId, endpoint, usageType, modelName, feature, promptSent, responseSummary, status = 'success', errorCode = null, errorMessage = null }) {
     try {
         const conn = await pool.getConnection();
-        await conn.query(
-            `INSERT INTO gemini_usage_logs (user_id, project_id, endpoint, usage_type, model_name, feature, prompt_sent, response_summary, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId || null, projectId || null, endpoint, usageType, modelName, feature || null,
-             typeof promptSent === 'string' ? promptSent.substring(0, 10000) : null,
-             typeof responseSummary === 'string' ? responseSummary.substring(0, 2000) : null,
-             status]
-        );
+        try {
+            await conn.query(
+                `INSERT INTO gemini_usage_logs (user_id, project_id, endpoint, usage_type, model_name, feature, prompt_sent, response_summary, status, error_code, error_message)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId || null, projectId || null, endpoint, usageType, modelName, feature || null,
+                 typeof promptSent === 'string' ? promptSent.substring(0, 10000) : null,
+                 typeof responseSummary === 'string' ? responseSummary.substring(0, 2000) : null,
+                 status, errorCode, typeof errorMessage === 'string' ? errorMessage.substring(0, 2000) : null]
+            );
+        } catch (colErr) {
+            // Fallback: columns error_code/error_message may not exist yet
+            await conn.query(
+                `INSERT INTO gemini_usage_logs (user_id, project_id, endpoint, usage_type, model_name, feature, prompt_sent, response_summary, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId || null, projectId || null, endpoint, usageType, modelName, feature || null,
+                 typeof promptSent === 'string' ? promptSent.substring(0, 10000) : null,
+                 typeof responseSummary === 'string' ? responseSummary.substring(0, 2000) : null,
+                 status]
+            );
+        }
         conn.release();
     } catch (err) {
         console.warn('logGeminiUsage warning:', err.message);
     }
+}
+
+// Helper: extract HTTP error code from Gemini/Google API errors
+function extractErrorCode(err) {
+    if (err?.status) return err.status;
+    if (err?.response?.status) return err.response.status;
+    if (err?.code === 'ECONNREFUSED') return 503;
+    if (err?.code === 'ETIMEDOUT' || err?.code === 'ESOCKETTIMEDOUT') return 504;
+    const match = err?.message?.match(/(\d{3})/);
+    if (match) {
+        const code = parseInt(match[1]);
+        if (code >= 400 && code <= 599) return code;
+    }
+    return 500;
 }
 
 // 1. GET subscription status
@@ -4640,6 +5063,34 @@ app.get('/api/subscription/status/:userId', async (req, res) => {
     }
 });
 
+// Helper: activate PRO subscription for a user (reusable)
+async function activateProSubscription(conn, userId, chargeId, paymentMethod) {
+    const now = new Date();
+    const endDate = new Date(now);
+    endDate.setMonth(endDate.getMonth() + 1);
+    const nextBilling = new Date(endDate);
+
+    await conn.query(
+        `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
+        [now, endDate, nextBilling, userId]
+    );
+    await conn.query(
+        `INSERT INTO payment_logs (user_id, omise_charge_id, amount_paid, package_selected, status, payment_method, omise_source_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [userId, chargeId, 129.00, 'PRO_MONTHLY', 'successful', paymentMethod, null]
+    );
+    // subscription_history — wrap in try/catch so it doesn't break the whole flow
+    try {
+        await conn.query(
+            `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, chargeId, 129.00, now, endDate, 'successful', paymentMethod]
+        );
+    } catch (histErr) {
+        console.error('subscription_history INSERT failed (non-blocking):', histErr.message);
+    }
+
+    return { now, endDate, nextBilling };
+}
+
 // 2. POST create charge (Omise)
 app.post('/api/subscription/create-charge', async (req, res) => {
     const { user_id, token, source } = req.body;
@@ -4686,27 +5137,13 @@ app.post('/api/subscription/create-charge', async (req, res) => {
         const charge = await omise.charges.create(chargeParams);
         const paymentMethod = charge.source?.type || 'credit_card';
 
-        if (charge.status === 'successful' || (charge.authorized && !charge.authorize_uri)) {
-            const now = new Date();
-            const endDate = new Date(now);
-            endDate.setMonth(endDate.getMonth() + 1);
-            const nextBilling = new Date(endDate);
+        console.log(`[Omise] Charge created: ${charge.id}, status: ${charge.status}, authorized: ${charge.authorized}, authorize_uri: ${charge.authorize_uri ? 'YES' : 'NO'}`);
 
-            await conn.query(
-                `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
-                [now, endDate, nextBilling, user_id]
-            );
-            await conn.query(
-                `INSERT INTO payment_logs (user_id, omise_charge_id, amount_paid, package_selected, status, payment_method) VALUES (?, ?, ?, ?, ?, ?)`,
-                [user_id, charge.id, 129.00, 'PRO_MONTHLY', 'successful', paymentMethod]
-            );
-            await conn.query(
-                `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [user_id, charge.id, 129.00, now, endDate, 'successful', paymentMethod]
-            );
+        if (charge.status === 'successful' || (charge.authorized && !charge.authorize_uri)) {
+            const { endDate } = await activateProSubscription(conn, user_id, charge.id, paymentMethod);
 
             // สร้าง Omise Schedule สำหรับ recurring (เฉพาะบัตรเครดิต)
-            if (token && user.omise_customer_id || chargeParams.customer) {
+            if (token && (user.omise_customer_id || chargeParams.customer)) {
                 try {
                     const scheduleEnd = new Date();
                     scheduleEnd.setFullYear(scheduleEnd.getFullYear() + 10);
@@ -4748,10 +5185,12 @@ app.post('/api/subscription/create-charge', async (req, res) => {
             [user_id, charge.id, 129.00, 'PRO_MONTHLY', charge.status, paymentMethod]
         );
         conn.release();
+        logPaymentError({ userId: user_id, endpoint: '/api/subscription/create-charge', errorType: 'charge_failed', errorCode: charge.failure_code || charge.status, errorMessage: `Charge ${charge.id} status: ${charge.status}, failure: ${charge.failure_code || 'none'}`, chargeId: charge.id, amount: 129.00 });
         return res.status(400).json({ status: 'error', message: 'การชำระเงินไม่สำเร็จ', failure_code: charge.failure_code });
     } catch (err) {
         conn.release();
         console.error('Create charge error:', err);
+        logPaymentError({ userId: req.body?.user_id, endpoint: '/api/subscription/create-charge', errorType: 'server_error', errorCode: err.code || '500', errorMessage: err.message, amount: 129.00 });
         res.status(500).json({ status: 'error', message: err.message || 'Payment processing failed' });
     }
 });
@@ -4772,17 +5211,20 @@ app.post('/api/webhook/omise', async (req, res) => {
             const charge = event.data;
             const chargeId = charge.id;
             const userId = charge.metadata?.user_id;
+            const paymentMethod = charge.source?.type || 'credit_card';
+
+            console.log(`[Webhook] charge.complete: ${chargeId}, status: ${charge.status}, userId: ${userId}`);
 
             // อัปเดต payment_logs ถ้ามี
             const [logRows] = await conn.query('SELECT * FROM payment_logs WHERE omise_charge_id = ?', [chargeId]);
+
+            // หา user_id จาก payment_logs หรือ metadata
+            const targetUserId = logRows.length ? logRows[0].user_id : (userId ? parseInt(userId) : null);
 
             if (charge.status === 'successful') {
                 if (logRows.length) {
                     await conn.query('UPDATE payment_logs SET status = ? WHERE omise_charge_id = ?', ['successful', chargeId]);
                 }
-
-                // หา user_id จาก payment_logs หรือ metadata
-                const targetUserId = logRows.length ? logRows[0].user_id : (userId ? parseInt(userId) : null);
 
                 if (targetUserId) {
                     const now = new Date();
@@ -4795,17 +5237,21 @@ app.post('/api/webhook/omise', async (req, res) => {
                         [now, endDate, nextBilling, targetUserId]
                     );
 
-                    // บันทึกลง subscription_history
-                    await conn.query(
-                        `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                        [targetUserId, chargeId, 129.00, now, endDate, 'successful', charge.source?.type || 'credit_card']
-                    );
+                    // บันทึกลง subscription_history (try/catch เพื่อไม่ให้ break flow)
+                    try {
+                        await conn.query(
+                            `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                            [targetUserId, chargeId, 129.00, now, endDate, 'successful', paymentMethod]
+                        );
+                    } catch (histErr) {
+                        console.error('Webhook subscription_history INSERT failed:', histErr.message);
+                    }
 
                     // ถ้าเป็น recurring charge จาก schedule แต่ไม่มี payment_logs → เพิ่มให้
                     if (!logRows.length) {
                         await conn.query(
                             `INSERT INTO payment_logs (user_id, omise_charge_id, amount_paid, package_selected, status, payment_method) VALUES (?, ?, ?, ?, ?, ?)`,
-                            [targetUserId, chargeId, 129.00, 'PRO_MONTHLY', 'successful', charge.source?.type || 'credit_card']
+                            [targetUserId, chargeId, 129.00, 'PRO_MONTHLY', 'successful', paymentMethod]
                         );
                     }
                 }
@@ -4813,16 +5259,19 @@ app.post('/api/webhook/omise', async (req, res) => {
                 if (logRows.length) {
                     await conn.query('UPDATE payment_logs SET status = ? WHERE omise_charge_id = ?', ['failed', chargeId]);
                 }
-                // ถ้า recurring charge fail → บันทึกไว้
-                const targetUserId = logRows.length ? logRows[0].user_id : (userId ? parseInt(userId) : null);
+                logPaymentError({ userId: targetUserId, endpoint: '/api/webhook/omise', errorType: 'charge_failed', errorCode: charge.failure_code || 'failed', errorMessage: `Webhook charge.complete failed: ${chargeId}, failure_code: ${charge.failure_code || 'unknown'}`, chargeId, amount: 129.00, metadata: { event_key: event.key } });
                 if (targetUserId) {
-                    const now = new Date();
-                    const endDate = new Date(now);
-                    endDate.setMonth(endDate.getMonth() + 1);
-                    await conn.query(
-                        `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                        [targetUserId, chargeId, 129.00, now, endDate, 'failed', charge.source?.type || 'credit_card']
-                    );
+                    try {
+                        const now = new Date();
+                        const endDate = new Date(now);
+                        endDate.setMonth(endDate.getMonth() + 1);
+                        await conn.query(
+                            `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                            [targetUserId, chargeId, 129.00, now, endDate, 'failed', paymentMethod]
+                        );
+                    } catch (histErr) {
+                        console.error('Webhook subscription_history INSERT failed:', histErr.message);
+                    }
                 }
             }
         }
@@ -4832,6 +5281,7 @@ app.post('/api/webhook/omise', async (req, res) => {
     } catch (err) {
         conn.release();
         console.error('Webhook error:', err);
+        logPaymentError({ endpoint: '/api/webhook/omise', errorType: 'webhook_error', errorCode: '500', errorMessage: err.message, metadata: { event_key: req.body?.key } });
         res.status(200).send('OK');
     }
 });
@@ -4855,26 +5305,48 @@ app.get('/api/subscription/check-payment/:chargeId', async (req, res) => {
         }
 
         const charge = await omise.charges.retrieve(chargeId);
+        console.log(`[Omise check-payment] charge ${chargeId}: status=${charge.status}, log.status=${log.status}`);
+
         if (charge.status === 'successful' && log.status !== 'successful') {
             const now = new Date();
             const endDate = new Date(now);
             endDate.setMonth(endDate.getMonth() + 1);
+            const nextBilling = new Date(endDate);
+            const paymentMethod = charge.source?.type || log.payment_method || 'credit_card';
 
             await conn.query('UPDATE payment_logs SET status = ? WHERE omise_charge_id = ?', ['successful', chargeId]);
             await conn.query(
-                `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ? WHERE user_id = ?`,
-                [now, endDate, log.user_id]
+                `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
+                [now, endDate, nextBilling, log.user_id]
             );
+
+            // เพิ่ม subscription_history (ก่อนหน้านี้ไม่มี!)
+            try {
+                await conn.query(
+                    `INSERT INTO subscription_history (user_id, charge_id, amount, billing_period_start, billing_period_end, status, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [log.user_id, chargeId, 129.00, now, endDate, 'successful', paymentMethod]
+                );
+            } catch (histErr) {
+                console.error('subscription_history INSERT failed (non-blocking):', histErr.message);
+            }
 
             const [updatedUser] = await conn.query('SELECT * FROM user_profile WHERE user_id = ?', [log.user_id]);
             conn.release();
             return res.json({ status: 'success', payment_status: 'successful', user: updatedUser[0] });
         }
 
+        if (charge.status === 'failed') {
+            await conn.query('UPDATE payment_logs SET status = ? WHERE omise_charge_id = ?', ['failed', chargeId]);
+            logPaymentError({ userId: log.user_id, endpoint: '/api/subscription/check-payment', errorType: 'charge_failed', errorCode: charge.failure_code || 'failed', errorMessage: `Check-payment: charge ${chargeId} failed, failure_code: ${charge.failure_code}`, chargeId, amount: 129.00 });
+            conn.release();
+            return res.json({ status: 'success', payment_status: 'failed', failure_code: charge.failure_code });
+        }
+
         conn.release();
         res.json({ status: 'success', payment_status: charge.status, failure_code: charge.failure_code });
     } catch (err) {
         console.error('Check payment error:', err);
+        logPaymentError({ endpoint: '/api/subscription/check-payment', errorType: 'server_error', errorCode: '500', errorMessage: err.message, chargeId: req.params.chargeId });
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -4930,6 +5402,7 @@ app.post('/api/subscription/cancel', async (req, res) => {
         });
     } catch (err) {
         conn.release();
+        logPaymentError({ userId: req.body?.user_id, endpoint: '/api/subscription/cancel', errorType: 'cancel_error', errorCode: '500', errorMessage: err.message });
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -4965,13 +5438,15 @@ app.post('/api/third-party/register', upload.single('image_profile'), async (req
         });
     }
 
+    const connection = await pool.getConnection();
     try {
-        const connection = await pool.getConnection();
-
         const [existing] = await connection.query(
             'SELECT third_party_id FROM third_party WHERE email = ?', [email]
         );
-        if (existing.length > 0) {
+        const [existingUser] = await connection.query(
+            'SELECT user_id FROM user_profile WHERE email = ?', [email]
+        );
+        if (existing.length > 0 || existingUser.length > 0) {
             connection.release();
             return res.status(400).json({ status: 'error', message: 'อีเมลนี้ถูกใช้งานแล้ว' });
         }
@@ -4979,25 +5454,41 @@ app.post('/api/third-party/register', upload.single('image_profile'), async (req
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
+        // สร้างบัญชีแบบ transaction: user_profile (account_type='printshop') ก่อน แล้วผูก third_party
+        await connection.beginTransaction();
+
+        const [userResult] = await connection.query(
+            `INSERT INTO user_profile (user_name, email, password, image_profile, subscription_status, account_type)
+             VALUES (?, ?, ?, ?, 'STANDARD', 'printshop')`,
+            [third_party_name, email, hashedPassword, image_profile]
+        );
+        const userId = userResult.insertId;
+
         const [result] = await connection.query(
-            `INSERT INTO third_party (third_party_name, email, password, phone, image_profile, subscription_status)
-             VALUES (?, ?, ?, ?, ?, 'active')`,
-            [third_party_name, email, hashedPassword, phone, image_profile]
+            `INSERT INTO third_party (third_party_name, email, password, phone, image_profile, subscription_status, user_id)
+             VALUES (?, ?, ?, ?, ?, 'active', ?)`,
+            [third_party_name, email, hashedPassword, phone, image_profile, userId]
         );
 
+        await connection.commit();
+
         const [newShop] = await connection.query(
-            'SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status FROM third_party WHERE third_party_id = ?',
+            'SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status, user_id FROM third_party WHERE third_party_id = ?',
             [result.insertId]
         );
         connection.release();
 
+        // คืน object พร้อม user_id + role ให้ Frontend ใช้งานได้ทุกฟีเจอร์เหมือน user ทั่วไป
         res.json({
             status: 'success',
             message: 'ลงทะเบียนโรงพิมพ์สำเร็จ!',
-            third_party: newShop[0]
+            third_party: newShop[0],
+            user: { ...newShop[0], user_id: userId, user_name: third_party_name, account_type: 'printshop', role: 'printshop', subscription_status: 'STANDARD' }
         });
 
     } catch (error) {
+        try { await connection.rollback(); } catch (e) {}
+        connection.release();
         console.error('Third Party Register Error:', error);
         res.status(500).json({ status: 'error', message: 'Database Error', error: error.message });
     }
@@ -5057,10 +5548,14 @@ app.post('/api/third-party/login', async (req, res) => {
         }
 
         delete shop.password;
+        // แนบ role + user_id ให้ Frontend ใช้งานได้เหมือน user ทั่วไป
+        shop.role = 'printshop';
+        shop.account_type = 'printshop';
         res.json({
             status: 'success',
             message: 'เข้าสู่ระบบสำเร็จ!',
-            third_party: shop
+            third_party: shop,
+            user: { ...shop }
         });
 
     } catch (error) {
@@ -5075,7 +5570,9 @@ app.get('/api/third-party/:id', async (req, res) => {
     try {
         const connection = await pool.getConnection();
         const [rows] = await connection.query(
-            'SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status FROM third_party WHERE third_party_id = ?',
+            `SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status,
+                    user_id, address, map_url, line_id, facebook, website, about, open_hours
+             FROM third_party WHERE third_party_id = ?`,
             [id]
         );
         connection.release();
@@ -5093,7 +5590,7 @@ app.get('/api/third-party/:id', async (req, res) => {
 // PUT /api/third-party/:id — แก้ไขข้อมูลโรงพิมพ์
 app.put('/api/third-party/:id', upload.single('image_profile'), async (req, res) => {
     const { id } = req.params;
-    const { third_party_name, phone, password } = req.body;
+    const { third_party_name, phone, password, address, map_url, line_id, facebook, website, about, open_hours } = req.body;
     const image_profile = req.file ? req.file.filename : null;
 
     try {
@@ -5103,8 +5600,16 @@ app.put('/api/third-party/:id', upload.single('image_profile'), async (req, res)
         const params = [];
 
         if (third_party_name) { fields.push('third_party_name = ?'); params.push(third_party_name); }
-        if (phone)             { fields.push('phone = ?');            params.push(phone); }
-        if (image_profile)     { fields.push('image_profile = ?');    params.push(image_profile); }
+        if (phone !== undefined)      { fields.push('phone = ?');      params.push(phone); }
+        if (image_profile)            { fields.push('image_profile = ?'); params.push(image_profile); }
+        // ฟิลด์ที่ตั้ง/ช่องทางติดต่อ (feature 5) — เจ้าของกรอกเอง
+        if (address !== undefined)    { fields.push('address = ?');    params.push(address); }
+        if (map_url !== undefined)    { fields.push('map_url = ?');    params.push(map_url); }
+        if (line_id !== undefined)    { fields.push('line_id = ?');    params.push(line_id); }
+        if (facebook !== undefined)   { fields.push('facebook = ?');   params.push(facebook); }
+        if (website !== undefined)    { fields.push('website = ?');    params.push(website); }
+        if (about !== undefined)      { fields.push('about = ?');      params.push(about); }
+        if (open_hours !== undefined) { fields.push('open_hours = ?'); params.push(open_hours); }
         if (password && password.trim() !== '') {
             const salt = await bcrypt.genSalt(10);
             const hashed = await bcrypt.hash(password, salt);
@@ -5121,7 +5626,9 @@ app.put('/api/third-party/:id', upload.single('image_profile'), async (req, res)
         await connection.query(`UPDATE third_party SET ${fields.join(', ')} WHERE third_party_id = ?`, params);
 
         const [updated] = await connection.query(
-            'SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status FROM third_party WHERE third_party_id = ?',
+            `SELECT third_party_id, third_party_name, email, phone, image_profile, subscription_status,
+                    user_id, address, map_url, line_id, facebook, website, about, open_hours
+             FROM third_party WHERE third_party_id = ?`,
             [id]
         );
         connection.release();

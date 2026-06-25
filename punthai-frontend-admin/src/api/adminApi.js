@@ -65,6 +65,12 @@ export const getGeminiByFeature = (days = 30) =>
 export const getGeminiRecentLogs = (limit = 50, offset = 0) =>
   client.get('/api/admin/gemini/recent-logs', { params: { limit, offset } }).then((r) => r.data);
 
+export const getGeminiErrorTimeline = (days = 30) =>
+  client.get('/api/admin/gemini/error-timeline', { params: { days } }).then((r) => r.data);
+
+export const getGeminiErrorSummary = (days = 30) =>
+  client.get('/api/admin/gemini/error-summary', { params: { days } }).then((r) => r.data);
+
 // ========== Payment Dashboard ==========
 export const getSubscriptionSignups = (days = 30) =>
   client.get('/api/admin/subscriptions/signups', { params: { days } }).then((r) => r.data);
@@ -77,6 +83,12 @@ export const getPayments = (params) =>
 
 export const getWebhookLogs = (params) =>
   client.get('/api/admin/webhooks', { params }).then((r) => r.data);
+
+export const getWebhookSummary = (days = 30) =>
+  client.get('/api/admin/webhooks/summary', { params: { days } }).then((r) => r.data);
+
+export const getPaymentErrorSummary = (days = 30) =>
+  client.get('/api/admin/payment-errors/summary', { params: { days } }).then((r) => r.data);
 
 // ========== Notifications ==========
 export const sendNotification = (data) =>

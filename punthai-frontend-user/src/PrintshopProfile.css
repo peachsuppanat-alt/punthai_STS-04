@@ -1,0 +1,91 @@
+.psp-standalone { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+.psp-content { width: 100%; }
+.psp-empty { text-align: center; color: #999; padding: 60px 0; font-size: 16px; }
+.psp-muted { color: #aaa; font-size: 14px; }
+
+/* การ์ดโปรไฟล์ */
+.psp-profile-card {
+  display: flex; gap: 18px; align-items: center;
+  background: #fff8f3; border: 1px solid #f0d9cb; border-radius: 18px;
+  padding: 20px 24px; margin-bottom: 20px;
+}
+.psp-avatar {
+  position: relative;
+  width: 88px; height: 88px; border-radius: 50%; flex-shrink: 0;
+  background: #fff; border: 2px solid #f0d9cb;
+  display: flex; align-items: center; justify-content: center; font-size: 40px; color: #c94f24;
+}
+.psp-avatar > img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.psp-avatar-edit {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #c94f24; color: #fff; font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.2);
+  transition: background .15s;
+}
+.psp-avatar-edit:hover { background: #a83e18; }
+.psp-profile-info { flex: 1; min-width: 0; }
+.psp-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.psp-name-row h2 { margin: 0; font-size: 24px; color: #5a3b2a; font-weight: 800; }
+.psp-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #c94f24; color: #fff; font-size: 12px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px;
+}
+.psp-email { color: #7a6a60; font-size: 14px; margin: 6px 0 0; display: flex; align-items: center; gap: 5px; }
+.psp-about { color: #6a5a50; font-size: 14px; margin: 8px 0 0; line-height: 1.5; }
+.psp-avatar-hint { color: #c94f24; font-size: 13px; margin: 6px 0 0; display: flex; align-items: center; gap: 4px; }
+
+/* Section */
+.psp-section {
+  background: #fff; border: 1px solid #f0e6df; border-radius: 18px;
+  padding: 20px 24px; margin-bottom: 20px;
+}
+.psp-section-title {
+  display: flex; align-items: center; gap: 7px;
+  margin: 0 0 4px; font-size: 17px; font-weight: 800; color: #c94f24;
+}
+.psp-section-hint { color: #9a8a80; font-size: 13px; margin: 0 0 14px; }
+
+.psp-label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; font-weight: 700; color: #5a3b2a; margin: 12px 0 5px;
+}
+.psp-input {
+  width: 100%; padding: 10px 12px; border: 1px solid #e2d5cb; border-radius: 10px;
+  font-size: 14px; font-family: inherit; box-sizing: border-box; outline: none;
+}
+.psp-input:focus { border-color: #e8763d; }
+.psp-textarea { min-height: 64px; resize: vertical; }
+.psp-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.psp-save-row { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 18px; }
+.psp-saved-msg { color: #2e7d32; font-size: 14px; font-weight: 600; }
+.psp-save-btn {
+  padding: 11px 26px; border-radius: 12px; border: none;
+  background: linear-gradient(135deg, #e8763d, #c94f24); color: #fff;
+  font-weight: 700; font-size: 15px; cursor: pointer;
+}
+.psp-save-btn:disabled { opacity: .6; cursor: default; }
+
+/* contact view (public) */
+.psp-contact-view p { display: flex; align-items: center; gap: 8px; color: #5a4a40; font-size: 15px; margin: 8px 0; }
+.psp-contact-view a { color: #c94f24; text-decoration: none; }
+.psp-contact-view a:hover { text-decoration: underline; }
+
+/* packages grid */
+.psp-pkg-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.psp-pkg-card {
+  border: 1px solid #f0e6df; border-radius: 14px; overflow: hidden; cursor: pointer;
+  background: #fff; transition: transform .15s, box-shadow .15s;
+}
+.psp-pkg-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(201,79,36,.15); }
+.psp-pkg-img { aspect-ratio: 1; background: #faf6f2; display: flex; align-items: center; justify-content: center; }
+.psp-pkg-img img { width: 100%; height: 100%; object-fit: cover; }
+.psp-pkg-body { padding: 10px 12px 14px; }
+.psp-pkg-type { font-size: 12px; color: #b07a5c; margin: 0; }
+.psp-pkg-name { font-size: 15px; font-weight: 700; color: #5a3b2a; margin: 2px 0 0; }
+
+@media (max-width: 900px) { .psp-pkg-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .psp-grid2 { grid-template-columns: 1fr; } .psp-pkg-grid { grid-template-columns: 1fr; } }

@@ -4,8 +4,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+
 import { QRCodeSVG } from 'qrcode.react';
 import Barcode from 'react-barcode';
+
+
 import { loadLogoTransparent } from './logoUtils';
 import { PACKAGES, CATEGORIES } from './PackageCatalog';
 import { getUserFromStorage, isProUser } from '../utils/subscriptionGuard';
@@ -1039,7 +1042,7 @@ export default function LabelEditor({ projectId, userId }) {
         if (!labelForm.mfgDate) warnings.push('ยังไม่มีวันผลิต');
         if (!labelForm.showBarcode && !labelForm.showQR) warnings.push('ยังไม่มี Barcode หรือ QR Code');
         if (warnings.length > 0) {
-            const proceed = window.confirm(`⚠️ ข้อมูลฉลากยังไม่ครบสำหรับส่งพิมพ์:\n\n• ${warnings.join('\n• ')}\n\nต้องการดาวน์โหลดต่อหรือไม่?`);
+            const proceed = window.confirm(` ข้อมูลฉลากยังไม่ครบสำหรับส่งพิมพ์:\n\n• ${warnings.join('\n• ')}\n\nต้องการดาวน์โหลดต่อหรือไม่?`);
             if (!proceed) return;
         }
         try {
@@ -1051,7 +1054,7 @@ export default function LabelEditor({ projectId, userId }) {
             link.click();
             const widthCm = labelDimensions.width;
             const heightCm = labelDimensions.height;
-            alert(`✅ ดาวน์โหลดสำเร็จ!\n\n📐 ขนาดฉลาก: ${widthCm} × ${heightCm} ซม.\n🖼️ ขนาดภาพ: ${canvas.width} × ${canvas.height} px\n📏 DPI โดยประมาณ: ${Math.round((canvas.width / (widthCm / 2.54)))}\n\n📝 หมายเหตุสำหรับโรงพิมพ์:\n• ระบบสี: RGB (กรุณาแปลงเป็น CMYK ก่อนพิมพ์)\n• กรุณาเผื่อ Bleed 3 มม. รอบด้าน\n• แนะนำกระดาษ: อาร์ตมัน 210-260 แกรม`);
+            alert(`ดาวน์โหลดสำเร็จ!\n\n ขนาดฉลาก: ${widthCm} × ${heightCm} ซม.\n ขนาดภาพ: ${canvas.width} × ${canvas.height} px\n DPI โดยประมาณ: ${Math.round((canvas.width / (widthCm / 2.54)))}\n\n หมายเหตุสำหรับโรงพิมพ์:\n• ระบบสี: RGB (กรุณาแปลงเป็น CMYK ก่อนพิมพ์)\n• กรุณาเผื่อ Bleed 3 มม. รอบด้าน\n• แนะนำกระดาษ: อาร์ตมัน 210-260 แกรม`);
         } catch (err) { alert('ไม่สามารถ export ได้: ' + err.message); }
     };
 

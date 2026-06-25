@@ -12,6 +12,8 @@ import { CreateConcept } from './project_feature/CreateConcept';
 import  { CreateLogo }  from './project_feature/CreateLogo';
 import { ResultLogo } from './project_feature/ResultLogo';
 import Result from './project_feature/Result';
+import PackagePage from './project_feature/PackagePage';
+import PrintshopProfile from './PrintshopProfile';
 import { Profile } from './Profile';
 import { EditProfile } from './EditProfile';
 import MarketPlanning from './MarketPlanning';
@@ -41,6 +43,7 @@ function App() {
                       location.pathname === '/result-logo'||
                       location.pathname === '/profile' ||
                       location.pathname === '/edit_profile' ||
+                      location.pathname === '/my-package' ||
                       location.pathname === '/settings';
 
 
@@ -66,7 +69,10 @@ function App() {
         <Route path="/create-logo" element={<CreateLogo />} />
         <Route path="/result-logo" element={<ResultLogo />} />
         <Route path="/result" element={<Result />} />
-        <Route path="/product" element={<Product />} /> 
+        <Route path="/package" element={<PackagePage />} />
+        <Route path="/my-package" element={<PrintshopProfile />} />
+        <Route path="/printshop/:thirdPartyId" element={<PrintshopProfile />} />
+        <Route path="/product" element={<Product />} />
         <Route path="/profile" element={<Profile user={user} setUser={setUser} />} />
         <Route path="/edit_profile" element={<EditProfile user={user} setUser={setUser} />} />
         <Route path="/market-planning" element={<MarketPlanning user={user} />} />

@@ -3,9 +3,10 @@ import {
   AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie
 } from 'recharts';
-import { getGeminiSummary, getGeminiTimeline, getGeminiByModel, getGeminiByFeature, getGeminiRecentLogs } from '../../api/adminApi';
+import { getGeminiSummary, getGeminiTimeline, getGeminiByModel, getGeminiByFeature, getGeminiRecentLogs, getGeminiErrorTimeline, getGeminiErrorSummary } from '../../api/adminApi';
 import ChartCard from '../../components/common/ChartCard';
 import DataTable from '../../components/common/DataTable';
+import { Badge } from '../../components/common/DataTable';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import styles from './GeminiDashboard.module.css';
 
@@ -20,18 +21,46 @@ const TYPE_COLORS = { text: '#919a4a', image: '#2563eb' };
 
 const FEATURE_COLORS = ['#d35325', '#82622a', '#d0b555', '#919a4a', '#2563eb', '#7c3aed', '#0891b2', '#e11d48', '#ea580c', '#16a34a', '#8b5cf6', '#06b6d4'];
 
+const ERROR_COLORS = {
+  400: '#f59e0b',
+  401: '#a855f7',
+  403: '#ec4899',
+  404: '#6366f1',
+  429: '#f97316',
+  500: '#ef4444',
+  502: '#dc2626',
+  503: '#b91c1c',
+  504: '#991b1b',
+};
+
+const ERROR_LABELS = {
+  400: 'BadRequest',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'NotFound',
+  429: 'TooManyRequests',
+  500: 'InternalServerError',
+  502: 'BadGateway',
+  503: 'ServiceUnavailable',
+  504: 'GatewayTimeout',
+};
+
 const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
 
 export default function GeminiDashboard() {
   const [days, setDays] = useState(30);
+  const [errorDays, setErrorDays] = useState(30);
   const [summary, setSummary] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [byModel, setByModel] = useState([]);
   const [byFeature, setByFeature] = useState([]);
   const [recentLogs, setRecentLogs] = useState([]);
+  const [errorTimeline, setErrorTimeline] = useState([]);
+  const [errorSummary, setErrorSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadData(); }, [days]);
+  useEffect(() => { loadErrorData(); }, [errorDays]);
 
   const loadData = async () => {
     setLoading(true);
@@ -49,6 +78,29 @@ export default function GeminiDashboard() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadErrorData = async () => {
+    try {
+      const [tlRes, sumRes] = await Promise.allSettled([
+        getGeminiErrorTimeline(errorDays),
+        getGeminiErrorSummary(errorDays)
+      ]);
+      if (tlRes.status === 'fulfilled') {
+        // Transform: [{date, error_code, count}] → [{date, 400: N, 500: N, ...}]
+        const raw = tlRes.value.data || [];
+        const grouped = {};
+        raw.forEach(r => {
+          const d = formatDate(r.date);
+          if (!grouped[d]) grouped[d] = { date: d };
+          grouped[d][r.error_code] = (grouped[d][r.error_code] || 0) + r.count;
+        });
+        setErrorTimeline(Object.values(grouped));
+      }
+      if (sumRes.status === 'fulfilled') setErrorSummary(sumRes.value.data || null);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -71,12 +123,25 @@ export default function GeminiDashboard() {
     { name: 'Image', value: summary.image || 0 },
   ] : [];
 
+  // Collect all unique error codes from timeline data
+  const allErrorCodes = [...new Set(errorTimeline.flatMap(d => Object.keys(d).filter(k => k !== 'date').map(Number)))].sort();
+
   const logColumns = [
     { key: 'user_name', label: 'ผู้ใช้', render: (v) => v || '-' },
     { key: 'feature', label: 'Feature', sortable: true },
     { key: 'usage_type', label: 'ประเภท', sortable: true },
     { key: 'model_name', label: 'Model', render: (v) => v?.replace('gemini-', '') },
-    { key: 'status', label: 'สถานะ' },
+    { key: 'status', label: 'สถานะ', render: (v) => <Badge type={v === 'success' ? 'success' : 'danger'}>{v}</Badge> },
+    { key: 'created_at', label: 'เวลา', render: (v) => new Date(v).toLocaleString('th-TH') },
+  ];
+
+  const errorLogColumns = [
+    { key: 'user_name', label: 'ผู้ใช้', render: (v) => v || '-' },
+    { key: 'feature', label: 'Feature' },
+    { key: 'endpoint', label: 'Endpoint', render: (v) => v?.replace('/api/', '') },
+    { key: 'error_code', label: 'Error Code', render: (v) => <Badge type="danger">{v || 500}</Badge> },
+    { key: 'error_message', label: 'Error Message', render: (v) => <span className={styles.errorMsgCell}>{v || '-'}</span> },
+    { key: 'model_name', label: 'Model', render: (v) => v?.replace('gemini-', '') },
     { key: 'created_at', label: 'เวลา', render: (v) => new Date(v).toLocaleString('th-TH') },
   ];
 
@@ -101,6 +166,10 @@ export default function GeminiDashboard() {
           <div className={styles.statBox}>
             <div className={styles.statValue} style={{ color: '#2563eb' }}>{summary.image?.toLocaleString()}</div>
             <div className={styles.statLabel}>Image Generation</div>
+          </div>
+          <div className={styles.statBox}>
+            <div className={styles.statValue} style={{ color: '#ef4444' }}>{summary.failed?.toLocaleString() || 0}</div>
+            <div className={styles.statLabel}>Total Errors</div>
           </div>
         </div>
       )}
@@ -182,6 +251,105 @@ export default function GeminiDashboard() {
             </ResponsiveContainer>
           </ChartCard>
         </div>
+      </div>
+
+      {/* ===== ERROR DASHBOARD SECTION ===== */}
+      <div className={styles.errorSection}>
+        <div className={styles.errorHeader}>
+          <h2 className={styles.errorTitle}>Gemini API Errors</h2>
+        </div>
+
+        {errorSummary && (
+          <div className={styles.errorStatsRow}>
+            <div className={`${styles.statBox} ${styles.errorStatBox}`}>
+              <div className={styles.statValue} style={{ color: '#ef4444' }}>{errorSummary.total}</div>
+              <div className={styles.statLabel}>Total Errors ({errorDays} วัน)</div>
+            </div>
+            <div className={`${styles.statBox} ${styles.errorStatBox}`}>
+              <div className={styles.statValue} style={{ color: '#ef4444' }}>{errorSummary.today}</div>
+              <div className={styles.statLabel}>วันนี้</div>
+            </div>
+            {(errorSummary.byCode || []).slice(0, 3).map(item => (
+              <div key={item.error_code} className={`${styles.statBox} ${styles.errorStatBox}`}>
+                <div className={styles.statValue} style={{ color: ERROR_COLORS[item.error_code] || '#ef4444' }}>
+                  {item.count}
+                </div>
+                <div className={styles.statLabel}>
+                  {item.error_code} {ERROR_LABELS[item.error_code] || ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className={styles.grid}>
+          <div className={styles.full}>
+            <ChartCard title="Total API Errors (แยกตาม Error Code)" timeRange={errorDays} onTimeRangeChange={setErrorDays}>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={errorTimeline}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  {allErrorCodes.map(code => (
+                    <Bar
+                      key={code}
+                      dataKey={code}
+                      name={`${code} ${ERROR_LABELS[code] || ''}`}
+                      fill={ERROR_COLORS[code] || '#999'}
+                      stackId="errors"
+                      radius={code === allErrorCodes[allErrorCodes.length - 1] ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+          </div>
+
+          <ChartCard title="Error แยกตาม Code">
+            <ResponsiveContainer width="100%" height={280}>
+              <PieChart>
+                <Pie
+                  data={(errorSummary?.byCode || []).map(r => ({
+                    name: `${r.error_code} ${ERROR_LABELS[r.error_code] || ''}`,
+                    value: r.count,
+                    code: r.error_code
+                  }))}
+                  cx="50%" cy="50%"
+                  innerRadius={50} outerRadius={90}
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {(errorSummary?.byCode || []).map((r, i) => (
+                    <Cell key={i} fill={ERROR_COLORS[r.error_code] || '#999'} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard title="Error แยกตาม Feature">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={errorSummary?.byFeature || []} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
+                <XAxis type="number" allowDecimals={false} />
+                <YAxis type="category" dataKey="feature" tick={{ fontSize: 11 }} width={120} />
+                <Tooltip />
+                <Bar dataKey="count" name="Errors" fill="#ef4444" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
+
+        {errorSummary?.recentErrors?.length > 0 && (
+          <DataTable
+            title="Error Logs ล่าสุด"
+            columns={errorLogColumns}
+            data={errorSummary.recentErrors}
+          />
+        )}
       </div>
 
       <DataTable

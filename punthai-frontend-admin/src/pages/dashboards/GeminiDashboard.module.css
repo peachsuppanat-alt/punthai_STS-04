@@ -11,7 +11,7 @@
 
 .statsRow {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
 }
@@ -51,12 +51,70 @@
     grid-template-columns: 1fr;
   }
   .statsRow {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
   }
+}
+
+/* Error Section */
+.errorSection {
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 2px solid #fecaca;
+}
+
+.errorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-md);
+}
+
+.errorTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #ef4444;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.errorTitle::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.errorStatsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.errorStatBox {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.errorMsgCell {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+  font-size: var(--font-size-xs);
+  color: #ef4444;
 }
 
 @media (max-width: 600px) {
   .statsRow {
     grid-template-columns: 1fr;
+  }
+  .errorStatsRow {
+    grid-template-columns: 1fr 1fr;
   }
 }

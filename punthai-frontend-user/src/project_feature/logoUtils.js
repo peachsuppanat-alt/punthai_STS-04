@@ -26,6 +26,7 @@ export function removeWhiteBackground(imageUrl, threshold = 245) {
 
             // ===== Flood-fill จาก edge ของรูป =====
             // ลบเฉพาะ "พื้นหลังจริง" ที่ติดกับขอบ ไม่กระทบส่วนภายในโลโก้
+            
             const visited = new Uint8Array(W * H);
             const stack = [];
             for (let x = 0; x < W; x++) {
