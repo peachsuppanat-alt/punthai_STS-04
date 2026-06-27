@@ -3,7 +3,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 
 .rs-body {
-  background: #f5f2ec;
+  background: var(--bg);
   font-family: 'Bai Jamjuree', sans-serif;
   min-height: 100vh;
 }
@@ -14,7 +14,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0 40px;
-  background: #ffffff;
+  background: var(--surface);
   border-bottom: 1px solid #ecddd3;
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -38,7 +38,7 @@
   width: 42px; height: 42px;
   border-radius: 50%;
   border: 1.5px solid #ecddd3;
-  background: #ffffff;
+  background: var(--surface);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   transition: all .25s ease;
@@ -46,7 +46,7 @@
 .rs-btn-world iconify-icon,
 .rs-btn-users iconify-icon {
   font-size: 20px;
-  color: #5a4a40;
+  color: var(--gray-2);
   transition: all .25s ease;
 }
 .rs-btn-world:hover,
@@ -79,7 +79,7 @@
 .rs-tabs-wrapper {
   display: flex;
   flex-shrink: 0;           /* ห้ามหด */
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(var(--glass-rgb), 0.92);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid #ecddd3;
@@ -112,7 +112,7 @@
   transition: all 0.25s ease;
 }
 
-.rs-tab:hover { color: #5a4a40; }
+.rs-tab:hover { color: var(--gray-2); }
 .rs-tab:hover::after { left: 20%; right: 20%; }
 
 .rs-active { color: #c94e1f !important; }
@@ -132,9 +132,9 @@
 
 /* ── Legacy classes (เผื่อใช้ที่อื่น) ── */
 .rs-logo-grid { display: grid; grid-template-columns: repeat(3, 336px); gap: 30px; margin-top: 30px; justify-content: start; }
-.rs-logo-card { position: relative; width: 336px; background: #fff; border-radius: 20px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); transition: 0.25s ease; cursor: pointer; }
+.rs-logo-card { position: relative; width: 336px; background: var(--surface); border-radius: 20px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); transition: 0.25s ease; cursor: pointer; }
 .rs-logo-card:hover { transform: translateY(-5px); box-shadow: 0 18px 40px rgba(0,0,0,0.08); }
 .rs-logo-box { width: 100%; height: 242px; border-radius: 14px; border: 2px dashed #ddd; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 18px; box-sizing: border-box; }
-.rs-logo-actions { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.9); padding: 6px; border-radius: 14px; backdrop-filter: blur(6px); z-index: 10; }
+.rs-logo-actions { position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 6px; background: rgba(var(--glass-rgb),0.9); padding: 6px; border-radius: 14px; backdrop-filter: blur(6px); z-index: 10; }
 .rs-action-btn { width: 34px; height: 34px; border: none; background: #f5f5f5; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s ease; }
 .rs-action-btn:hover { background: #D35325; color: #fff; }

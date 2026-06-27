@@ -18,7 +18,15 @@ const Subscription = ({ user, setUser }) => {
 
     useEffect(() => {
         if (user?.user_id) {
-            fetchSubscriptionStatus(user.user_id).then(setSubStatus);
+            fetchSubscriptionStatus(user.user_id).then((s) => {
+                setSubStatus(s);
+                // ถ้าหมดรอบบิลแล้ว backend จะคืน STANDARD → sync ให้ทั้งเว็บกลับเป็น standard ทันที
+                if (s && s.subscription_status === 'STANDARD' && user.subscription_status === 'PRO') {
+                    const downgraded = { ...user, subscription_status: 'STANDARD' };
+                    if (setUser) setUser(downgraded);
+                    localStorage.setItem('user', JSON.stringify(downgraded));
+                }
+            });
         }
     }, [user]);
 
@@ -116,12 +124,19 @@ const Subscription = ({ user, setUser }) => {
             });
             const data = await res.json();
             if (data.status === 'success') {
-                const updatedUser = { ...user, subscription_status: 'STANDARD' };
+                // ยังคงเป็น PRO จนหมดรอบบิล — แค่ปิดการต่ออายุอัตโนมัติ
+                // (ไม่ downgrade เป็น STANDARD ทันที เพื่อให้ตรงกับฐานข้อมูล)
+                const updatedUser = {
+                    ...user,
+                    subscription_status: 'PRO',
+                    subscription_end_date: data.subscription_end_date || user.subscription_end_date,
+                };
                 if (setUser) setUser(updatedUser);
                 localStorage.setItem('user', JSON.stringify(updatedUser));
-                setSubStatus(prev => ({ ...prev, subscription_status: 'STANDARD' }));
+                // ดึงสถานะจริงจาก backend (auto_renew=false, cancelled=true)
+                fetchSubscriptionStatus(user.user_id).then(setSubStatus);
                 setShowCancelModal(false);
-                alert('ยกเลิกสมาชิก Pro สำเร็จ');
+                alert(data.message || 'ยกเลิกการต่ออายุสำเร็จ ยังใช้งาน Pro ได้จนถึงวันหมดอายุ');
             } else {
                 alert(data.message || 'เกิดข้อผิดพลาด');
             }
@@ -199,7 +214,7 @@ const Subscription = ({ user, setUser }) => {
                         <ul className="sub-card-features">
                             <li>
                                 <iconify-icon icon="solar:check-circle-linear" width="18" className="feat-check"></iconify-icon>
-                                สร้างรูปภาพ AI ได้ 6 ครั้งตลอดอายุ Account
+                                ทดลองสร้างรูปภาพได้หลากหลาย
                             </li>
                             <li>
                                 <iconify-icon icon="solar:check-circle-linear" width="18" className="feat-check"></iconify-icon>
@@ -241,7 +256,7 @@ const Subscription = ({ user, setUser }) => {
                         <ul className="sub-card-features">
                             <li>
                                 <iconify-icon icon="solar:check-circle-bold" width="18" className="feat-check-pro"></iconify-icon>
-                                สร้างรูปภาพ AI ได้ 50 ครั้ง/เดือน
+                                สามารถสร้างสรรค์รูปภาพได้มากขึ้น
                             </li>
                             <li>
                                 <iconify-icon icon="solar:check-circle-bold" width="18" className="feat-check-pro"></iconify-icon>
@@ -271,27 +286,23 @@ const Subscription = ({ user, setUser }) => {
                                 )}
                             </div>
                         ) : (
-                            <button className="sub-card-cta" onClick={handlePayment} disabled={loading}>
-                                {loading ? (
-                                    <><iconify-icon icon="solar:refresh-linear" width="18" className="spin"></iconify-icon> กำลังดำเนินการ...</>
-                                ) : (
-                                    <><iconify-icon icon="solar:crown-linear" width="18"></iconify-icon> สมัครเลย</>
-                                )}
-                            </button>
+                            <>
+                                <div className="sub-card-note" title="ระบบจะตัดเงิน 129 บาททุกเดือนผ่าน Omise หากยกเลิกก่อนรอบบิลถัดไป คุณยังใช้สิทธิ์ Pro ได้จนถึงวันสิ้นสุดรอบบิลปัจจุบัน">
+                                    <iconify-icon icon="solar:info-circle-linear" width="14"></iconify-icon>
+                                    <span>ต่ออายุอัตโนมัติทุกเดือน ยกเลิกได้ทุกเมื่อ ใช้สิทธิ์ได้จนหมดรอบบิล</span>
+                                </div>
+                                <button className="sub-card-cta" onClick={handlePayment} disabled={loading}>
+                                    {loading ? (
+                                        <><iconify-icon icon="solar:refresh-linear" width="18" className="spin"></iconify-icon> กำลังดำเนินการ...</>
+                                    ) : (
+                                        <><iconify-icon icon="solar:crown-linear" width="18"></iconify-icon> สมัครเลย</>
+                                    )}
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
 
-                {/* Usage info */}
-                {subStatus && (
-                    <div className="sub-usage-info">
-                        <iconify-icon icon="solar:gallery-check-linear" width="20"></iconify-icon>
-                        <span>
-                            ทดลองใช้ไป {subStatus.generation_used}/{subStatus.generation_limit} ครั้ง
-                            ({subStatus.generation_period === 'monthly' ? 'เดือนนี้' : 'ตลอดอายุ Account'})
-                        </span>
-                    </div>
-                )}
             </section>
 
             {/* Error */}
@@ -324,18 +335,42 @@ const Subscription = ({ user, setUser }) => {
                         <div className="sub-cancel-icon">
                             <iconify-icon icon="solar:crown-bold-duotone" width="28" style={{ color: '#e53935' }}></iconify-icon>
                         </div>
-                        <div className="sub-cancel-info">
-                            <h3>ยกเลิกสมาชิก Pro</h3>
-                            <p>ยกเลิกการสมัครสมาชิก Pro และกลับไปใช้แผน Standard</p>
-                            <div className="sub-cancel-warning">
-                                <iconify-icon icon="solar:info-circle-linear" width="16"></iconify-icon>
-                                <span>หลังจากยกเลิก คุณจะยังใช้งาน Pro ได้จนถึงวันหมดอายุ</span>
-                            </div>
-                        </div>
-                        <button className="sub-cancel-btn" onClick={() => setShowCancelModal(true)}>
-                            <iconify-icon icon="solar:close-circle-linear" width="16"></iconify-icon>
-                            ยกเลิกสมาชิก
-                        </button>
+                        {subStatus?.cancelled ? (
+                            <>
+                                <div className="sub-cancel-info">
+                                    <h3>ยกเลิกการต่ออายุแล้ว</h3>
+                                    <p>คุณยังใช้งานสิทธิ์ Pro ได้ตามปกติจนถึงวันสิ้นสุดรอบบิลปัจจุบัน</p>
+                                    <div className="sub-cancel-warning">
+                                        <iconify-icon icon="solar:info-circle-linear" width="16"></iconify-icon>
+                                        <span>
+                                            ใช้สิทธิ์ Pro ได้ถึง:{' '}
+                                            {subStatus?.subscription_end_date
+                                                ? new Date(subStatus.subscription_end_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+                                                : 'สิ้นรอบปัจจุบัน'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button className="sub-cancel-btn" onClick={handlePayment} disabled={loading}>
+                                    <iconify-icon icon="solar:restart-linear" width="16"></iconify-icon>
+                                    กลับมาต่ออายุ
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="sub-cancel-info">
+                                    <h3>ยกเลิกสมาชิก Pro</h3>
+                                    <p>ยกเลิกการสมัครสมาชิก Pro และกลับไปใช้แผน Standard</p>
+                                    <div className="sub-cancel-warning">
+                                        <iconify-icon icon="solar:info-circle-linear" width="16"></iconify-icon>
+                                        <span>หลังจากยกเลิก คุณจะยังใช้งาน Pro ได้จนถึงวันหมดอายุ</span>
+                                    </div>
+                                </div>
+                                <button className="sub-cancel-btn" onClick={() => setShowCancelModal(true)}>
+                                    <iconify-icon icon="solar:close-circle-linear" width="16"></iconify-icon>
+                                    ยกเลิกสมาชิก
+                                </button>
+                            </>
+                        )}
                     </div>
                 </section>
             )}

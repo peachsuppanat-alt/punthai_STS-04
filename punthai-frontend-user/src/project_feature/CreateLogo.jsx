@@ -384,14 +384,6 @@ export const CreateLogo = () => {
                 </label>
               </div>
 
-              {usageInfo?.generation && (
-                <div className={`clg-usage-info${usageInfo.generation.remaining <= 1 ? ' clg-usage-warn' : ''}`}>
-                  <iconify-icon icon="mdi:image-auto-adjust"></iconify-icon>
-                  ใช้ไป {usageInfo.generation.used}/{usageInfo.generation.limit} ครั้ง
-                  {usageInfo.generation.period === 'lifetime' ? ' (ตลอดชีพ)' : ' (เดือนนี้)'}
-                </div>
-              )}
-
               {/* Actions */}
               <div className="clg-modal-actions">
                 <button className="clg-cancel" onClick={handleCloseModal}>ยกเลิก</button>

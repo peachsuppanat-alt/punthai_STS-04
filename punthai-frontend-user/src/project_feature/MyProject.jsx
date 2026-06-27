@@ -262,7 +262,7 @@ export const MyProject = ({ user }) => {
                             <div className="mp-card">
                                 <div className="mp-card-title" style={{ color: '#d75a2a', fontWeight: 'bold', marginBottom: '15px' }}>Name</div>
                                 <h3
-                                    style={{ marginBottom: '20px', color: '#333', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                                    style={{ marginBottom: '20px', color: 'var(--charcoal)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                                     onClick={() => {
                                         setEditBrandNameInput(selectedBrandName || '');
                                         setShowBrandNamePopup(true);

@@ -57,7 +57,7 @@
 }
 
 .modal-content {
-  background: white;
+  background: var(--surface);
   padding: 30px;
   border-radius: 15px;
   width: 90%;
@@ -79,7 +79,7 @@
   color: #888;
 }
 .close-btn:hover {
-  color: #333;
+  color: var(--charcoal);
 }
 
 @keyframes slideDown {

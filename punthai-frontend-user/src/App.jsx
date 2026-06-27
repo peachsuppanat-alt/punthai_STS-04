@@ -41,6 +41,7 @@ function App() {
                       location.pathname === '/create-logo' ||
                       location.pathname === '/result'||
                       location.pathname === '/result-logo'||
+                      location.pathname === '/product' ||
                       location.pathname === '/profile' ||
                       location.pathname === '/edit_profile' ||
                       location.pathname === '/my-package' ||

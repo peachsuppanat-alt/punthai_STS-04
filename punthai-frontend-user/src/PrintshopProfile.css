@@ -12,7 +12,7 @@
 .psp-avatar {
   position: relative;
   width: 88px; height: 88px; border-radius: 50%; flex-shrink: 0;
-  background: #fff; border: 2px solid #f0d9cb;
+  background: var(--surface); border: 2px solid #f0d9cb;
   display: flex; align-items: center; justify-content: center; font-size: 40px; color: #c94f24;
 }
 .psp-avatar > img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
@@ -27,19 +27,19 @@
 .psp-avatar-edit:hover { background: #a83e18; }
 .psp-profile-info { flex: 1; min-width: 0; }
 .psp-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.psp-name-row h2 { margin: 0; font-size: 24px; color: #5a3b2a; font-weight: 800; }
+.psp-name-row h2 { margin: 0; font-size: 24px; color: var(--gray-2); font-weight: 800; }
 .psp-badge {
   display: inline-flex; align-items: center; gap: 4px;
   background: #c94f24; color: #fff; font-size: 12px; font-weight: 700;
   padding: 3px 10px; border-radius: 20px;
 }
-.psp-email { color: #7a6a60; font-size: 14px; margin: 6px 0 0; display: flex; align-items: center; gap: 5px; }
-.psp-about { color: #6a5a50; font-size: 14px; margin: 8px 0 0; line-height: 1.5; }
+.psp-email { color: var(--gray-2); font-size: 14px; margin: 6px 0 0; display: flex; align-items: center; gap: 5px; }
+.psp-about { color: var(--gray-2); font-size: 14px; margin: 8px 0 0; line-height: 1.5; }
 .psp-avatar-hint { color: #c94f24; font-size: 13px; margin: 6px 0 0; display: flex; align-items: center; gap: 4px; }
 
 /* Section */
 .psp-section {
-  background: #fff; border: 1px solid #f0e6df; border-radius: 18px;
+  background: var(--surface); border: 1px solid #f0e6df; border-radius: 18px;
   padding: 20px 24px; margin-bottom: 20px;
 }
 .psp-section-title {
@@ -50,7 +50,7 @@
 
 .psp-label {
   display: flex; align-items: center; gap: 5px;
-  font-size: 13px; font-weight: 700; color: #5a3b2a; margin: 12px 0 5px;
+  font-size: 13px; font-weight: 700; color: var(--gray-2); margin: 12px 0 5px;
 }
 .psp-input {
   width: 100%; padding: 10px 12px; border: 1px solid #e2d5cb; border-radius: 10px;
@@ -70,7 +70,7 @@
 .psp-save-btn:disabled { opacity: .6; cursor: default; }
 
 /* contact view (public) */
-.psp-contact-view p { display: flex; align-items: center; gap: 8px; color: #5a4a40; font-size: 15px; margin: 8px 0; }
+.psp-contact-view p { display: flex; align-items: center; gap: 8px; color: var(--gray-2); font-size: 15px; margin: 8px 0; }
 .psp-contact-view a { color: #c94f24; text-decoration: none; }
 .psp-contact-view a:hover { text-decoration: underline; }
 
@@ -78,14 +78,14 @@
 .psp-pkg-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 .psp-pkg-card {
   border: 1px solid #f0e6df; border-radius: 14px; overflow: hidden; cursor: pointer;
-  background: #fff; transition: transform .15s, box-shadow .15s;
+  background: var(--surface); transition: transform .15s, box-shadow .15s;
 }
 .psp-pkg-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(201,79,36,.15); }
 .psp-pkg-img { aspect-ratio: 1; background: #faf6f2; display: flex; align-items: center; justify-content: center; }
 .psp-pkg-img img { width: 100%; height: 100%; object-fit: cover; }
 .psp-pkg-body { padding: 10px 12px 14px; }
 .psp-pkg-type { font-size: 12px; color: #b07a5c; margin: 0; }
-.psp-pkg-name { font-size: 15px; font-weight: 700; color: #5a3b2a; margin: 2px 0 0; }
+.psp-pkg-name { font-size: 15px; font-weight: 700; color: var(--gray-2); margin: 2px 0 0; }
 
 @media (max-width: 900px) { .psp-pkg-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .psp-grid2 { grid-template-columns: 1fr; } .psp-pkg-grid { grid-template-columns: 1fr; } }

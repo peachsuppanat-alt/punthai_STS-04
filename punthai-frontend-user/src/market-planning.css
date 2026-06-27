@@ -129,7 +129,7 @@ button { font-family: inherit; cursor: pointer; }
 .mp-hero__title {
   font-size: 38px;
   font-weight: 700;
-  color: #3A1A05;
+  color: var(--charcoal);
   letter-spacing: -0.3px;
   line-height: 1.2;
   margin-bottom: 10px;
@@ -138,7 +138,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .mp-hero__sub {
   font-size: 18px;
-  color: #7A4010;
+  color: var(--gray-2);
   font-weight: 400;
 }
 
@@ -178,7 +178,7 @@ button { font-family: inherit; cursor: pointer; }
 .mp-searchbar {
   max-width: 1500px;
   margin: 0 auto;
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -324,7 +324,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .mp-dropdown__menu {
   position: fixed;
-  background: #fff;
+  background: var(--surface);
   border-radius: var(--r-md);
   border: 1.5px solid var(--border);
   box-shadow: 0 4px 6px rgba(60,25,5,0.06), 0 12px 36px rgba(60,25,5,0.14);
@@ -465,7 +465,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .badge-market {
-  background: rgba(255,255,255,0.28);
+  background: rgba(var(--glass-rgb),0.28);
   color: rgba(255,255,255,0.97);
   border: 1px solid rgba(255,255,255,0.35);
   backdrop-filter: blur(4px);
@@ -475,7 +475,7 @@ button { font-family: inherit; cursor: pointer; }
   position: relative;
   z-index: 2;
   width: 64px; height: 64px;
-  background: rgba(255,255,255,0.18);
+  background: rgba(var(--glass-rgb),0.18);
   border-radius: 50%;
   border: 2px solid rgba(255,255,255,0.35);
   display: flex; align-items: center; justify-content: center;
@@ -656,7 +656,7 @@ button { font-family: inherit; cursor: pointer; }
 .mp-map-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px;
-  background: #ffffff;
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -729,14 +729,14 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .mp-map-detail__close {
-  background: rgba(255,255,255,0.8); border: 1px solid var(--border);
+  background: rgba(var(--glass-rgb),0.8); border: 1px solid var(--border);
   border-radius: 50%; width: 26px; height: 26px;
   display: flex; align-items: center; justify-content: center;
   color: var(--ink-soft); font-size: 15px; flex-shrink: 0;
   transition: all var(--ease);
 }
 
-.mp-map-detail__close:hover { background: #fff; color: var(--terra); border-color: var(--terra); }
+.mp-map-detail__close:hover { background: var(--surface); color: var(--terra); border-color: var(--terra); }
 
 .mp-map-detail__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 
@@ -861,7 +861,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .mp-modal__close {
   position: absolute; top: 14px; right: 14px; z-index: 10;
-  background: rgba(255,255,255,0.22);
+  background: rgba(var(--glass-rgb),0.22);
   border: 1.5px solid rgba(255,255,255,0.35);
   backdrop-filter: blur(8px);
   border-radius: 50%; width: 34px; height: 34px;
@@ -870,7 +870,7 @@ button { font-family: inherit; cursor: pointer; }
   transition: all 0.2s ease;
 }
 
-.mp-modal__close:hover { background: rgba(255,255,255,0.38); transform: scale(1.08); }
+.mp-modal__close:hover { background: rgba(var(--glass-rgb),0.38); transform: scale(1.08); }
 
 .mp-modal__hero-body {
   position: relative; z-index: 2;
@@ -880,7 +880,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .mp-modal__hero-icon {
   width: 58px; height: 58px; border-radius: 16px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(var(--glass-rgb),0.2);
   border: 2px solid rgba(255,255,255,0.35);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; color: #fff;
@@ -889,7 +889,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .mp-modal__hero-badge {
   display: inline-flex;
-  background: rgba(255,255,255,0.22);
+  background: rgba(var(--glass-rgb),0.22);
   border: 1px solid rgba(255,255,255,0.38);
   color: rgba(255,255,255,0.95);
   font-size: 10.5px; font-weight: 700;
@@ -971,7 +971,7 @@ button { font-family: inherit; cursor: pointer; }
 .mp-modal__contact-chip {
   display: flex; align-items: center; gap: 14px;
   padding: 12px 14px;
-  background: #fff; border-radius: var(--r-lg);
+  background: var(--surface); border-radius: var(--r-lg);
   border: 1.5px solid var(--border);
   transition: all 0.2s ease;
   box-shadow: var(--shadow-sm);
@@ -1055,8 +1055,44 @@ button { font-family: inherit; cursor: pointer; }
   height: 200px;        
   min-height: unset;
   animation: mp-fc-fadein 0.32s ease;
-  max-width: calc(100% - 428px);
+  max-width: calc(100% - 480px);
 }
+
+/* ── Featured carousel: stage ครอบการ์ด + ปุ่มลูกศรเปลี่ยนการ์ด ── */
+.mp-fc-stage {
+  position: relative;
+  max-width: calc(100% - 480px);
+}
+.mp-fc-stage > .mp-fc-card {
+  max-width: 100%;   /* การ์ดเต็มความกว้าง stage (stage เป็นตัวคุมความกว้างแทน) */
+}
+.mp-fc-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  /* สว่าง = เทาเข้ม / มืด = ขาว (var(--charcoal) สลับตามธีมอัตโนมัติ) */
+  color: var(--charcoal);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 6;
+  filter: drop-shadow(0 1px 4px rgba(0,0,0,0.4));
+}
+.mp-fc-nav iconify-icon { font-size: 40px; }
+.mp-fc-nav--prev { left: -46px; }            /* ซ้าย: อยู่ในช่องว่างนอกการ์ด */
+.mp-fc-nav--next { right: -46px; }           /* ขวา: นอกการ์ด (มีช่องว่างกันชนกับแผนที่แล้ว) */
+/* ซ่อนลูกศรตกแต่งเดิมที่มุมขวาการ์ด (ซ้ำกับปุ่ม next) */
+.mp-fc-stage .mp-fc-card__arrow { display: none; }
+/* โผล่เมื่อเอาเมาส์เข้าใกล้การ์ด */
+.mp-fc-stage:hover .mp-fc-nav { opacity: 0.85; }
+.mp-fc-nav:hover { opacity: 1; transform: translateY(-50%) scale(1.18); }
 
 @keyframes mp-fc-fadein {
   from { opacity: 0; transform: translateY(8px); }
@@ -1105,13 +1141,13 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .mp-fc-badge--event {
-  background: rgba(255,255,255,0.22);
+  background: rgba(var(--glass-rgb),0.22);
   border: 1px solid rgba(255,255,255,0.38);
   color: rgba(255,255,255,0.95);
 }
 
 .mp-fc-badge--market {
-  background: rgba(255,255,255,0.2);
+  background: rgba(var(--glass-rgb),0.2);
   border: 1px solid rgba(255,255,255,0.35);
   color: rgba(255,255,255,0.92);
 }
@@ -1121,7 +1157,7 @@ button { font-family: inherit; cursor: pointer; }
   z-index: 2;
   width: 66px;
   height: 66px;
-  background: rgba(255,255,255,0.15);
+  background: rgba(var(--glass-rgb),0.15);
   border: 2px solid rgba(255,255,255,0.28);
   border-radius: 16px;
   display: flex;
@@ -1241,7 +1277,7 @@ button { font-family: inherit; cursor: pointer; }
   justify-content: center;
   gap: 7px;
   margin-top: 14px;
-  max-width: calc(100% - 428px);
+  max-width: calc(100% - 480px);
 }
 
 .mp-fc-dot {
@@ -1270,7 +1306,7 @@ button { font-family: inherit; cursor: pointer; }
   .mp-layout { grid-template-columns: 1fr 360px; }
   .mp-footer-features__inner { grid-template-columns: repeat(3, 1fr); gap: 16px; }
   /* Right col: 360px + 28px gap = 388px */
-  .mp-fc-card, .mp-fc-dots { max-width: calc(100% - 388px); }
+  .mp-fc-stage, .mp-fc-card, .mp-fc-dots { max-width: calc(100% - 440px); }
 }
 
 @media (max-width: 900px) {
@@ -1280,7 +1316,12 @@ button { font-family: inherit; cursor: pointer; }
   .mp-footer-features__inner { grid-template-columns: 1fr; }
   .mp-hero__illustration { display: none; }
   /* Single column — carousel goes full width */
-  .mp-fc-card, .mp-fc-dots { max-width: 100%; }
+  .mp-fc-stage, .mp-fc-card, .mp-fc-dots { max-width: 100%; }
+  /* จอแคบ: ย้ายปุ่มลูกศรเข้ามาในขอบการ์ด + ใส่พื้นวงกลมให้เห็นชัด */
+  .mp-fc-nav { background: rgba(0,0,0,0.35); border-radius: 50%; color: #fff; }
+  .mp-fc-nav iconify-icon { font-size: 28px; }
+  .mp-fc-nav--prev { left: 8px; }
+  .mp-fc-nav--next { right: 8px; }
 }
 
 @media (max-width: 720px) {
@@ -1347,7 +1388,7 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
+  background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: var(--r-pill);
   padding: 0 16px;
@@ -1378,6 +1419,18 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 18px;
   border-bottom: 2px solid var(--border-warm);
   padding-bottom: 0;
+  /* ติดด้านบน (ใต้แถบค้นหา) + มีพื้นหลัง เพื่อให้แท็บ "มองเห็นได้เสมอ" และสลับหน้าได้
+     ทั้งหน้าอีเวนต์และหน้าโรงพิมพ์ (ถ้าไม่มีพื้นหลัง แท็บจะกลืนหายไปกับภาพ hero) */
+  position: sticky;
+  top: 88px;
+  z-index: 8;
+  background: var(--bg-page);
+  padding-top: 12px;
+}
+
+/* เฉพาะหน้าโรงพิมพ์: ให้แถบแท็บพื้นหลังโปร่งใส (ไม่เป็นกล่องทึบ) */
+.mp-section-tabs--printers {
+  background: transparent;
 }
 
 .mp-section-tab {
@@ -1460,3 +1513,73 @@ button { font-family: inherit; cursor: pointer; }
   width: 100%;
   font-family: inherit;
 }
+/* ── ปุ่มเพิ่มที่ตั้งโรงพิมพ์ (เฉพาะ Third Party) ───────────────── */
+.mp-add-printer-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 20px; border: none;
+  background: linear-gradient(135deg, #e8763d, #c94f24); color: #fff;
+  font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(201,79,36,.3); transition: transform .15s, box-shadow .15s;
+}
+.mp-add-printer-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(201,79,36,.42); }
+
+/* ── ฟอร์มเพิ่มที่ตั้งโรงพิมพ์ (modal) ─────────────────────────── */
+.mpf-backdrop {
+  position: fixed; inset: 0; background: rgba(40,25,15,.5); z-index: 9999;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.mpf-modal {
+  background: var(--surface); border-radius: 18px; width: 100%; max-width: 560px;
+  max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 70px rgba(0,0,0,.3);
+  font-family: 'Bai Jamjuree', sans-serif;
+}
+.mpf-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px; border-bottom: 1px solid #f0e6df; position: sticky; top: 0; background: var(--surface); z-index: 1;
+}
+.mpf-head h3 { margin: 0; font-size: 18px; font-weight: 800; color: var(--gray-2); }
+.mpf-close { border: none; background: none; font-size: 22px; color: #999; cursor: pointer; display: flex; }
+
+.mpf-import-btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: calc(100% - 44px); margin: 16px 22px 0;
+  padding: 11px; border-radius: 12px; border: 1.5px dashed #c94f24;
+  background: #fff8f3; color: #c94f24; font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: background .15s;
+}
+.mpf-import-btn:hover { background: #fdeee3; }
+.mpf-import-btn:disabled { opacity: .6; cursor: default; }
+
+.mpf-form { padding: 14px 22px 24px; display: flex; flex-direction: column; }
+.mpf-label { font-size: 13px; font-weight: 700; color: var(--gray-2); margin: 12px 0 5px; }
+.mpf-input {
+  width: 100%; padding: 10px 12px; border: 1px solid #e2d5cb; border-radius: 10px;
+  font-size: 14px; font-family: inherit; box-sizing: border-box; outline: none; background: var(--surface);
+}
+.mpf-input:focus { border-color: #e8763d; }
+.mpf-textarea { min-height: 64px; resize: vertical; }
+.mpf-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.mpf-tag-add { display: flex; gap: 8px; }
+.mpf-tag-btn {
+  flex-shrink: 0; padding: 0 16px; border-radius: 10px; border: none;
+  background: #e8763d; color: #fff; font-weight: 700; cursor: pointer;
+}
+.mpf-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.mpf-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #fff8f3; border: 1px solid #f0d9cb; color: var(--gray-2);
+  padding: 4px 8px; border-radius: 8px; font-size: 13px;
+}
+.mpf-tag button { border: none; background: none; cursor: pointer; color: #c08a6c; display: flex; }
+
+.mpf-error { background: #fdecea; border: 1px solid #f5c6c0; color: #c0392b; padding: 8px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 8px; }
+.mpf-ok { background: #eafaf0; border: 1px solid #b8e6c8; color: #2e7d32; padding: 8px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 8px; }
+
+.mpf-actions { display: flex; gap: 10px; margin-top: 22px; }
+.mpf-cancel, .mpf-confirm { flex: 1; padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; }
+.mpf-cancel { background: #f1ebe6; color: var(--gray-2); }
+.mpf-confirm { background: linear-gradient(135deg, #e8763d, #c94f24); color: #fff; }
+.mpf-confirm:disabled { opacity: .6; cursor: default; }
+
+@media (max-width: 560px) { .mpf-row2 { grid-template-columns: 1fr; } }

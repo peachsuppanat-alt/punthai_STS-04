@@ -102,7 +102,7 @@
   padding: 32px 36px;
   overflow-y: auto;
   position: relative;
-  background: #f5f2ec;
+  background: var(--bg);
   scrollbar-width: thin;
   scrollbar-color: var(--line-dk) transparent;
 }
@@ -213,7 +213,7 @@
 .mp-card {
   border-radius: var(--radius-lg);
   padding: 28px;
-  background: rgba(255, 255, 255, 0.38);
+  background: rgba(var(--glass-rgb), 0.38);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.55);
@@ -225,7 +225,7 @@
   box-shadow: 0 12px 36px rgba(180, 90, 50, 0.10), 0 1px 0 rgba(255,255,255,0.6) inset;
   transform: translateY(-4px);
   border-color: rgba(201, 79, 36, 0.25);
-  background: rgba(255, 255, 255, 0.48);
+  background: rgba(var(--glass-rgb), 0.48);
 }
 
 /* ── Card entrance animation ─────────────────────── */
@@ -300,7 +300,7 @@
   padding: 0 16px;
   height: 60px;
   border-radius: var(--radius-md);
-  background: rgba(255,255,255,0.6);
+  background: rgba(var(--glass-rgb),0.6);
   border: 1.5px solid rgba(255,255,255,0.9);
   box-shadow: 0 2px 8px rgba(180,90,50,0.06);
   cursor: pointer;
@@ -323,7 +323,7 @@
   transition: all .22s ease;
 }
 .mp-action-item:hover {
-  background: rgba(255,255,255,0.95);
+  background: rgba(var(--glass-rgb),0.95);
   border-color: rgba(201,79,36,0.25);
   transform: translateX(5px);
   color: var(--orange);
@@ -337,8 +337,18 @@
 
 .mp-action-item .mp-left {
   display: flex;
+  flex-direction: row;   /* ไอคอนซ้าย ข้อความต่อทางขวา (ไม่เรียงแนวตั้ง) */
+  flex-wrap: nowrap;
   align-items: center;
   gap: 14px;
+  flex: 1 1 auto;
+  min-width: 0;          /* ให้ข้อความยาวหดได้ ไม่ดันตกบรรทัด */
+}
+/* ข้อความ (span ตัวที่ไม่ใช่ไอคอน) อยู่บรรทัดเดียว ตัด ... ถ้ายาวเกิน */
+.mp-action-item .mp-left > span:not(.mp-action-icon) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* icon วงกลม background สีส้มอ่อน */
@@ -558,7 +568,7 @@
 
 .mp-popup-content {
   position: relative;
-  background: #fff;
+  background: var(--surface);
   padding: 0;
   border-radius: 28px;
   width: 90%;
@@ -643,7 +653,7 @@
 }
 .mp-popup-input:focus {
   border-color: var(--orange);
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 0 0 4px rgba(201,79,36,.10);
 }
 

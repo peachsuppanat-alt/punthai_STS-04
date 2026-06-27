@@ -1,0 +1,304 @@
+/* =====================================================================
+   DARK THEME — โทนเทาเข้มกลางๆ (neutral, ไม่ดำสนิท)
+   ทำงานเมื่อ <html data-theme="dark"> (ตั้งค่าโดย src/utils/theme.js)
+
+   หลักการ: override ตัวแปร CSS (custom properties) ทั้งหมดที่ใช้เป็น
+   พื้นหลัง/เส้นขอบ/ตัวอักษร ทั่วทั้งโปรเจกต์ในที่เดียว
+   เนื่องจาก selector html[data-theme="dark"] มี specificity สูงกว่า :root
+   ค่าที่ตั้งตรงนี้จะชนะค่าเดิมที่แต่ละไฟล์ประกาศไว้
+   ===================================================================== */
+
+html[data-theme="dark"] {
+  /* ----- พาเลตหลัก (neutral dark gray) ----- */
+  --c-bg:        #1e1e1e; /* พื้นหลังหน้า */
+  --c-surface:   #33333397; /* การ์ด/กล่อง (โปร่งแสงได้) */
+  --c-surface-solid: #2d2d2d; /* พื้นทึบสำหรับ popup/modal/dropdown ที่ลอยทับเนื้อหา */
+  --c-surface-2: #7e7e7e; /* hover / พื้นรอง */
+  --c-line:      #3d3d3d; /* เส้นขอบ */
+  --c-line-2:    #4a4a4a; /* เส้นขอบเข้ม */
+  --c-text:      #ffffff; /* ตัวอักษรหลัก */
+  --c-text-2:    #e9e9e9; /* ตัวอักษรรอง */
+  --c-text-3:    #8c8c8c; /* ตัวอักษรจาง */
+  --c-text-4:    #6e6e6e; /* ตัวอักษรจางมาก */
+  --c-tint:      #322a25; /* พื้นเน้นโทนอุ่นจางๆ (แทนสีพาสเทลในโหมดสว่าง) */
+
+  /* ----- พื้นหลังหน้า ----- */
+  --bg:          var(--c-bg);
+  --bg-page:     var(--c-bg);
+  --cream:       var(--c-bg);
+  --cream-warm:  var(--c-bg);
+  --warm-white:  var(--c-bg);
+  --pkc-bg:      var(--c-bg);
+  --terra-bg:    var(--c-bg);
+
+  /* ----- พื้นผิวการ์ด/กล่อง ----- */
+  --surface:        var(--c-surface);
+  --solid:          var(--c-surface);
+  --light:          var(--c-surface);
+  --bg-card:        var(--c-surface);
+  --cream-card:     var(--c-surface);
+  --pkc-surface:    var(--c-surface);
+  --surface-2:      var(--c-surface-2);
+  --cream-dark:     var(--c-surface-2);
+  --pkc-surface-2:  var(--c-surface-2);
+  --pkc-cream-dark: var(--c-surface-2);
+
+  /* ----- เส้นขอบ ----- */
+  --line:        var(--c-line);
+  --border:      var(--c-line);
+  --border-warm: var(--c-line);
+  --pkc-line:    var(--c-line);
+  --line-dk:     var(--c-line-2);
+  --pkc-line-dk: var(--c-line-2);
+
+  /* ----- ตัวอักษร ----- */
+  --charcoal:     var(--c-text);
+  --ink:          var(--c-text);
+  --pkc-charcoal: var(--c-text);
+  --ink-soft:     var(--c-text-2);
+  --gray-2:       var(--c-text-2);
+  --gray:         var(--c-text-2);
+  --pkc-gray-2:   var(--c-text-2);
+  --ink-mid:      var(--c-text-3);
+  --gray-3:       var(--c-text-3);
+  --pkc-gray-3:   var(--c-text-3);
+  --ink-hint:     var(--c-text-4);
+  --gray-4:       var(--c-text-4);
+  --pkc-gray-4:   var(--c-text-4);
+
+  /* ----- พื้นเน้นโทนอ่อน (พาสเทล) → โทนอุ่นจางบนพื้นมืด ----- */
+  --orange-lt:   var(--c-tint);
+  --orange-mid:  #43352c;
+  --orange-soft: var(--c-tint);
+  --orange-bg:   var(--c-tint);
+  --olive-lt:    #2c3024;
+  --olive-soft:  #2c3024;
+  --gold-soft:   #3a3320;
+  --terra-soft:  var(--c-tint);
+
+  /* ----- เงา (เข้มขึ้นบนพื้นมืด) ----- */
+  --sh-sm:      0 2px 12px rgba(0,0,0,.45);
+  --sh-md:      0 8px 30px rgba(0,0,0,.55);
+  --sh-lg:      0 20px 56px rgba(0,0,0,.65);
+  --sh-hover:   0 8px 30px rgba(0,0,0,.6);
+  --shadow-sm:  0 2px 12px rgba(0,0,0,.45);
+  --shadow-md:  0 8px 30px rgba(0,0,0,.55);
+  --shadow-hover: 0 8px 30px rgba(0,0,0,.6);
+  --pkc-sh-sm:  0 2px 12px rgba(0,0,0,.45);
+  --pkc-sh-md:  0 8px 30px rgba(0,0,0,.55);
+  --pkc-sh-lg:  0 20px 56px rgba(0,0,0,.65);
+
+  /* พื้นผิวโปร่งแสง (glass) → ใช้ฐานเทาเข้มแทนขาว (คงค่า alpha เดิมไว้) */
+  --glass-rgb: 42, 42, 42;
+
+  color-scheme: dark; /* ให้ scrollbar / form control เป็นโหมดมืด */
+}
+
+/* พื้นหลัง + ตัวอักษรพื้นฐานของทั้งหน้า */
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background-color: var(--c-bg);
+  color: var(--c-text);
+}
+
+/* ===== ตัวช่วยจัดการสีที่ hardcode ไว้ (พื้นขาว/ตัวอักษรเข้ม) =====
+   ครอบคลุมกรณีที่ component เขียนสีตรงๆ ไม่ได้ใช้ตัวแปร            */
+
+/* sidebar — ใช้ surface
+   หมายเหตุ: ไม่ใส่ background ให้ [class*="card"] แบบเหวี่ยงแหแล้ว เพราะมันไป
+   โดน sub-element ที่มีคำว่า card ในชื่อ (เช่น __name, __desc) ทำให้เกิดกล่องซ้อน
+   การ์ดแต่ละตัวกำหนดพื้นหลังเองผ่านตัวแปร/override อยู่แล้ว */
+html[data-theme="dark"] [class*="sidebar"] {
+  background-color: var(--c-surface);
+  color: var(--c-text);
+}
+/* popup/modal/dropdown/panel — ลอยทับเนื้อหา ต้องทึบเสมอ (ไม่โปร่งแสง) */
+html[data-theme="dark"] [class*="modal"]:not([class*="overlay"]):not([class*="backdrop"]),
+html[data-theme="dark"] [class*="dropdown"]:not([class*="backdrop"]),
+html[data-theme="dark"] [class*="popup"],
+html[data-theme="dark"] [class*="panel"] {
+  background-color: var(--c-surface-solid);
+  color: var(--c-text);
+}
+
+/* ช่องกรอกข้อมูล */
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: var(--c-surface-2);
+  color: var(--c-text);
+  border-color: var(--c-line);
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--c-text-4);
+}
+
+/* ===== หน้า Market: เปลี่ยนภาพพื้นหลัง hero เป็นเวอร์ชันกลางคืนในโหมดมืด ===== */
+html[data-theme="dark"] .mp-hero {
+  background-image: url('/pattern element/BG-black.png');
+}
+/* fade ด้านล่าง hero ให้กลืนกับพื้นหลังมืด (เดิมจางเป็นสีขาว) */
+html[data-theme="dark"] .mp-hero::after {
+  background: linear-gradient(to bottom, transparent 0%, var(--c-bg) 100%);
+}
+
+/* ===== Sidebar หน้า project_feature: สลับภาพเป็นเวอร์ชันกลางคืนในโหมดมืด ===== */
+html[data-theme="dark"] .psb-bg-illustration img,
+html[data-theme="dark"] .psb2-bg-illustration img,
+html[data-theme="dark"] .csnews-bg-illustration img {
+  content: url('./assets/Gemini_Generated_Image_4xqhji4xqhji4xqh.png');
+  filter: none; /* ภาพกลางคืนมืดอยู่แล้ว ไม่ต้องเพิ่มความสว่าง/sepia */
+}
+/* overlay เดิมเป็นสีขาวจางๆ → เปลี่ยนเป็นโทนมืด (เข้มด้านบนให้เมนูอ่านง่าย โปร่งด้านล่างโชว์ภาพ) */
+html[data-theme="dark"] .psb-bg-illustration::after,
+html[data-theme="dark"] .psb2-bg-illustration::after,
+html[data-theme="dark"] .csnews-bg-illustration::after {
+  background: linear-gradient(180deg, rgba(20,20,20,0.7) 0%, rgba(20,20,20,0.3) 45%, rgba(20,20,20,0.05) 100%);
+}
+
+/* ===== หน้า Market: ปรับองค์ประกอบที่ยังสว่างให้เข้ากับธีมมืด ===== */
+/* footer ด้านล่าง (เดิมเป็นครีมอ่อน → กลืนพื้นมืด) */
+html[data-theme="dark"] .mp-footer-features {
+  background: var(--c-bg);
+  border-top-color: var(--c-line);
+}
+/* ไอคอน footer (เดิมพื้นส้มอ่อน) → โทนอุ่นเข้ม ไอคอนส้มยังเด่น */
+html[data-theme="dark"] .mp-footer-feature__icon {
+  background: linear-gradient(135deg, #3a2c24, #2c241f);
+  box-shadow: none;
+}
+/* แถบ section ที่เคยเป็นสีขาว #f8f8f8 */
+html[data-theme="dark"] .mp-fc-section {
+  background: var(--c-bg);
+}
+/* เส้นขอบ/badge สีขาวจ้าให้นวลลง เข้ากับพื้นมืด */
+html[data-theme="dark"] .mp-fc-badge--event,
+html[data-theme="dark"] .mp-fc-badge--market,
+html[data-theme="dark"] .badge-event {
+  border-color: rgba(255,255,255,0.14);
+}
+
+/* ===== หน้า Market: search bar เป็นการ์ดพื้นทึบใบเดียว =====
+   (รวมทุกช่องให้ดูเป็นหนึ่งเดียวเหมือนโหมดสว่าง ไม่โปร่งแสงจนลอย) */
+html[data-theme="dark"] .mp-searchbar {
+  background: #2d2d2d;        /* พื้นทึบ ไม่ใช้ surface โปร่งแสง */
+  border-color: #4a4a4a;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.5);
+}
+/* ตัวหนังสือ + placeholder + ไอคอนในช่องค้นหา เป็นสีขาว/อ่อน อ่านง่าย
+   + พื้นช่อง input โปร่งใส กลืนกับพื้นการ์ด (เดิมโดน global input override ทำเป็นกล่องเทา) */
+html[data-theme="dark"] .mp-searchbar__input {
+  color: #ffffff;
+  background: transparent;
+  border: none;
+}
+html[data-theme="dark"] .mp-searchbar__input::placeholder { color: #cfcfcf; }
+html[data-theme="dark"] .mp-searchbar__field-icon,
+html[data-theme="dark"] .mp-searchbar__field-icon-top { color: #ffffff; }
+
+/* ===== หน้า Package: popup/modal ต้องเป็นพื้นทึบ (ไม่โปร่งแสง) =====
+   (ค่าเดิมใช้ surface ที่โปร่งแสง ทำให้ popup ทะลุเห็นพื้นหลัง) */
+html[data-theme="dark"] .pkc-modal,
+html[data-theme="dark"] .pkc-select-product-modal,
+html[data-theme="dark"] .pkc-like-picker {
+  background: #2d2d2d;          /* พื้นทึบ */
+  border-color: #4a4a4a;
+  /* เอาขอบในสีขาวจ้าออก ใช้เงาเข้มแทน */
+  box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+}
+
+/* ===== หน้า Content Online: ปรับธีมมืดทั้งหมด ===== */
+/* พื้นหลังหน้า (เดิมเป็นรูปภาพครีมสว่าง) → หรี่ให้มืดเข้ากับธีม */
+html[data-theme="dark"] .co-page::before {
+  filter: brightness(0.24) saturate(0.55);
+}
+/* กล่องหลักทั้งหมดต้องทึบ (ห้ามโปร่งแสง) */
+html[data-theme="dark"] .co-section,
+html[data-theme="dark"] .co-stepper {
+  background: var(--c-surface-solid);
+  border-color: var(--c-line);
+}
+html[data-theme="dark"] .co-card {
+  background: var(--c-surface-solid) !important;
+  border-color: var(--c-line);
+}
+html[data-theme="dark"] .co-card.selected {
+  background: var(--c-tint) !important;
+  border-color: var(--orange);
+}
+/* sub-element ของการ์ดที่ helper เผลอใส่พื้นเกินมา → คืนค่าให้เหมาะ + ตัวอักษรอ่านง่าย */
+html[data-theme="dark"] .co-card-name { background: transparent !important; color: var(--c-text) !important; }
+html[data-theme="dark"] .co-card-img { background: var(--c-bg) !important; }
+html[data-theme="dark"] .co-card-sub {
+  background: var(--c-bg) !important;
+  color: var(--c-text-2) !important;
+}
+/* stepper: ตัวเลข/เส้น/ข้อความ ให้เห็นชัด ไม่จมพื้น */
+html[data-theme="dark"] .co-step-item { color: var(--c-text-2); }
+html[data-theme="dark"] .co-step-circle { background: #4a4a4a; color: var(--c-text); }
+html[data-theme="dark"] .co-step-line { background: #4a4a4a; }
+html[data-theme="dark"] .co-step-item:hover { background: var(--c-surface-2); color: var(--c-text); }
+
+/* ===== หน้า Home: hero section แรก (.home) =====
+   พื้นหลังเป็นรูปภาพสีครีมสว่างตายตัว (ไม่เปลี่ยนตามธีม)
+   จึงต้องคงตัวอักษรให้เป็นโทนเข้ม อ่านง่ายบนพื้นสว่าง (ไม่ให้กลายเป็นขาว) */
+html[data-theme="dark"] .home .home-eyebrow,
+html[data-theme="dark"] .home h1,
+html[data-theme="dark"] .home .hh-title { color: #1e1a15; }
+html[data-theme="dark"] .home h1 em { color: var(--orange); }
+html[data-theme="dark"] .home .home-desc,
+html[data-theme="dark"] .home .hh-desc { color: #5a4a40; }
+
+/* ===== หน้า Home: การ์ดเลือกประเภทงาน (.fn-card) ให้เป็นเทาสว่างกว่าเดิมเล็กน้อย ===== */
+html[data-theme="dark"] .fn-card {
+  background: #3a3a3a !important; /* !important เพื่อชนะ selector ตัวช่วย [class*="card"] */
+  border-color: var(--c-line-2);
+}
+/* ส่วนข้อความ/รูป ภายในการ์ด โดน helper ใส่พื้นเกินมาเป็นกล่องซ้อน → ทำให้โปร่งใส กลืนกับการ์ด */
+html[data-theme="dark"] .fn-card-body,
+html[data-theme="dark"] .fn-card-img-wrap {
+  background: transparent !important;
+}
+
+/* ===== หน้า Home: section ตลาด/โรงพิมพ์ (.market-section) =====
+   พื้นหลังเป็นรูปภาพสว่างตายตัว → คงตัวอักษรโทนเข้ม อ่านง่าย (เหมือน hero) */
+html[data-theme="dark"] .market-section .mkt-heading { color: #1e1a15; }
+html[data-theme="dark"] .market-section .mkt-heading em { color: var(--orange); }
+html[data-theme="dark"] .market-section .mkt-desc,
+html[data-theme="dark"] .market-section .mkt-label-sub,
+html[data-theme="dark"] .market-section .mkt-feat-desc { color: #5a4a40; }
+
+/* ===== หน้า Market: การ์ดข้อมูล (carousel + รายการ) เทาสว่างขึ้นเล็กน้อย ===== */
+html[data-theme="dark"] .mp-fc-card,
+html[data-theme="dark"] .mp-event-card {
+  background: #3a3a3a !important; /* !important เพื่อชนะ selector ตัวช่วย [class*="card"] */
+}
+/* ส่วนข้อความในการ์ดให้กลืน (กันกล่องซ้อนจาก helper) */
+html[data-theme="dark"] .mp-fc-card__right,
+html[data-theme="dark"] .mp-event-card__content {
+  background: transparent !important;
+}
+
+/* การ์ด "สร้างแบรนด์ใหม่" (เดิมพื้นชมพูอ่อน hardcode ที่เคยพึ่ง helper) → โทนอุ่นเข้ม */
+html[data-theme="dark"] .project-card.create-new {
+  background: var(--c-tint);
+}
+
+/* ===== หน้า Market: ปุ่ม/กล่อง dropdown (เช่น เลือกจังหวัด) ให้พื้นโปร่งใส =====
+   (เดิมโดน helper [class*="dropdown"] ทาเป็นกล่องทึบ ทำให้เด่นจากพื้นหลัง)
+   เมนูที่เด้งออกมา (__menu) ยังทึบเหมือนเดิม */
+html[data-theme="dark"] .mp-dropdown,
+html[data-theme="dark"] .mp-dropdown__trigger,
+html[data-theme="dark"] .mp-dropdown__val,
+html[data-theme="dark"] .mp-dropdown__chevron {
+  background: transparent !important;
+}
+
+/* scrollbar */
+html[data-theme="dark"] ::-webkit-scrollbar { width: 12px; height: 12px; }
+html[data-theme="dark"] ::-webkit-scrollbar-track { background: var(--c-bg); }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #4a4a4a; border-radius: 6px; border: 3px solid var(--c-bg);
+}

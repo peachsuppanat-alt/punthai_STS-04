@@ -6,7 +6,7 @@
 
   color-scheme: light dark;
   color: rgba(0, 0, 0, 0.87);
-  background-color: #ffffff;
+  background-color: var(--surface);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -57,8 +57,8 @@ button:focus-visible {
 
 @media (prefers-color-scheme: light) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    color: var(--charcoal);
+    background-color: var(--surface);
   }
   a:hover {
     color: #747bff;
@@ -68,6 +68,9 @@ button:focus-visible {
   }
 }
 */
+
+/* ฐานสีสำหรับพื้นผิวแบบโปร่งแสง (glass) — โหมดสว่าง = ขาว, โหมดมืดถูก override เป็นเทาเข้ม */
+:root { --glass-rgb: 255, 255, 255; }
 
 /* Global spin animation for loading icons */
 .spin {

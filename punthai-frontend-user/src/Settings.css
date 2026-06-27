@@ -128,7 +128,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
 .st-sidebar::before {
   content: '';
   position: absolute; inset: 0;
-  background: linear-gradient(160deg, rgba(249,237,229,0.65) 0%, rgba(255,255,255,0.30) 55%, rgba(253,224,208,0.25) 100%);
+  background: linear-gradient(160deg, rgba(249,237,229,0.65) 0%, rgba(var(--glass-rgb),0.30) 55%, rgba(253,224,208,0.25) 100%);
   pointer-events: none; z-index: 0;
   transition: opacity 0.3s;
 }
@@ -311,7 +311,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
   height: 100vh;
   padding: 32px 20px;
   border-right: 1px solid var(--line);
-  background: rgba(255,255,255,0.60);
+  background: rgba(var(--glass-rgb),0.60);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   flex-shrink: 0;
@@ -383,7 +383,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
 
 /* ===== CARDS ===== */
 .st-card {
-  background: rgba(255,255,255,0.48);
+  background: rgba(var(--glass-rgb),0.48);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius-md);
@@ -395,7 +395,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
 .st-card:hover {
   box-shadow: var(--sh-md);
   border-color: rgba(201,79,36,0.18);
-  background: rgba(255,255,255,0.58);
+  background: rgba(var(--glass-rgb),0.58);
 }
 .st-card-pro-glow {
   border-color: var(--orange-mid);
@@ -433,7 +433,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
   padding: 16px 24px;
   border-top: 1px solid var(--line);
   display: flex; gap: 10px;
-  background: rgba(255,255,255,0.30);
+  background: rgba(var(--glass-rgb),0.30);
 }
 
 /* ===== INFO GRID ===== */
@@ -445,7 +445,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
 .st-info-item {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 16px;
-  background: rgba(255,255,255,0.55);
+  background: rgba(var(--glass-rgb),0.55);
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   backdrop-filter: blur(8px);
@@ -484,7 +484,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
 .st-payment-card {
   display: flex; align-items: center; gap: 16px;
   padding: 16px 20px;
-  background: rgba(255,255,255,0.55);
+  background: rgba(var(--glass-rgb),0.55);
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
 }
@@ -558,7 +558,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
   position: absolute;
   width: 18px; height: 18px;
   left: 3px; top: 3px;
-  background: #fff;
+  background: var(--surface);
   border-radius: 50%;
   transition: var(--trans);
   box-shadow: 0 1px 4px rgba(0,0,0,0.15);
@@ -575,7 +575,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
   padding: 11px 40px 11px 15px;
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--line);
-  background: rgba(255,255,255,0.70);
+  background: rgba(var(--glass-rgb),0.70);
   font-family: 'Bai Jamjuree', sans-serif;
   font-size: 14px; color: var(--charcoal);
   appearance: none; outline: none;
@@ -595,7 +595,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
   padding: 16px 12px;
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--line);
-  background: rgba(255,255,255,0.55);
+  background: rgba(var(--glass-rgb),0.55);
   cursor: pointer; transition: var(--trans);
   font-family: 'Bai Jamjuree', sans-serif;
   font-size: 13px; color: var(--gray-2);
@@ -616,7 +616,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
   padding: 14px 16px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
-  background: rgba(255,255,255,0.50);
+  background: rgba(var(--glass-rgb),0.50);
 }
 .st-session-current { border-color: var(--orange-mid); background: var(--orange-lt); }
 .st-session-icon {
@@ -783,12 +783,12 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
   border-radius: var(--radius-sm);
   font-family: 'Bai Jamjuree', sans-serif;
   font-size: 14px; color: var(--charcoal);
-  background: rgba(255,255,255,0.70);
+  background: rgba(var(--glass-rgb),0.70);
   transition: var(--trans); outline: none;
 }
 .st-edit-field input:focus {
   border-color: var(--orange);
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 0 0 3px rgba(201,79,36,0.10);
 }
 .st-edit-field input::placeholder { color: var(--gray-4); }
@@ -1002,7 +1002,7 @@ h1, h2, h3, button { font-family: 'Poppins', sans-serif; }
   align-items: center;
   gap: 16px;
   padding: 16px 20px;
-  background: rgba(255,255,255,0.55);
+  background: rgba(var(--glass-rgb),0.55);
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
 }

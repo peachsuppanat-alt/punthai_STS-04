@@ -31,7 +31,7 @@
 
 /* ── Body ─────────────────────────────────────────── */
 .pd-body {
-  background: #f5f2ec;
+  background: var(--bg);
   font-family: 'Bai Jamjuree', sans-serif;
   min-height: 100vh;
   position: relative;
@@ -225,7 +225,7 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 .pd-product-card {
-  background: rgba(255,255,255,0.72);
+  background: rgba(var(--glass-rgb),0.72);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1.5px solid rgba(255,255,255,0.9);
@@ -240,7 +240,7 @@
   transform: translateY(-5px);
   box-shadow: var(--sh-md);
   border-color: rgba(201,79,36,.18);
-  background: rgba(255,255,255,0.88);
+  background: rgba(var(--glass-rgb),0.88);
 }
 
 /* Card index badge */
@@ -279,7 +279,7 @@
   object-fit: cover;
 }
 .pd-image-placeholder {
-  background: rgba(255,255,255,0.5);
+  background: rgba(var(--glass-rgb),0.5);
   border-style: dashed;
 }
 
@@ -310,7 +310,7 @@
   align-items: center; justify-content: center;
   gap: 10px; cursor: pointer;
   border: 2px dashed var(--line-dk);
-  background: rgba(255,255,255,0.35);
+  background: rgba(var(--glass-rgb),0.35);
   min-height: 180px;
   color: var(--gray-3);
   transition: var(--trans);

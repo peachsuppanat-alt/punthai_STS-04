@@ -13,6 +13,7 @@ import sharp from 'sharp';
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import Omise from 'omise';
+import cron from 'node-cron';
 
 // สร้าง Client สำหรับตรวจสอบ Token จาก Google
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -1729,6 +1730,97 @@ app.post('/api/packages', upload.fields([{ name: 'thumbnail', maxCount: 1 }, { n
         try { await connection.rollback(); } catch (e) {}
         connection.release();
         console.error('Create Package (third-party) error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// ================= API MARKET LOCATIONS (โรงพิมพ์โพสต์ที่ตั้ง) =================
+// GET /api/market-locations — รายการที่ตั้งโรงพิมพ์ที่ user โพสต์ (ออปชัน ?third_party_id=)
+app.get('/api/market-locations', async (req, res) => {
+    const { third_party_id } = req.query;
+    try {
+        const connection = await pool.getConnection();
+        let where = 'WHERE ml.third_party_id IS NOT NULL';
+        const params = [];
+        if (third_party_id) { where += ' AND ml.third_party_id = ?'; params.push(third_party_id); }
+
+        const [rows] = await connection.query(
+            `SELECT ml.market_location_id, ml.location_name, ml.url_location, ml.image_location,
+                    ml.address, ml.hours, ml.province, ml.region, ml.phone, ml.tags, ml.lat, ml.lng,
+                    ml.third_party_id, tp.third_party_name, tp.image_profile
+             FROM market_location ml
+             LEFT JOIN third_party tp ON ml.third_party_id = tp.third_party_id
+             ${where}
+             ORDER BY ml.market_location_id DESC`, params
+        );
+        connection.release();
+
+        const data = rows.map(r => {
+            let tags = [];
+            try { tags = r.tags ? (typeof r.tags === 'string' ? JSON.parse(r.tags) : r.tags) : []; } catch (e) { tags = []; }
+            return {
+                id: `tp${r.third_party_id}`,
+                market_location_id: r.market_location_id,
+                third_party_id: r.third_party_id,
+                name: r.location_name || r.third_party_name || 'โรงพิมพ์',
+                address: r.address || '',
+                province: r.province || '',
+                region: r.region || 'central',
+                hours: r.hours || '',
+                phone: r.phone || '',
+                url_location: r.url_location || '',
+                lat: r.lat != null ? Number(r.lat) : null,
+                lng: r.lng != null ? Number(r.lng) : null,
+                tags: Array.isArray(tags) ? tags : [],
+                image_profile: r.image_profile || null,
+                icon: 'mdi:printer-outline',
+                iconColor: '#3A6B7C',
+                isUserPosted: true,
+            };
+        });
+        res.json({ status: 'success', data });
+    } catch (err) {
+        console.error('Market locations list error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// POST /api/market-locations — โรงพิมพ์เพิ่ม/แก้ไขที่ตั้งของตัวเอง (1 รายการ/โรงพิมพ์)
+app.post('/api/market-locations', async (req, res) => {
+    const { third_party_id, name, address, province, region, hours, phone, map_url, lat, lng } = req.body;
+    if (!third_party_id || !name) {
+        return res.status(400).json({ status: 'error', message: 'ต้องเป็นบัญชีโรงพิมพ์ และกรอกชื่ออย่างน้อย' });
+    }
+    const tags = JSON.stringify(Array.isArray(req.body.tags) ? req.body.tags : []);
+    const latVal = (lat === '' || lat === undefined) ? null : lat;
+    const lngVal = (lng === '' || lng === undefined) ? null : lng;
+    try {
+        const connection = await pool.getConnection();
+        // upsert ตาม third_party_id (โรงพิมพ์มีที่ตั้งเดียว)
+        const [existing] = await connection.query(
+            'SELECT market_location_id FROM market_location WHERE third_party_id = ?', [third_party_id]
+        );
+        if (existing.length > 0) {
+            await connection.query(
+                `UPDATE market_location SET location_name=?, url_location=?, address=?, hours=?,
+                        province=?, region=?, phone=?, tags=?, lat=?, lng=?
+                 WHERE third_party_id = ?`,
+                [name, map_url || null, address || null, hours || null, province || null,
+                 region || 'central', phone || null, tags, latVal, lngVal, third_party_id]
+            );
+        } else {
+            await connection.query(
+                `INSERT INTO market_location
+                    (location_name, url_location, address, hours, province, region, phone, tags, lat, lng, third_party_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [name, map_url || null, address || null, hours || null, province || null,
+                 region || 'central', phone || null, tags, latVal, lngVal, third_party_id]
+            );
+        }
+        connection.release();
+        res.json({ status: 'success', message: 'บันทึกที่ตั้งโรงพิมพ์สำเร็จ' });
+    } catch (err) {
+        console.error('Create market location error:', err);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -4775,17 +4867,41 @@ app.get('/api/subscription/status/:userId', async (req, res) => {
 
     try {
         const conn = await pool.getConnection();
-        const [userRows] = await conn.query(
-            'SELECT subscription_status, subscription_start_date, subscription_end_date, omise_customer_id FROM user_profile WHERE user_id = ?',
-            [userId]
-        );
+        let userRows;
+        try {
+            [userRows] = await conn.query(
+                'SELECT subscription_status, subscription_start_date, subscription_end_date, next_billing_date, omise_customer_id, omise_schedule_id, auto_renew FROM user_profile WHERE user_id = ?',
+                [userId]
+            );
+        } catch (colErr) {
+            // fallback ถ้ายังไม่ได้รัน ALTER TABLE เพิ่มคอลัมน์ auto_renew
+            [userRows] = await conn.query(
+                'SELECT subscription_status, subscription_start_date, subscription_end_date, next_billing_date, omise_customer_id, omise_schedule_id FROM user_profile WHERE user_id = ?',
+                [userId]
+            );
+            if (userRows.length) userRows[0].auto_renew = userRows[0].next_billing_date ? 1 : 0;
+        }
         if (!userRows.length) {
             conn.release();
             return res.status(404).json({ status: 'error', message: 'User not found' });
         }
 
         const user = userRows[0];
+        const expired = user.subscription_status === 'PRO' && user.subscription_end_date && new Date(user.subscription_end_date) <= new Date();
         const isPro = user.subscription_status === 'PRO' && (!user.subscription_end_date || new Date(user.subscription_end_date) > new Date());
+
+        // ตัดสิทธิ์ทันทีถ้าหมดรอบบิลแล้ว (ไม่ต้องรอ cron) — ทุกอย่างกลับเป็น STANDARD
+        if (expired) {
+            try {
+                await conn.query(
+                    `UPDATE user_profile SET subscription_status = 'STANDARD', omise_schedule_id = NULL, next_billing_date = NULL WHERE user_id = ?`,
+                    [userId]
+                );
+            } catch (e) { /* ignore */ }
+        }
+
+        // auto_renew = ผูกบัตรไว้และจะตัดเงินอัตโนมัติทุกเดือน (ถ้ายกเลิกแล้วจะเป็น false แต่ยัง PRO จนหมดรอบ)
+        const autoRenew = isPro && user.auto_renew === 1;
 
         let countQuery, countParams;
         if (isPro) {
@@ -4810,9 +4926,12 @@ app.get('/api/subscription/status/:userId', async (req, res) => {
         res.json({
             status: 'success',
             subscription: {
-                subscription_status: isPro ? 'PRO' : user.subscription_status,
+                subscription_status: isPro ? 'PRO' : 'STANDARD',
                 subscription_start_date: user.subscription_start_date,
-                subscription_end_date: user.subscription_end_date,
+                subscription_end_date: isPro ? user.subscription_end_date : null,
+                next_billing_date: user.next_billing_date,
+                auto_renew: autoRenew,
+                cancelled: isPro && !autoRenew,
                 has_omise_customer: !!user.omise_customer_id,
                 generation_used: used,
                 generation_limit: limit,
@@ -4879,10 +4998,19 @@ app.post('/api/subscription/create-charge', async (req, res) => {
             endDate.setMonth(endDate.getMonth() + 1);
             const nextBilling = new Date(endDate);
 
-            await conn.query(
-                `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
-                [now, endDate, nextBilling, user_id]
-            );
+            // สมัคร/ต่ออายุสำเร็จ → เปิดต่ออายุอัตโนมัติ (auto_renew = 1)
+            try {
+                await conn.query(
+                    `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ?, auto_renew = 1 WHERE user_id = ?`,
+                    [now, endDate, nextBilling, user_id]
+                );
+            } catch (colErr) {
+                // fallback ถ้ายังไม่มีคอลัมน์ auto_renew
+                await conn.query(
+                    `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
+                    [now, endDate, nextBilling, user_id]
+                );
+            }
             await conn.query(
                 `INSERT INTO payment_logs (user_id, omise_charge_id, amount_paid, package_selected, status, payment_method) VALUES (?, ?, ?, ?, ?, ?)`,
                 [user_id, charge.id, 129.00, 'PRO_MONTHLY', 'successful', paymentMethod]
@@ -4893,7 +5021,7 @@ app.post('/api/subscription/create-charge', async (req, res) => {
             );
 
             // สร้าง Omise Schedule สำหรับ recurring (เฉพาะบัตรเครดิต)
-            if (token && user.omise_customer_id || chargeParams.customer) {
+            if (chargeParams.customer) {
                 try {
                     const scheduleEnd = new Date();
                     scheduleEnd.setFullYear(scheduleEnd.getFullYear() + 10);
@@ -4977,10 +5105,18 @@ app.post('/api/webhook/omise', async (req, res) => {
                     endDate.setMonth(endDate.getMonth() + 1);
                     const nextBilling = new Date(endDate);
 
-                    await conn.query(
-                        `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
-                        [now, endDate, nextBilling, targetUserId]
-                    );
+                    // ตัดเงินรอบถัดไปสำเร็จ (recurring) → ต่ออายุ + คงสถานะต่ออายุอัตโนมัติ
+                    try {
+                        await conn.query(
+                            `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ?, auto_renew = 1 WHERE user_id = ?`,
+                            [now, endDate, nextBilling, targetUserId]
+                        );
+                    } catch (colErr) {
+                        await conn.query(
+                            `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
+                            [now, endDate, nextBilling, targetUserId]
+                        );
+                    }
 
                     // บันทึกลง subscription_history
                     await conn.query(
@@ -5047,11 +5183,19 @@ app.get('/api/subscription/check-payment/:chargeId', async (req, res) => {
             const endDate = new Date(now);
             endDate.setMonth(endDate.getMonth() + 1);
 
+            const nextBilling = new Date(endDate);
             await conn.query('UPDATE payment_logs SET status = ? WHERE omise_charge_id = ?', ['successful', chargeId]);
-            await conn.query(
-                `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ? WHERE user_id = ?`,
-                [now, endDate, log.user_id]
-            );
+            try {
+                await conn.query(
+                    `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ?, auto_renew = 1 WHERE user_id = ?`,
+                    [now, endDate, nextBilling, log.user_id]
+                );
+            } catch (colErr) {
+                await conn.query(
+                    `UPDATE user_profile SET subscription_status = 'PRO', subscription_start_date = ?, subscription_end_date = ?, next_billing_date = ? WHERE user_id = ?`,
+                    [now, endDate, nextBilling, log.user_id]
+                );
+            }
 
             const [updatedUser] = await conn.query('SELECT * FROM user_profile WHERE user_id = ?', [log.user_id]);
             conn.release();
@@ -5104,16 +5248,37 @@ app.post('/api/subscription/cancel', async (req, res) => {
             }
         }
 
-        // ไม่เปลี่ยนเป็น STANDARD ทันที — ให้ใช้ได้จนหมดรอบ
-        await conn.query(
-            'UPDATE user_profile SET omise_schedule_id = NULL, next_billing_date = NULL WHERE user_id = ?',
-            [user_id]
-        );
+        // ไม่เปลี่ยนเป็น STANDARD ทันที — ให้ใช้ได้จนหมดรอบบิลปัจจุบัน
+        // กำหนดวันสิ้นสุดสิทธิ์ PRO ให้แน่นอน (เผื่อ account ที่ subscription_end_date ยังเป็น NULL
+        // จะได้ถูกปรับกลับเป็น STANDARD โดย /api/subscription/check-expired เมื่อถึงกำหนด)
+        let endDate = user.subscription_end_date ? new Date(user.subscription_end_date) : null;
+        if (!endDate || isNaN(endDate.getTime())) {
+            if (user.next_billing_date) {
+                endDate = new Date(user.next_billing_date);
+            } else {
+                endDate = new Date();
+                endDate.setMonth(endDate.getMonth() + 1);
+            }
+        }
+
+        // auto_renew = 0 → ปิดต่ออายุอัตโนมัติ (ยังเป็น PRO จนหมดรอบ)
+        try {
+            await conn.query(
+                'UPDATE user_profile SET omise_schedule_id = NULL, next_billing_date = NULL, subscription_end_date = ?, auto_renew = 0 WHERE user_id = ?',
+                [endDate, user_id]
+            );
+        } catch (colErr) {
+            await conn.query(
+                'UPDATE user_profile SET omise_schedule_id = NULL, next_billing_date = NULL, subscription_end_date = ? WHERE user_id = ?',
+                [endDate, user_id]
+            );
+        }
 
         conn.release();
         res.json({
             status: 'success',
-            message: 'ยกเลิกการต่ออายุอัตโนมัติแล้ว ยังใช้ PRO ได้ถึง ' + (user.subscription_end_date ? new Date(user.subscription_end_date).toLocaleDateString('th-TH') : 'สิ้นรอบปัจจุบัน')
+            subscription_end_date: endDate,
+            message: 'ยกเลิกการต่ออายุอัตโนมัติแล้ว ยังใช้ PRO ได้ถึง ' + new Date(endDate).toLocaleDateString('th-TH')
         });
     } catch (err) {
         conn.release();
@@ -5121,17 +5286,28 @@ app.post('/api/subscription/cancel', async (req, res) => {
     }
 });
 
-// Daily check: ปรับ user ที่หมดอายุแล้วไม่ได้ต่อกลับเป็น STANDARD (เรียกผ่าน cron หรือ manual)
-app.post('/api/subscription/check-expired', async (req, res) => {
+// ฟังก์ชันกลาง: ตัดสิทธิ์ user ที่หมดรอบบิลแล้วไม่ได้ต่อ → กลับเป็น STANDARD
+// ใช้ร่วมกันทั้ง endpoint (manual) และ cron job (อัตโนมัติ)
+async function expireOverdueSubscriptions() {
     const conn = await pool.getConnection();
     try {
+        // หมดรอบบิลแล้ว (end_date < ตอนนี้) แต่ยัง PRO อยู่ = ไม่มีการต่ออายุ/เก็บเงินสำเร็จ
+        // → ตัดสิทธิ์กลับเป็น STANDARD (ถ้าต่ออายุสำเร็จ end_date จะถูกเลื่อนไปข้างหน้าแล้ว)
         const [expired] = await conn.query(
-            `UPDATE user_profile SET subscription_status = 'STANDARD' WHERE subscription_status = 'PRO' AND subscription_end_date < NOW() AND omise_schedule_id IS NULL`
+            `UPDATE user_profile SET subscription_status = 'STANDARD', omise_schedule_id = NULL, next_billing_date = NULL WHERE subscription_status = 'PRO' AND subscription_end_date IS NOT NULL AND subscription_end_date < NOW()`
         );
+        return expired.affectedRows;
+    } finally {
         conn.release();
-        res.json({ status: 'success', updated: expired.affectedRows });
+    }
+}
+
+// Daily check: ปรับ user ที่หมดอายุแล้วไม่ได้ต่อกลับเป็น STANDARD (เรียกผ่าน cron หรือ manual)
+app.post('/api/subscription/check-expired', async (req, res) => {
+    try {
+        const updated = await expireOverdueSubscriptions();
+        res.json({ status: 'success', updated });
     } catch (err) {
-        conn.release();
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
@@ -5356,6 +5532,20 @@ app.put('/api/third-party/:id', upload.single('image_profile'), async (req, res)
 
 // ================= END API โรงพิมพ์ (Third Party) =================
 
+
+// ================= CRON: ตัดสิทธิ์สมาชิกที่หมดรอบบิลอัตโนมัติ =================
+// รันทุกวันตอนตี 1 (เวลาไทย) — กวาด user ที่หมดรอบแล้วไม่ได้ต่อให้กลับเป็น STANDARD
+// แม้ผู้ใช้จะไม่ได้เปิดเว็บเลยก็ตาม (เสริมกับ lazy check ในหน้า /api/subscription/status)
+cron.schedule('0 1 * * *', async () => {
+    try {
+        const updated = await expireOverdueSubscriptions();
+        if (updated > 0) {
+            console.log(`[CRON] ตัดสิทธิ์สมาชิกหมดอายุ ${updated} ราย กลับเป็น STANDARD`);
+        }
+    } catch (err) {
+        console.error('[CRON] check-expired error:', err.message);
+    }
+}, { timezone: 'Asia/Bangkok' });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

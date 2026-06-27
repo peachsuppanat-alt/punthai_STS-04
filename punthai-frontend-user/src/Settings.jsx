@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { fetchSubscriptionStatus } from './utils/subscriptionGuard';
+import { applyTheme, getStoredTheme } from './utils/theme';
 import './Settings.css';
 
 import logoImg from './assets/logo.png';
@@ -34,18 +35,17 @@ export const Settings = ({ user, setUser }) => {
     newsletter: true,
   });
 
-  // Privacy settings
-  const [privacy, setPrivacy] = useState({
-    profilePublic: false,
-    showEmail: false,
-    showProjects: true,
-  });
-
   // Display settings
   const [display, setDisplay] = useState({
     language: 'th',
-    theme: 'light',
+    theme: getStoredTheme(), // อ่านธีมที่เคยเลือกไว้
   });
+
+  // เปลี่ยนธีมทันทีที่กด + บันทึกค่า
+  const handleChangeTheme = (theme) => {
+    setDisplay(p => ({ ...p, theme }));
+    applyTheme(theme);
+  };
 
 
   useEffect(() => {
@@ -138,20 +138,6 @@ export const Settings = ({ user, setUser }) => {
     }
   };
 
-  const handleSavePrivacy = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/users/settings/privacy`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userData.user_id, ...privacy }),
-      });
-      const data = await res.json();
-      alert(data.status === 'success' ? 'บันทึกสำเร็จ' : 'เกิดข้อผิดพลาด');
-    } catch {
-      alert('บันทึกการตั้งค่าไว้ในเครื่องแล้ว');
-    }
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('user');
     if (setUser) setUser(null);
@@ -210,7 +196,6 @@ export const Settings = ({ user, setUser }) => {
     { id: 'account', icon: 'solar:user-circle-linear', label: 'บัญชีผู้ใช้' },
     { id: 'subscription', icon: 'solar:crown-linear', label: 'การสมัครสมาชิก' },
     { id: 'notifications', icon: 'solar:bell-linear', label: 'การแจ้งเตือน' },
-    { id: 'privacy', icon: 'solar:shield-check-linear', label: 'ความเป็นส่วนตัว' },
     { id: 'display', icon: 'solar:pallete-2-linear', label: 'การแสดงผล' },
   ];
 
@@ -218,7 +203,6 @@ export const Settings = ({ user, setUser }) => {
     account: { title: 'บัญชีผู้ใช้', desc: 'ข้อมูลที่แสดงต่อสาธารณะ กรุณาระวังข้อมูลที่คุณแชร์' },
     subscription: { title: 'การสมัครสมาชิก', desc: 'จัดการแผนสมาชิกและการชำระเงินของคุณ' },
     notifications: { title: 'การแจ้งเตือน', desc: 'เลือกประเภทการแจ้งเตือนที่ต้องการรับ' },
-    privacy: { title: 'ความเป็นส่วนตัว', desc: 'ควบคุมการแสดงข้อมูลของคุณ' },
     display: { title: 'การแสดงผล', desc: 'ปรับแต่งภาษาและรูปแบบการแสดงผล' },
   };
 
@@ -510,31 +494,9 @@ export const Settings = ({ user, setUser }) => {
                     </div>
                     {isPro && subStatus?.subscription_end_date && (
                       <div className="st-plan-row">
-                        <span className="st-plan-label">รอบตัดเงินถัดไป</span>
+                        <span className="st-plan-label">{subStatus?.cancelled ? 'ใช้สิทธิ์ Pro ได้ถึง' : 'รอบตัดเงินถัดไป'}</span>
                         <span className="st-plan-value">
                           {new Date(subStatus.subscription_end_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </span>
-                      </div>
-                    )}
-                    {subStatus && (
-                      <div className="st-plan-row">
-                        <span className="st-plan-label">การใช้งาน AI</span>
-                        <span className="st-plan-value">
-                          {subStatus.generation_used}/{subStatus.generation_limit} ครั้ง
-                          ({subStatus.generation_period === 'monthly' ? 'ต่อเดือน' : 'ตลอดอายุ'})
-                        </span>
-                      </div>
-                    )}
-                    {subStatus && (
-                      <div className="st-usage-bar">
-                        <div className="st-usage-track">
-                          <div
-                            className="st-usage-fill"
-                            style={{ width: `${Math.min((subStatus.generation_used / subStatus.generation_limit) * 100, 100)}%` }}
-                          ></div>
-                        </div>
-                        <span className="st-usage-text">
-                          {Math.round((subStatus.generation_used / subStatus.generation_limit) * 100)}%
                         </span>
                       </div>
                     )}
@@ -703,97 +665,6 @@ export const Settings = ({ user, setUser }) => {
             </div>
           )}
 
-          {/* ==================== ความเป็นส่วนตัว ==================== */}
-          {activeSection === 'privacy' && (
-            <div className="st-section">
-              <div className="st-card">
-                <div className="st-card-header">
-                  <div className="st-card-icon st-icon-blue">
-                    <iconify-icon icon="solar:shield-check-bold-duotone"></iconify-icon>
-                  </div>
-                  <div>
-                    <h3 className="st-card-title">ความเป็นส่วนตัว</h3>
-                    <p className="st-card-desc">ควบคุมการแสดงข้อมูลของคุณ</p>
-                  </div>
-                </div>
-                <div className="st-card-body">
-                  <div className="st-toggle-list">
-                    <div className="st-toggle-item">
-                      <div className="st-toggle-info">
-                        <span className="st-toggle-title">โปรไฟล์สาธารณะ</span>
-                        <span className="st-toggle-desc">อนุญาตให้ผู้ใช้อื่นเห็นโปรไฟล์ของคุณ</span>
-                      </div>
-                      <label className="st-switch">
-                        <input type="checkbox" checked={privacy.profilePublic}
-                          onChange={e => setPrivacy(p => ({ ...p, profilePublic: e.target.checked }))} />
-                        <span className="st-slider"></span>
-                      </label>
-                    </div>
-                    <div className="st-toggle-item">
-                      <div className="st-toggle-info">
-                        <span className="st-toggle-title">แสดงอีเมล</span>
-                        <span className="st-toggle-desc">แสดงอีเมลในโปรไฟล์สาธารณะ</span>
-                      </div>
-                      <label className="st-switch">
-                        <input type="checkbox" checked={privacy.showEmail}
-                          onChange={e => setPrivacy(p => ({ ...p, showEmail: e.target.checked }))} />
-                        <span className="st-slider"></span>
-                      </label>
-                    </div>
-                    <div className="st-toggle-item">
-                      <div className="st-toggle-info">
-                        <span className="st-toggle-title">แสดงโปรเจกต์</span>
-                        <span className="st-toggle-desc">อนุญาตให้ผู้ใช้อื่นเห็นโปรเจกต์ของคุณ</span>
-                      </div>
-                      <label className="st-switch">
-                        <input type="checkbox" checked={privacy.showProjects}
-                          onChange={e => setPrivacy(p => ({ ...p, showProjects: e.target.checked }))} />
-                        <span className="st-slider"></span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div className="st-card-footer">
-                  <button className="st-btn-primary" onClick={handleSavePrivacy}>
-                    <iconify-icon icon="solar:diskette-linear"></iconify-icon>
-                    บันทึกการตั้งค่า
-                  </button>
-                </div>
-              </div>
-
-              {/* Sessions */}
-              <div className="st-card">
-                <div className="st-card-header">
-                  <div className="st-card-icon st-icon-gold">
-                    <iconify-icon icon="solar:monitor-smartphone-bold-duotone"></iconify-icon>
-                  </div>
-                  <div>
-                    <h3 className="st-card-title">เซสชันที่ใช้งาน</h3>
-                    <p className="st-card-desc">อุปกรณ์ที่ล็อกอินอยู่ในขณะนี้</p>
-                  </div>
-                </div>
-                <div className="st-card-body">
-                  <div className="st-session-item st-session-current">
-                    <div className="st-session-icon">
-                      <iconify-icon icon="solar:monitor-linear"></iconify-icon>
-                    </div>
-                    <div className="st-session-info">
-                      <span className="st-session-name">อุปกรณ์ปัจจุบัน</span>
-                      <span className="st-session-detail">เบราว์เซอร์นี้ — กำลังใช้งาน</span>
-                    </div>
-                    <span className="st-session-badge">ปัจจุบัน</span>
-                  </div>
-                </div>
-                <div className="st-card-footer">
-                  <button className="st-btn-outline-danger" onClick={() => alert('ออกจากระบบทุกอุปกรณ์สำเร็จ')}>
-                    <iconify-icon icon="solar:logout-2-linear"></iconify-icon>
-                    ออกจากระบบทุกอุปกรณ์
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* ==================== การแสดงผล ==================== */}
           {activeSection === 'display' && (
             <div className="st-section">
@@ -827,21 +698,21 @@ export const Settings = ({ user, setUser }) => {
                     <div className="st-theme-options">
                       <button
                         className={`st-theme-btn ${display.theme === 'light' ? 'st-theme-active' : ''}`}
-                        onClick={() => setDisplay(p => ({ ...p, theme: 'light' }))}
+                        onClick={() => handleChangeTheme('light')}
                       >
                         <iconify-icon icon="solar:sun-2-linear"></iconify-icon>
                         <span>สว่าง</span>
                       </button>
                       <button
                         className={`st-theme-btn ${display.theme === 'dark' ? 'st-theme-active' : ''}`}
-                        onClick={() => setDisplay(p => ({ ...p, theme: 'dark' }))}
+                        onClick={() => handleChangeTheme('dark')}
                       >
                         <iconify-icon icon="solar:moon-linear"></iconify-icon>
                         <span>มืด</span>
                       </button>
                       <button
                         className={`st-theme-btn ${display.theme === 'auto' ? 'st-theme-active' : ''}`}
-                        onClick={() => setDisplay(p => ({ ...p, theme: 'auto' }))}
+                        onClick={() => handleChangeTheme('auto')}
                       >
                         <iconify-icon icon="solar:monitor-linear"></iconify-icon>
                         <span>ตามระบบ</span>

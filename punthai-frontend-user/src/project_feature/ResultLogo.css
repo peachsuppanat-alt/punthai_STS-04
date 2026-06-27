@@ -73,7 +73,7 @@
   padding: 28px 36px;
   overflow-y: auto;
   position: relative;
-  background: #f5f2ec;
+  background: var(--bg);
   scrollbar-width: thin;
   scrollbar-color: var(--line-dk) transparent;
 }
@@ -152,7 +152,7 @@
 /* ── Logo Card ────────────────────────────────────── */
 .rl-logo-card {
   position: relative;
-  background: rgba(255,255,255,0.7);
+  background: rgba(var(--glass-rgb),0.7);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-radius: var(--radius-lg);
@@ -171,7 +171,7 @@
   transform: translateY(-5px);
   box-shadow: var(--sh-md), 0 1px 0 rgba(255,255,255,0.7) inset;
   border-color: rgba(201,79,36,0.18);
-  background: rgba(255,255,255,0.85);
+  background: rgba(var(--glass-rgb),0.85);
 }
 .rl-logo-card--selected {
   border-color: var(--orange) !important;
@@ -200,7 +200,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  background: rgba(255,255,255,0.92);
+  background: rgba(var(--glass-rgb),0.92);
   padding: 6px;
   border-radius: var(--radius-sm);
   backdrop-filter: blur(8px);

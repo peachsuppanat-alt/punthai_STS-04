@@ -104,7 +104,7 @@
   padding: 28px 36px;
   overflow-y: auto;
   position: relative;
-  background: #f5f2ec;
+  background: var(--bg);
   scrollbar-width: thin;
   scrollbar-color: var(--line-dk) transparent;
 }
@@ -217,7 +217,7 @@
 .bdna-welcome-box {
   border-radius: var(--radius-lg);
   padding: 32px;
-  background: rgba(255, 255, 255, 0.38);
+  background: rgba(var(--glass-rgb), 0.38);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.55);
@@ -231,7 +231,7 @@
 .bdna-result-card:hover {
   box-shadow: 0 12px 36px rgba(180, 90, 50, 0.10), 0 1px 0 rgba(255,255,255,0.6) inset;
   border-color: rgba(201, 79, 36, 0.25);
-  background: rgba(255, 255, 255, 0.48);
+  background: rgba(var(--glass-rgb), 0.48);
 }
 
 /* ── Page Header ─────────────────────────────────── */
@@ -313,7 +313,7 @@
   padding: 60px 40px;
   margin-top: 0;
   animation-delay: 0s !important;
-  background: rgba(255, 255, 255, 0.28) !important;
+  background: rgba(var(--glass-rgb), 0.28) !important;
   backdrop-filter: blur(28px) !important;
   -webkit-backdrop-filter: blur(28px) !important;
   border: 1px solid rgba(255, 255, 255, 0.45) !important;
@@ -454,7 +454,7 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--trans);
-  background: rgba(255,255,255,0.6);
+  background: rgba(var(--glass-rgb),0.6);
 }
 .bdna-radio-option:hover {
   background: var(--orange-lt);
@@ -494,7 +494,7 @@
 
 .bdna-tag {
   padding: 9px 20px;
-  background: rgba(255,255,255,0.6);
+  background: rgba(var(--glass-rgb),0.6);
   border: 1.5px solid var(--line);
   border-radius: 99px;
   cursor: pointer;
@@ -768,7 +768,7 @@
 
 .bdna-ai-card {
   padding: 20px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(var(--glass-rgb), 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1.5px solid rgba(255,255,255,0.9);
@@ -823,13 +823,13 @@
 
 .bdna-close-modal {
   position: absolute; right: 18px; top: 12px;
-  border: none; background: rgba(255,255,255,0.25);
+  border: none; background: rgba(var(--glass-rgb),0.25);
   width: 36px; height: 36px; border-radius: 50%;
   font-size: 20px; cursor: pointer; color: #fff;
   display: flex; align-items: center; justify-content: center;
   transition: var(--trans);
 }
-.bdna-close-modal:hover { background: rgba(255,255,255,0.45); }
+.bdna-close-modal:hover { background: rgba(var(--glass-rgb),0.45); }
 
 .bdna-form-group { margin-bottom: 22px; }
 .bdna-form-group label {

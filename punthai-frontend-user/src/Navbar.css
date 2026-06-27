@@ -3,7 +3,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 60px;
-  background: white;
+  background: var(--surface);
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   position: sticky; 
   top: 0;
@@ -19,7 +19,7 @@
 
 .navbar a {
   text-decoration: none;
-  color: #333;
+  color: var(--charcoal);
   font-family: 'Poppins', sans-serif;
   font-weight: 500;
   transition: 0.3s;

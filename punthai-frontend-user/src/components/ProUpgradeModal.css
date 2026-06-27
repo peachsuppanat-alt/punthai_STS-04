@@ -19,7 +19,7 @@
 }
 
 .pro-modal-content {
-    background: #fff;
+    background: var(--surface);
     border-radius: 16px;
     padding: 36px 32px;
     max-width: 420px;
@@ -47,7 +47,7 @@
 }
 
 .pro-modal-close:hover {
-    color: #374151;
+    color: var(--charcoal);
 }
 
 .pro-modal-icon {
@@ -66,14 +66,14 @@
     font-family: 'Bai Jamjuree', sans-serif;
     font-size: 20px;
     font-weight: 700;
-    color: #1f2937;
+    color: var(--charcoal);
     margin: 0 0 8px;
 }
 
 .pro-modal-desc {
     font-family: 'Bai Jamjuree', sans-serif;
     font-size: 14px;
-    color: #6b7280;
+    color: var(--gray-2);
     margin: 0 0 24px;
     line-height: 1.5;
 }
@@ -93,7 +93,7 @@
     padding: 8px 0;
     font-family: 'Bai Jamjuree', sans-serif;
     font-size: 13px;
-    color: #374151;
+    color: var(--charcoal);
 }
 
 .pro-modal-benefit-item iconify-icon {
@@ -138,5 +138,5 @@
 }
 
 .pro-modal-cancel-btn:hover {
-    color: #6b7280;
+    color: var(--gray-2);
 }

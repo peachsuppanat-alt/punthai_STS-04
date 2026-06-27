@@ -61,6 +61,7 @@
     "mysql2": "^3.20.0",
     "named-placeholders": "^1.1.6",
     "negotiator": "^1.0.0",
+    "node-cron": "^4.5.0",
     "object-assign": "^4.1.1",
     "object-inspect": "^1.13.4",
     "omise": "^1.1.0",

@@ -258,7 +258,7 @@ h1, h2, h3, button,
   display: flex;
   flex-direction: column;
   gap: 22px;
-  background: #f5f2ec;
+  background: var(--bg);
   position: relative;
   scrollbar-width: thin;
   scrollbar-color: var(--line-dk) transparent;
@@ -338,7 +338,7 @@ h1, h2, h3, button,
   gap: 16px;
   border-radius: var(--radius-lg);
   padding: 22px 28px;
-  background: rgba(255, 255, 255, 0.38);
+  background: rgba(var(--glass-rgb), 0.38);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.55);
@@ -349,7 +349,7 @@ h1, h2, h3, button,
 .pf-profile-bar:hover {
   box-shadow: 0 12px 36px rgba(180, 90, 50, 0.10), 0 1px 0 rgba(255,255,255,0.6) inset;
   border-color: rgba(201, 79, 36, 0.25);
-  background: rgba(255, 255, 255, 0.48);
+  background: rgba(var(--glass-rgb), 0.48);
 }
 
 .pf-avatar {
@@ -415,7 +415,7 @@ h1, h2, h3, button,
 .pf-stat-banner {
   border-radius: var(--radius-lg);
   padding: 22px 28px;
-  background: rgba(255, 255, 255, 0.38);
+  background: rgba(var(--glass-rgb), 0.38);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.55);
@@ -427,7 +427,7 @@ h1, h2, h3, button,
 .pf-stat-banner:hover {
   box-shadow: 0 12px 36px rgba(180, 90, 50, 0.10), 0 1px 0 rgba(255,255,255,0.6) inset;
   border-color: rgba(201, 79, 36, 0.25);
-  background: rgba(255, 255, 255, 0.48);
+  background: rgba(var(--glass-rgb), 0.48);
 }
 
 .pf-stat-banner-left {
@@ -505,7 +505,7 @@ h1, h2, h3, button,
 /* Project Card (matches bdna-ai-card) */
 .pf-home-card {
   padding: 22px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(var(--glass-rgb), 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1.5px solid rgba(255,255,255,0.9);
@@ -521,7 +521,7 @@ h1, h2, h3, button,
   box-shadow: var(--sh-md);
   transform: translateY(-4px);
   border-color: rgba(201,79,36,.18);
-  background: rgba(255,255,255,0.92);
+  background: rgba(var(--glass-rgb),0.92);
 }
 
 .pf-home-card-icon {
@@ -588,7 +588,7 @@ h1, h2, h3, button,
   gap: 8px;
   min-height: 140px;
   border: 2px dashed var(--line-dk) !important;
-  background: rgba(255,255,255,0.42) !important;
+  background: rgba(var(--glass-rgb),0.42) !important;
   backdrop-filter: blur(12px);
 }
 .pf-create-new:hover {
@@ -633,7 +633,7 @@ h1, h2, h3, button,
   flex-direction: row;
   align-items: center;
   gap: 18px;
-  background: rgba(255,255,255,0.38);
+  background: rgba(var(--glass-rgb),0.38);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow: var(--sh-sm);
@@ -645,7 +645,7 @@ h1, h2, h3, button,
   transform: translateY(-3px);
   box-shadow: var(--sh-md);
   border-color: rgba(201,79,36,.20);
-  background: rgba(255,255,255,0.50);
+  background: rgba(var(--glass-rgb),0.50);
 }
 
 .pf-stat-icon-wrap {
@@ -779,7 +779,7 @@ h1, h2, h3, button,
 }
 
 .edit-profile-card {
-  background: rgba(255,255,255,0.42);
+  background: rgba(var(--glass-rgb),0.42);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255,255,255,0.60);
@@ -926,7 +926,7 @@ h1, h2, h3, button,
   padding: 11px 15px;
   border-radius: var(--radius-sm);
   border: 1.5px solid var(--line);
-  background: rgba(255,255,255,0.70);
+  background: rgba(var(--glass-rgb),0.70);
   font-family: 'Bai Jamjuree', sans-serif;
   font-size: 14px;
   color: var(--charcoal);
@@ -935,7 +935,7 @@ h1, h2, h3, button,
 }
 .edit-input:focus {
   border-color: var(--orange);
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 0 0 3px rgba(201,79,36,0.10);
 }
 .edit-input.input-disabled {

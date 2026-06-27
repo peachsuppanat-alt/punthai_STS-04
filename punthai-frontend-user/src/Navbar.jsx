@@ -39,7 +39,7 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
                     <button className="btn-outline" onClick={onOpenLogin}>Log in</button>
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <span style={{ fontWeight: 'bold', color: '#333', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 'bold', color: '#d35325', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             Hi, {user.user_name}
                             {/*  PRO / STANDARD  */}
                             <span style={{
