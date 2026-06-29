@@ -1,6 +1,6 @@
 // punthai-frontend-user/src/MockupEditor.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Stage, Layer, Image as KImg, Rect as KRect, Text as KText, Circle as KCircle, Group, Transformer } from 'react-konva';
+import { Stage, Layer, Image as KImg, Rect as KRect, Text as KText, Circle as KCircle, Shape as KShape, Group, Transformer } from 'react-konva';
 import html2canvas from 'html2canvas';
 import { loadLogoTransparent } from './logoUtils';
 import JsBarcode from 'jsbarcode';
@@ -8,21 +8,9 @@ import QRCode from 'qrcode';
 import { getUserFromStorage, isProUser } from '../utils/subscriptionGuard';
 import ProUpgradeModal from '../components/ProUpgradeModal';
 import { API_URL } from '../config';
+import './MockupEditor.css';
 
 const API = `${API_URL}`;
-
-// Color palette (match other pages)
-const C = {
-    primary: '#c94e1f',
-    primaryDark: '#8f1d1d',
-    label: '#8a9a3c',
-    accent: '#d3542b',
-    text: '#2a2a2a',
-    sub: '#6b7280',
-    border: '#e5e7eb',
-    bgLight: '#fafafa',
-    bgPage: '#f5f5f5',
-};
 
 // === Helper: load image (CORS-safe) ===
 function useHtmlImage(src) {
@@ -55,45 +43,34 @@ function LabelImageRenderer({ labelData, brandAssets, onReady }) {
 
     if (!labelData) return null;
 
-    const colors = brandAssets?.colors || ['#fff', '#222', '#d3542b', '#777', '#eee'];
-    const bgColor = labelData.bg_color || colors[0] || '#fff';
-    const textColor = colors[1] || '#222';
-    const accent = colors[2] || '#d3542b';
-    const sub = colors[3] || '#888';
-
     return (
-        <div style={{ position: 'fixed', left: -99999, top: -99999, pointerEvents: 'none' }}>
-            <div ref={ref} style={{
-                width: 380, padding: 24, background: bgColor, color: textColor,
-                fontFamily: brandAssets?.font || "'Sarabun', sans-serif",
-                display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-                borderRadius: 12, boxSizing: 'border-box', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-            }}>
+        <div className="label-render-offscreen">
+            <div ref={ref} className="label-render-card">
                 {brandAssets?.logoUrl && (
                     <img src={brandAssets.logoUrl} crossOrigin="anonymous" alt="logo"
-                        style={{ width: 90, height: 90, objectFit: 'contain', marginBottom: 12 }} />
+                        className="label-render-logo" />
                 )}
-                <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.1 }}>
+                <div className="label-render-name">
                     {labelData.product_name || 'Product Name'}
                 </div>
                 {labelData.tagline && (
-                    <div style={{ fontSize: 13, fontWeight: 600, color: accent, marginTop: 6 }}>
+                    <div className="label-render-tagline">
                         {labelData.tagline}
                     </div>
                 )}
                 {labelData.net_weight && (
-                    <div style={{ fontSize: 11, marginTop: 4, color: sub }}>{labelData.net_weight}</div>
+                    <div className="label-render-weight">{labelData.net_weight}</div>
                 )}
                 {labelData.ingredients && (
-                    <div style={{ background: 'rgba(255,255,255,0.6)', padding: 10, borderRadius: 8, fontSize: 11, marginTop: 12, textAlign: 'left', width: '100%', lineHeight: 1.5 }}>
+                    <div className="label-render-ingredients">
                         <strong>ส่วนประกอบ:</strong>
-                        <div style={{ whiteSpace: 'pre-wrap' }}>{labelData.ingredients}</div>
+                        <div className="label-render-ingredients-text">{labelData.ingredients}</div>
                     </div>
                 )}
                 {labelData.certifications?.length > 0 && (
-                    <div style={{ marginTop: 12, display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    <div className="label-render-certs">
                         {labelData.certifications.map(c => (
-                            <span key={c} style={{ background: accent, color: '#fff', fontSize: 9, padding: '2px 6px', borderRadius: 999, fontWeight: 'bold' }}>
+                            <span key={c} className="label-render-cert-badge">
                                 {c}
                             </span>
                         ))}
@@ -103,7 +80,6 @@ function LabelImageRenderer({ labelData, brandAssets, onReady }) {
         </div>
     );
 }
-
 
 // === Package Design Editor ===
 function PackageDesignEditor({ projectId, userId, projectName, product, brandAssets, labelData, labelImageUrl, onBack }) {
@@ -116,6 +92,9 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     const [panelDesigns, setPanelDesigns] = useState({});
     const [selectedElId, setSelectedElId] = useState(null);
     const [openSections, setOpenSections] = useState({ bg: true });
+    const [shapeTab, setShapeTab] = useState('ทั้งหมด');
+    const [propsPanelTab, setPropsPanelTab] = useState('คุณสมบัติ');
+    const [aspectLocked, setAspectLocked] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [savedMockupId, setSavedMockupId] = useState(null);
@@ -142,6 +121,19 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     const [lightboxUrl, setLightboxUrl] = useState(null); // for image popup
     const [mockupPanelSelection, setMockupPanelSelection] = useState({}); // which panels to include
 
+    // Zoom & pan state
+    const [stageScale, setStageScale] = useState(1);
+    const ZOOM_STEP = 0.15;
+    const ZOOM_MIN = 0.2;
+    const ZOOM_MAX = 4;
+
+    // Undo / redo history (snapshots of panelDesigns)
+    const historyRef = useRef([]);
+    const historyIndexRef = useRef(-1);
+    const isUndoRedoRef = useRef(false);
+    const [canUndo, setCanUndo] = useState(false);
+    const [canRedo, setCanRedo] = useState(false);
+
     // Canvas sizing
     const CANVAS_W = 700;
     const activePanel = panels[activePanelIdx];
@@ -151,6 +143,62 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
 
     // Current panel design
     const currentDesign = activePanel ? (panelDesigns[activePanel.id] || { bg_mode: 'solid', bg_color: '#FFFFFF', bg_opacity: 1, elements: [] }) : null;
+
+    // === Record history on panelDesigns change ===
+    useEffect(() => {
+        if (!dataLoadedRef.current) return;
+        if (isUndoRedoRef.current) { isUndoRedoRef.current = false; return; }
+        const snapshot = JSON.parse(JSON.stringify(panelDesigns));
+        historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
+        historyRef.current.push(snapshot);
+        historyIndexRef.current = historyRef.current.length - 1;
+        setCanUndo(historyIndexRef.current > 0);
+        setCanRedo(false);
+    }, [panelDesigns]);
+
+    // === Undo ===
+    const handleUndo = useCallback(() => {
+        if (historyIndexRef.current <= 0) return;
+        historyIndexRef.current -= 1;
+        isUndoRedoRef.current = true;
+        setPanelDesigns(JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current])));
+        setCanUndo(historyIndexRef.current > 0);
+        setCanRedo(true);
+    }, []);
+
+    // === Redo ===
+    const handleRedo = useCallback(() => {
+        if (historyIndexRef.current >= historyRef.current.length - 1) return;
+        historyIndexRef.current += 1;
+        isUndoRedoRef.current = true;
+        setPanelDesigns(JSON.parse(JSON.stringify(historyRef.current[historyIndexRef.current])));
+        setCanUndo(true);
+        setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+    }, []);
+
+    // === Keyboard shortcuts Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z ===
+    useEffect(() => {
+        const onKey = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); handleRedo(); }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [handleUndo, handleRedo]);
+
+    // === Zoom helpers ===
+    const clampScale = (s) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
+    const handleZoomIn  = () => setStageScale(s => clampScale(parseFloat((s + ZOOM_STEP).toFixed(2))));
+    const handleZoomOut = () => setStageScale(s => clampScale(parseFloat((s - ZOOM_STEP).toFixed(2))));
+
+    const handleFitToScreen = () => {
+        const area = document.querySelector('.canvas-scroll-area');
+        if (!area) { setStageScale(1); return; }
+        const { width: aW, height: aH } = area.getBoundingClientRect();
+        const padding = 64;
+        const fitScale = clampScale(Math.min((aW - padding) / canvasW, (aH - padding) / canvasH));
+        setStageScale(fitScale);
+    };
 
     useEffect(() => { fetchMaterial(); }, [product]);
 
@@ -263,11 +311,12 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
         const cx = canvasW / 2, cy = canvasH / 2;
         let el;
         if (type === 'text') {
-            el = { id, type: 'text', x: cx - 80, y: cy - 16, w: 160, h: 32, rotation: 0, data: 'ข้อความ', fontSize: 24, fill: '#222', fontFamily: brandAssets?.font || "'Sarabun', sans-serif" };
-        } else if (type === 'rect') {
-            el = { id, type: 'shape', x: cx - 60, y: cy - 40, w: 120, h: 80, rotation: 0, fill: brandAssets?.colors?.[2] || '#cccccc' };
-        } else if (type === 'circle') {
-            el = { id, type: 'circle', x: cx, y: cy, radius: 40, fill: brandAssets?.colors?.[2] || '#cccccc' };
+            el = { id, type: 'text', x: cx - 80, y: cy - 16, w: 160, h: 32, rotation: 0, data: 'ข้อความ', fontSize: 24, fill: '#222', fontFamily: brandAssets?.font || "'Bai Jamjuree', sans-serif" };
+        } else if (type === 'rect' || type === 'rect_round' || type === 'triangle' || type === 'star' || type === 'hexagon' || type === 'octagon' || type === 'diamond' || type === 'arrow' || type === 'speech' || type === 'heart') {
+            const shapeKind = type === 'rect' ? 'rect' : type;
+            el = { id, type: 'shape', shapeKind, x: cx - 60, y: cy - 60, w: 120, h: 120, rotation: 0, fill: brandAssets?.colors?.[2] || '#cccccc', cornerRadius: type === 'rect_round' ? 20 : 0 };
+        } else if (type === 'circle' || type === 'ellipse') {
+            el = { id, type: 'circle', shapeKind: type, x: cx, y: cy, radius: 50, w: 100, h: 100, rotation: 0, fill: brandAssets?.colors?.[2] || '#cccccc' };
         } else if (type === 'barcode') {
             const val = labelData?.barcode_value || '8850000000000';
             el = { id, type: 'barcode', x: cx - 80, y: cy - 25, w: 160, h: 50, rotation: 0, barcodeValue: val, barcodeFormat: 'EAN13' };
@@ -344,12 +393,12 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
             const t = textMap[field];
             if (!t?.data) return;
             const w = Math.min(canvasW * 0.8, 400);
-            el = { id, type: 'text', x: (canvasW - w) / 2, y: canvasH * 0.3 + Math.random() * 60, w, h: 40, rotation: 0, data: t.data, fontSize: t.fontSize, fill: t.fill, fontFamily: brandAssets?.font || "'Sarabun', sans-serif" };
+            el = { id, type: 'text', x: (canvasW - w) / 2, y: canvasH * 0.3 + Math.random() * 60, w, h: 40, rotation: 0, data: t.data, fontSize: t.fontSize, fill: t.fill, fontFamily: brandAssets?.font || "'Bai Jamjuree', sans-serif" };
         } else if (type === 'label_certs') {
             if (!labelData?.certifications?.length) return;
             const certs = Array.isArray(labelData.certifications) ? labelData.certifications : JSON.parse(labelData.certifications || '[]');
             if (certs.length === 0) return;
-            el = { id, type: 'text', x: canvasW * 0.1, y: canvasH * 0.85, w: canvasW * 0.8, h: 30, rotation: 0, data: certs.join('  •  '), fontSize: 11, fill: '#fff', fontFamily: brandAssets?.font || "'Sarabun', sans-serif" };
+            el = { id, type: 'text', x: canvasW * 0.1, y: canvasH * 0.85, w: canvasW * 0.8, h: 30, rotation: 0, data: certs.join('  •  '), fontSize: 11, fill: '#fff', fontFamily: brandAssets?.font || "'Bai Jamjuree', sans-serif" };
         }
         if (el) {
             setPanelDesigns(prev => {
@@ -793,35 +842,30 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
 
     if (!materialData || panels.length === 0) {
         return (
-            <div style={{ padding: 60, textAlign: 'center', color: C.sub }}>
-                <iconify-icon icon="mdi:loading" style={{ fontSize: 32, animation: 'spin 1s linear infinite' }}></iconify-icon>
-                <div style={{ marginTop: 12 }}>กำลังโหลดข้อมูลบรรจุภัณฑ์...</div>
+            <div className="pkgdesign-loading">
+                <iconify-icon icon="mdi:loading" className="spin"></iconify-icon>
+                <div>กำลังโหลดข้อมูลบรรจุภัณฑ์...</div>
             </div>
         );
     }
 
     return (
-        <div style={{ display: 'flex', height: 'calc(100vh - 80px - 61px)', overflow: 'hidden' }}>
+        <div className="pkgdesign-root">
             {/* === SIDEBAR === */}
-            <div style={{ width: 320, minWidth: 320, borderRight: `1px solid ${C.border}`, overflowY: 'auto', background: '#fff', padding: 16 }}>
-                <button onClick={onBack} style={{ background: 'none', border: 'none', color: C.sub, cursor: 'pointer', marginBottom: 12, fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}>
+            <div className="pkgdesign-sidebar">
+                <button onClick={onBack} className="back-link">
                     <iconify-icon icon="mdi:chevron-left"></iconify-icon> กลับ
                 </button>
-                <h3 style={{ margin: '0 0 4px', fontSize: 16, color: C.primaryDark }}>ออกแบบบรรจุภัณฑ์</h3>
-                <p style={{ margin: '0 0 16px', fontSize: 12, color: C.sub }}>{product.name_product} — {materialData.name}</p>
+                <h3 className="pkgdesign-title">ออกแบบบรรจุภัณฑ์</h3>
+                <p className="pkgdesign-subtitle">{product.name_product} — {materialData.name}</p>
 
                 {/* Panel Selector */}
-                <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>เลือกด้าน</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div className="panel-selector">
+                    <div className="panel-selector-label">เลือกด้าน</div>
+                    <div className="panel-selector-list">
                         {panels.map((p, idx) => (
                             <button key={p.id} onClick={() => { setActivePanelIdx(idx); setSelectedElId(null); }}
-                                style={{
-                                    padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                                    border: idx === activePanelIdx ? `2px solid #2563eb` : `1px solid ${C.border}`,
-                                    background: idx === activePanelIdx ? '#eff6ff' : '#fff',
-                                    color: idx === activePanelIdx ? '#2563eb' : C.text
-                                }}>
+                                className={`panel-chip ${idx === activePanelIdx ? 'panel-chip-active' : ''}`}>
                                 {p.label}
                             </button>
                         ))}
@@ -829,24 +873,24 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 </div>
 
                 {/* === Background Section === */}
-                <SidebarSection title={<><iconify-icon icon="mdi:palette" style={{verticalAlign:'middle'}}></iconify-icon> Background</>} open={openSections.bg} onToggle={() => toggleSection('bg')}>
+                <SidebarSection title={<><iconify-icon icon="mdi:palette"></iconify-icon> Background</>} open={openSections.bg} onToggle={() => toggleSection('bg')}>
                     {/* AI Background */}
-                    <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', marginBottom: 6 }}>AI สร้างลวดลาย (ทุกด้านพร้อมกัน)</div>
+                    <div className="ai-bg-block">
+                        <div className="ai-bg-label">AI สร้างฉากหลัง ✨</div>
                         <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)}
-                            placeholder="เช่น: ลายใบไม้ tropical สีเขียวอ่อน พื้นครีม สไตล์ organic"
-                            style={{ width: '100%', height: 56, border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, fontSize: 12, resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                            placeholder="เช่น: ลายใบไม้ สีเขียวอ่อน ฟีลธรรมชาติ สไตล์ organic"
+                            className="ai-bg-textarea" />
                         <button onClick={generateAiBg} disabled={isAiGenerating || !aiPrompt.trim()}
-                            style={{ marginTop: 6, width: '100%', padding: '8px 0', background: isAiGenerating ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: isAiGenerating ? 'wait' : 'pointer' }}>
-                            {isAiGenerating ? <><iconify-icon icon="mdi:loading" style={{verticalAlign:'middle'}} class="spin"></iconify-icon> กำลังสร้าง...</> : <><iconify-icon icon="mdi:auto-fix" style={{verticalAlign:'middle'}}></iconify-icon> สร้างลวดลาย AI</>}
+                            className="ai-bg-generate-btn">
+                            {isAiGenerating ? <><iconify-icon icon="mdi:loading" className="spin"></iconify-icon> กำลังสร้าง...</> : <>สร้างฉากหลัง AI</>}
                         </button>
                     </div>
 
                     {/* AI BG History */}
                     {aiBgHistory.length > 0 && (
-                        <div style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 6 }}>ประวัติ AI ({aiBgHistory.length})</div>
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxHeight: 120, overflowY: 'auto' }}>
+                        <div className="ai-bg-history">
+                            <div className="ai-bg-history-label">ประวัติ AI ({aiBgHistory.length})</div>
+                            <div className="ai-bg-history-list">
                                 {aiBgHistory.map(h => (
                                     <div key={h.history_id}
                                         onClick={() => {
@@ -857,87 +901,81 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                                             panels.forEach(p => { updateDesign(p.id, { bg_mode: 'dalle', bg_image_url: fullUrl }); });
                                         }}
                                         title={h.prompt || ''}
-                                        style={{
-                                            width: 52, height: 52, borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
-                                            border: aiDielineBgUrl === h.image_url ? '2px solid #2563eb' : `1px solid ${C.border}`,
-                                            flexShrink: 0
-                                        }}>
-                                        <img src={`${API}${h.image_url}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        className={`ai-bg-history-thumb ${aiDielineBgUrl === h.image_url ? 'ai-bg-history-thumb-active' : ''}`}>
+                                        <img src={`${API}${h.image_url}`} alt="" />
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginBottom: 8 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 6 }}>Manual (ด้านนี้เท่านั้น)</div>
+                    <div className="bg-manual-divider">
+                        <div className="bg-manual-label">Manual (ด้านนี้เท่านั้น)</div>
                     </div>
 
                     {/* Solid Color */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div className="bg-color-row">
                         <input type="color" value={currentDesign?.bg_color || '#FFFFFF'}
                             onChange={e => activePanel && updateDesign(activePanel.id, { bg_mode: 'solid', bg_color: e.target.value })}
-                            style={{ width: 32, height: 32, border: 'none', cursor: 'pointer', borderRadius: 6 }} />
+                            className="bg-color-swatch-input" />
                         <input type="text" value={currentDesign?.bg_color || '#FFFFFF'}
                             onChange={e => activePanel && updateDesign(activePanel.id, { bg_mode: 'solid', bg_color: e.target.value })}
-                            style={{ flex: 1, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', fontSize: 12 }} />
+                            className="bg-color-text-input" />
                     </div>
 
                     {/* Brand color swatches */}
                     {brandAssets?.colors?.length > 0 && (
-                        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+                        <div className="brand-color-swatches">
                             {brandAssets.colors.map(c => (
                                 <button key={c} onClick={() => activePanel && updateDesign(activePanel.id, { bg_mode: 'solid', bg_color: c })}
-                                    style={{ width: 24, height: 24, borderRadius: 6, border: '2px solid #fff', boxShadow: '0 0 0 1px #ccc', background: c, cursor: 'pointer', padding: 0 }} />
+                                    className="brand-color-swatch" style={{ background: c }} />
                             ))}
                         </div>
                     )}
 
                     {/* Upload BG image */}
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: C.text, marginBottom: 8 }}>
+                    <label className="upload-bg-label">
                         <iconify-icon icon="mdi:image-plus"></iconify-icon> อัพโหลดรูป Background
-                        <input type="file" accept="image/*" onChange={handleBgImageUpload} style={{ display: 'none' }} />
+                        <input type="file" accept="image/*" onChange={handleBgImageUpload} className="visually-hidden-input" />
                     </label>
 
                     {/* Opacity */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 11, color: C.sub }}>ความโปร่งใส</span>
+                    <div className="bg-opacity-row">
+                        <span className="bg-opacity-label">ความโปร่งใส</span>
                         <input type="range" min="0" max="1" step="0.05" value={currentDesign?.bg_opacity ?? 1}
                             onChange={e => activePanel && updateDesign(activePanel.id, { bg_opacity: parseFloat(e.target.value) })}
-                            style={{ flex: 1 }} />
+                            className="bg-opacity-slider" />
                     </div>
                 </SidebarSection>
 
                 {/* === Text Section === */}
-                <SidebarSection title={<><iconify-icon icon="mdi:format-text" style={{verticalAlign:'middle'}}></iconify-icon> ข้อความ</>} open={openSections.text} onToggle={() => toggleSection('text')}>
-                    <button onClick={() => addElement('text')}
-                        style={{ width: '100%', padding: '8px 0', background: '#f0fdf4', border: `1px solid #86efac`, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#166534', marginBottom: 8 }}>
+                <SidebarSection title={<><iconify-icon icon="mdi:format-text"></iconify-icon> ข้อความ</>} open={openSections.text} onToggle={() => toggleSection('text')}>
+                    <button onClick={() => addElement('text')} className="add-text-btn">
                         + เพิ่มข้อความ
                     </button>
                     {selectedEl?.type === 'text' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div className="text-controls">
                             <input type="text" value={selectedEl.data} onChange={e => updateElement(activePanel.id, selectedEl.id, { data: e.target.value })}
-                                style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12 }} />
-                            <div style={{ display: 'flex', gap: 6 }}>
+                                className="text-content-input" />
+                            <div className="text-style-row">
                                 <input type="number" value={selectedEl.fontSize} onChange={e => updateElement(activePanel.id, selectedEl.id, { fontSize: parseInt(e.target.value) || 16 })}
-                                    style={{ width: 60, border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 6px', fontSize: 11 }} />
+                                    className="text-fontsize-input" />
                                 <input type="color" value={selectedEl.fill || '#222'} onChange={e => updateElement(activePanel.id, selectedEl.id, { fill: e.target.value })}
-                                    style={{ width: 32, height: 28, border: 'none', cursor: 'pointer' }} />
+                                    className="text-color-input" />
                             </div>
                         </div>
                     )}
                 </SidebarSection>
 
                 {/* === Image Section === */}
-                <SidebarSection title={<><iconify-icon icon="mdi:image-outline" style={{verticalAlign:'middle'}}></iconify-icon> รูปภาพ / โลโก้</>} open={openSections.image} onToggle={() => toggleSection('image')}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', color: C.text }}>
+                <SidebarSection title={<><iconify-icon icon="mdi:image-outline"></iconify-icon> รูปภาพ / โลโก้</>} open={openSections.image} onToggle={() => toggleSection('image')}>
+                    <div className="image-section-buttons">
+                        <label className="upload-image-label">
                             <iconify-icon icon="mdi:image-plus"></iconify-icon> อัพโหลดรูป
-                            <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                            <input type="file" accept="image/*" onChange={handleImageUpload} className="visually-hidden-input" />
                         </label>
                         {brandAssets?.logoUrl && (
-                            <button onClick={() => addElement('logo')}
-                                style={{ padding: '6px 10px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: '#fff', color: C.text, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <button onClick={() => addElement('logo')} className="add-logo-btn">
                                 <iconify-icon icon="mdi:crown"></iconify-icon> ใส่โลโก้แบรนด์
                             </button>
                         )}
@@ -945,145 +983,172 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 </SidebarSection>
 
                 {/* === Shape Section === */}
-                <SidebarSection title={<><iconify-icon icon="mdi:shape-outline" style={{verticalAlign:'middle'}}></iconify-icon> รูปทรง</>} open={openSections.shape} onToggle={() => toggleSection('shape')}>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <button onClick={() => addElement('rect')}
-                            style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: '#fff' }}>
-                            <iconify-icon icon="mdi:square-outline" style={{verticalAlign:'middle'}}></iconify-icon> สี่เหลี่ยม
-                        </button>
-                        <button onClick={() => addElement('circle')}
-                            style={{ padding: '6px 12px', border: `1px solid ${C.border}`, borderRadius: 6, fontSize: 11, cursor: 'pointer', background: '#fff' }}>
-                            <iconify-icon icon="mdi:circle-outline" style={{verticalAlign:'middle'}}></iconify-icon> วงกลม
-                        </button>
+                <SidebarSection title={<><iconify-icon icon="mdi:shape-outline"></iconify-icon> รูปทรง</>} open={openSections.shape} onToggle={() => toggleSection('shape')}>
+                    {/* Shape category tabs */}
+                    <div className="shape-tabs">
+                        {['ทั้งหมด', 'พื้นฐาน', 'กรอบ', 'ตกแต่ง'].map(tab => (
+                            <button key={tab} onClick={() => setShapeTab(tab)}
+                                className={`shape-tab ${shapeTab === tab ? 'shape-tab-active' : ''}`}>
+                                {tab}
+                            </button>
+                        ))}
                     </div>
-                    {selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle') && (
-                        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 11, color: C.sub }}>สี:</span>
-                            <input type="color" value={selectedEl.fill || '#cccccc'} onChange={e => updateElement(activePanel.id, selectedEl.id, { fill: e.target.value })}
-                                style={{ width: 32, height: 28, border: 'none', cursor: 'pointer' }} />
+                    {/* Shape icon grid — filtered by tab */}
+                    <div className="shape-grid">
+                        {[
+                            { type: 'rect',       icon: 'mdi:square-outline',           label: 'สี่เหลี่ยม',   tab: 'พื้นฐาน' },
+                            { type: 'rect_round', icon: 'mdi:square-rounded-outline',   label: 'มนเหลี่ยม',  tab: 'พื้นฐาน' },
+                            { type: 'circle',     icon: 'mdi:circle-outline',           label: 'วงกลม',       tab: 'พื้นฐาน' },
+                            { type: 'triangle',   icon: 'mdi:triangle-outline',         label: 'สามเหลี่ยม', tab: 'พื้นฐาน' },
+                            { type: 'diamond',    icon: 'mdi:rhombus-outline',          label: 'ข้าวหลามตัด', tab: 'ตกแต่ง' },
+                            { type: 'star',       icon: 'mdi:star-outline',             label: 'ดาว',         tab: 'ตกแต่ง' },
+                            { type: 'hexagon',    icon: 'mdi:hexagon-outline',          label: 'หกเหลี่ยม',  tab: 'กรอบ' },
+                            { type: 'arrow',      icon: 'mdi:arrow-right-bold-outline', label: 'ลูกศร',       tab: 'ตกแต่ง' },
+                            { type: 'octagon',    icon: 'mdi:octagon-outline',          label: 'แปดเหลี่ยม', tab: 'กรอบ' },
+                            { type: 'ellipse',    icon: 'mdi:ellipse-outline',          label: 'วงรี',        tab: 'พื้นฐาน' },
+                            { type: 'speech',     icon: 'mdi:chat-outline',             label: 'บอลลูน',      tab: 'ตกแต่ง' },
+                            { type: 'heart',      icon: 'mdi:cards-heart-outline',      label: 'หัวใจ',       tab: 'ตกแต่ง' },
+                        ]
+                            .filter(s => shapeTab === 'ทั้งหมด' || s.tab === shapeTab)
+                            .map(s => (
+                                <button key={s.type} onClick={() => addElement(s.type)}
+                                    className="shape-grid-btn" title={s.label}>
+                                    <iconify-icon icon={s.icon}></iconify-icon>
+                                </button>
+                            ))
+                        }
+                    </div>
+                    {/* Fill color quick-picker — always visible; active only when a shape is selected */}
+                    <div className={`shape-fill-section${selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle') ? ' shape-fill-section-active' : ''}`}>
+                        <div className="shape-fill-row">
+                            <span className="shape-fill-label">สีเติม</span>
+                            <input type="color"
+                                value={(selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle')) ? (selectedEl.fill || '#cccccc') : '#cccccc'}
+                                disabled={!(selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle'))}
+                                onChange={e => selectedEl && updateElement(activePanel.id, selectedEl.id, { fill: e.target.value })}
+                                className="shape-fill-swatch" />
+                            {brandAssets?.colors?.length > 0 && (
+                                <div className="shape-fill-swatches">
+                                    {brandAssets.colors.map((c, i) => (
+                                        <button key={i}
+                                            disabled={!(selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle'))}
+                                            onClick={() => selectedEl && updateElement(activePanel.id, selectedEl.id, { fill: c })}
+                                            className="brand-color-swatch" style={{ background: c }} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    )}
+                        <div className="shape-opacity-row">
+                            <span className="shape-fill-label">ความทึบ</span>
+                            <input
+                                type="range" min={0} max={1} step={0.01}
+                                value={(selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle')) ? (selectedEl.opacity ?? 1) : 1}
+                                disabled={!(selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle'))}
+                                onChange={e => selectedEl && updateElement(activePanel.id, selectedEl.id, { opacity: parseFloat(e.target.value) })}
+                                className="shape-opacity-slider" />
+                            <span className="shape-fill-opacity">
+                                {Math.round(((selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle')) ? (selectedEl.opacity ?? 1) : 1) * 100)}%
+                            </span>
+                        </div>
+                        {!(selectedEl && (selectedEl.type === 'shape' || selectedEl.type === 'circle')) && (
+                            <div className="shape-fill-hint">เลือกรูปทรงเพื่อแก้ไขสี</div>
+                        )}
+                    </div>
                 </SidebarSection>
 
                 {/* === Import Label === */}
-                <SidebarSection title={<><iconify-icon icon="mdi:clipboard-text-outline" style={{verticalAlign:'middle'}}></iconify-icon> Import จากฉลาก</>} open={openSections.label} onToggle={() => toggleSection('label')}>
+                <SidebarSection title={<><iconify-icon icon="mdi:clipboard-text-outline"></iconify-icon> Import จากฉลาก</>} open={openSections.label} onToggle={() => toggleSection('label')}>
                     {!labelData ? (
-                        <div style={{ fontSize: 12, color: C.sub, textAlign: 'center', padding: 8 }}>ยังไม่มีฉลากที่ออกแบบไว้</div>
+                        <div className="no-label-msg">ยังไม่มีฉลากที่ออกแบบไว้</div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginBottom: 2 }}>วางฉลากทั้งชิ้น</div>
+                        <div className="label-import-list">
+                            <div className="label-import-group-title">วางฉลากทั้งชิ้น</div>
                             <LabelPartBtn icon="mdi:label-outline" label="ฉลากเต็ม (รูปภาพ)" available={!!(labelImageUrl || labelData?.final_label_url)} onClick={() => addElement('label_import')} />
 
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>ข้อมูลสินค้า</div>
+                            <div className="label-import-group-title">ข้อมูลสินค้า</div>
                             <LabelPartBtn icon="mdi:tag-text-outline" label="ชื่อสินค้า" detail={labelData?.product_name} available={!!labelData?.product_name} onClick={() => addElement('label_text_product_name')} />
                             <LabelPartBtn icon="mdi:star-four-points-outline" label="Tagline" detail={labelData?.tagline} available={!!labelData?.tagline} onClick={() => addElement('label_text_tagline')} />
                             <LabelPartBtn icon="mdi:scale-balance" label="น้ำหนักสุทธิ" detail={labelData?.net_weight} available={!!labelData?.net_weight} onClick={() => addElement('label_text_net_weight')} />
                             <LabelPartBtn icon="mdi:text-box-outline" label="ส่วนประกอบ" available={!!labelData?.ingredients} onClick={() => addElement('label_text_ingredients')} />
 
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>คำแนะนำ / คำเตือน</div>
+                            <div className="label-import-group-title">คำแนะนำ / คำเตือน</div>
                             <LabelPartBtn icon="mdi:book-open-variant" label="วิธีใช้" available={!!labelData?.usage_instruction} onClick={() => addElement('label_text_usage')} />
                             <LabelPartBtn icon="mdi:home-outline" label="วิธีเก็บรักษา" available={!!labelData?.storage_instruction} onClick={() => addElement('label_text_storage')} />
                             <LabelPartBtn icon="mdi:alert-outline" label="คำเตือน" available={!!labelData?.warnings} onClick={() => addElement('label_text_warnings')} />
 
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>ข้อมูลทางกฎหมาย</div>
+                            <div className="label-import-group-title">ข้อมูลทางกฎหมาย</div>
                             <LabelPartBtn icon="mdi:factory" label="ผู้ผลิต" available={!!labelData?.manufacturer_info} onClick={() => addElement('label_text_manufacturer')} />
                             <LabelPartBtn icon="mdi:bookmark-outline" label="เลข อย." detail={labelData?.fda_number} available={!!labelData?.fda_number} onClick={() => addElement('label_text_fda')} />
                             <LabelPartBtn icon="mdi:calendar-outline" label="MFG / EXP" available={!!(labelData?.mfg_date || labelData?.exp_date)} onClick={() => addElement('label_text_dates')} />
                             <LabelPartBtn icon="mdi:pound" label="LOT" detail={labelData?.lot_number} available={!!labelData?.lot_number} onClick={() => addElement('label_text_lot')} />
 
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>โลโก้ / เครื่องหมาย</div>
+                            <div className="label-import-group-title">โลโก้ / เครื่องหมาย</div>
                             <LabelPartBtn icon="mdi:crown" label="โลโก้แบรนด์" available={!!brandAssets?.logoUrl} onClick={() => addElement('label_logo')} />
                             <LabelPartBtn icon="mdi:medal-outline" label="Certifications" detail={(() => { try { const c = Array.isArray(labelData?.certifications) ? labelData.certifications : JSON.parse(labelData?.certifications || '[]'); return c.join(', '); } catch { return ''; } })()} available={!!labelData?.certifications} onClick={() => addElement('label_certs')} />
 
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#92400e', marginTop: 8, marginBottom: 2 }}>Barcode / QR Code</div>
+                            <div className="label-import-group-title">Barcode / QR Code</div>
                             <LabelPartBtn icon="mdi:barcode" label="Barcode (EAN-13)" detail={labelData?.barcode_value} available={true} onClick={() => addElement('barcode')} />
                             <LabelPartBtn icon="mdi:qrcode" label="QR Code" detail={labelData?.qr_code_value} available={true} onClick={() => addElement('qrcode')} />
                         </div>
                     )}
                 </SidebarSection>
 
-                {/* === Selected Element Controls === */}
-                {selectedEl && (
-                    <div style={{ marginTop: 12, padding: 10, background: '#fef2f2', borderRadius: 8 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: '#991b1b' }}>
-                                {selectedEl.type === 'text' ? 'ข้อความ' : selectedEl.type === 'image' ? 'รูปภาพ' : selectedEl.type === 'barcode' ? 'Barcode (EAN-13)' : selectedEl.type === 'qrcode' ? 'QR Code' : 'รูปทรง'}
-                            </span>
-                            <button onClick={() => deleteElement(selectedEl.id)}
-                                style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}>
-                                <iconify-icon icon="mdi:delete-outline" style={{verticalAlign:'middle'}}></iconify-icon> ลบ
-                            </button>
-                        </div>
-                        {selectedEl.type === 'barcode' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <label style={{ fontSize: 10, color: C.sub }}>ตัวเลข EAN-13 (13 หลัก)</label>
-                                <input type="text" maxLength={13} value={selectedEl.barcodeValue || ''} onChange={e => updateElement(activePanel.id, selectedEl.id, { barcodeValue: e.target.value })}
-                                    placeholder="8850000000000"
-                                    style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12 }} />
-                            </div>
-                        )}
-                        {selectedEl.type === 'qrcode' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                <label style={{ fontSize: 10, color: C.sub }}>ข้อมูล QR Code</label>
-                                <input type="text" value={selectedEl.qrValue || ''} onChange={e => updateElement(activePanel.id, selectedEl.id, { qrValue: e.target.value })}
-                                    placeholder="URL หรือข้อมูล"
-                                    style={{ border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', fontSize: 12 }} />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* === Save / Export Buttons === */}
-                <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <button onClick={handleSave} disabled={isSaving}
-                        style={{ padding: '10px 0', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: isSaving ? 'wait' : 'pointer' }}>
-                        {isSaving ? <><iconify-icon icon="mdi:content-save" style={{verticalAlign:'middle'}}></iconify-icon> กำลังบันทึก...</> : <><iconify-icon icon="mdi:content-save" style={{verticalAlign:'middle'}}></iconify-icon> บันทึก</>}
+                {/* === Export Block === */}
+                <div className="save-export-block">
+                    {/* Primary: PNG download */}
+                    <button onClick={handleExportPng} disabled={isExporting} className="export-primary-btn">
+                        <span className="export-primary-icon"><iconify-icon icon="mdi:download"></iconify-icon></span>
+                        <span className="export-primary-text">
+                            <span className="export-primary-label">ดาวน์โหลด PNG</span>
+                            <span className="export-primary-sub">ไฟล์ภาพความละเอียดสูง</span>
+                        </span>
                     </button>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={handleExportPng} disabled={isExporting}
-                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: C.text }}>
-                            <iconify-icon icon="mdi:image-outline" style={{verticalAlign:'middle'}}></iconify-icon> PNG
+
+                    {/* Secondary: print-ready formats */}
+                    <div className="export-pro-label">
+                        <iconify-icon icon="mdi:crown"></iconify-icon> สำหรับงานพิมพ์ (Pro)
+                    </div>
+                    <div className="export-buttons-row">
+                        <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportPdf(); }}
+                            disabled={isExporting}
+                            className={`export-btn ${!isProUser(getUserFromStorage()) ? 'export-btn-locked' : ''}`}>
+                            <iconify-icon icon="mdi:file-pdf-box"></iconify-icon>
+                            <span>PDF</span>
+                            {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="11" className="lock-icon"></iconify-icon>}
                         </button>
-                        <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportPdf(); }} disabled={isExporting}
-                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: isProUser(getUserFromStorage()) ? C.text : '#ccc' }}>
-                            <iconify-icon icon="mdi:file-pdf-box" style={{verticalAlign:'middle'}}></iconify-icon> PDF
-                            {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="12" style={{verticalAlign:'middle', marginLeft: 2, color: '#d35325'}}></iconify-icon>}
-                        </button>
-                        <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportAi(); }} disabled={isExporting}
-                            style={{ flex: 1, padding: '8px 0', background: '#fff', border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: isExporting ? 'wait' : 'pointer', color: isProUser(getUserFromStorage()) ? C.text : '#ccc' }}>
-                            <iconify-icon icon="mdi:adobe" style={{verticalAlign:'middle'}}></iconify-icon> AI
-                            {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="12" style={{verticalAlign:'middle', marginLeft: 2, color: '#d35325'}}></iconify-icon>}
+                        <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportAi(); }}
+                            disabled={isExporting}
+                            className={`export-btn ${!isProUser(getUserFromStorage()) ? 'export-btn-locked' : ''}`}>
+                            <iconify-icon icon="mdi:adobe"></iconify-icon>
+                            <span>Illustrator</span>
+                            {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="11" className="lock-icon"></iconify-icon>}
                         </button>
                     </div>
-                    <div style={{ fontSize: 10, color: C.sub, textAlign: 'center' }}>PDF/AI = print-ready, crop marks, fold lines</div>
-                    {saveMsg && <div style={{ fontSize: 12, color: '#16a34a', textAlign: 'center' }}>{saveMsg}</div>}
-                    {saveStatus && !saveMsg && <div style={{ fontSize: 11, color: saveStatus.includes('ไม่') ? '#dc2626' : '#16a34a', textAlign: 'center' }}>{saveStatus}</div>}
+                    <div className="export-hint">CMYK · crop marks · fold lines</div>
+
+                    {saveMsg && <div className="save-msg save-msg-success"><iconify-icon icon="mdi:check-circle-outline"></iconify-icon> {saveMsg}</div>}
+                    {saveStatus && !saveMsg && <div className={`save-status ${saveStatus.includes('ไม่') ? 'save-status-error' : 'save-status-success'}`}>{saveStatus}</div>}
                 </div>
 
                 {/* === AI Mockup Preview === */}
-                <div style={{ marginTop: 16, padding: 12, background: '#fdf4ff', borderRadius: 10, border: '1px solid #e9d5ff' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <iconify-icon icon="mdi:cube-scan" style={{fontSize:16}}></iconify-icon>
+                <div className="ai-mockup-block">
+                    <div className="ai-mockup-title">
+                        <iconify-icon icon="mdi:cube-scan"></iconify-icon>
                         AI สร้างภาพ Mockup สมบูรณ์
                     </div>
-                    <div style={{ fontSize: 10, color: '#6b21a8', marginBottom: 8, lineHeight: 1.5 }}>
+                    <div className="ai-mockup-desc">
                         เลือกด้านที่จะแสดง แล้วให้ AI สร้างภาพ 3D Mockup สมจริง
                     </div>
 
                     {/* Panel selection checkboxes */}
-                    <div style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 600, marginBottom: 4 }}>เลือกด้านที่จะใช้:</div>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    <div className="ai-mockup-panel-select">
+                        <div className="ai-mockup-panel-select-label">เลือกด้านที่จะใช้:</div>
+                        <div className="ai-mockup-panel-select-list">
                             {panels.map(p => (
-                                <label key={p.id} style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 6, fontSize: 10, cursor: 'pointer',
-                                    border: mockupPanelSelection[p.id] ? '2px solid #7c3aed' : `1px solid ${C.border}`,
-                                    background: mockupPanelSelection[p.id] ? '#ede9fe' : '#fff',
-                                    color: mockupPanelSelection[p.id] ? '#7c3aed' : C.sub, fontWeight: mockupPanelSelection[p.id] ? 600 : 400
-                                }}>
+                                <label key={p.id} className={`ai-mockup-panel-chip ${mockupPanelSelection[p.id] ? 'ai-mockup-panel-chip-active' : ''}`}>
                                     <input type="checkbox" checked={!!mockupPanelSelection[p.id]}
                                         onChange={e => setMockupPanelSelection(prev => ({ ...prev, [p.id]: e.target.checked }))}
-                                        style={{ width: 12, height: 12, accentColor: '#7c3aed' }} />
+                                        className="ai-mockup-panel-checkbox" />
                                     {p.label}
                                 </label>
                             ))}
@@ -1091,9 +1156,9 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                     </div>
 
                     {/* Background style selector */}
-                    <div style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 600, marginBottom: 4 }}>พื้นหลัง:</div>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    <div className="ai-mockup-bgstyle-select">
+                        <div className="ai-mockup-bgstyle-label">พื้นหลัง:</div>
+                        <div className="ai-mockup-bgstyle-list">
                             {[
                                 { key: 'white', label: 'ขาว', color: '#fff' },
                                 { key: 'wood', label: 'ไม้', color: '#d4a574' },
@@ -1102,38 +1167,28 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                                 { key: 'gradient', label: 'สตูดิโอ', color: '#c4b5fd' },
                             ].map(bg => (
                                 <button key={bg.key} onClick={() => setMockupBgStyle(bg.key)}
-                                    style={{
-                                        padding: '3px 8px', borderRadius: 6, fontSize: 10, cursor: 'pointer',
-                                        border: mockupBgStyle === bg.key ? '2px solid #7c3aed' : `1px solid ${C.border}`,
-                                        background: bg.color, color: '#333',
-                                        fontWeight: mockupBgStyle === bg.key ? 700 : 400
-                                    }}>
+                                    className={`ai-mockup-bgstyle-chip ${mockupBgStyle === bg.key ? 'ai-mockup-bgstyle-chip-active' : ''}`}>
                                     {bg.label}
                                 </button>
                             ))}
                         </div>
                     </div>
 
-                    <button onClick={handleGenMockup} disabled={isGenMockup || panels.length === 0}
-                        style={{
-                            width: '100%', padding: '10px 0', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: isGenMockup ? 'wait' : 'pointer',
-                            background: isGenMockup ? '#c4b5fd' : 'linear-gradient(135deg, #7c3aed, #a855f7)',
-                            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
-                        }}>
+                    <button onClick={handleGenMockup} disabled={isGenMockup || panels.length === 0} className="ai-mockup-generate-btn">
                         {isGenMockup ? (
-                            <><iconify-icon icon="mdi:loading" class="spin" style={{verticalAlign:'middle'}}></iconify-icon> {mockupProgress?.message || 'กำลังสร้าง...'}</>
+                            <><iconify-icon icon="mdi:loading" className="spin"></iconify-icon> {mockupProgress?.message || 'กำลังสร้าง...'}</>
                         ) : (
-                            <><iconify-icon icon="mdi:cube-scan" style={{verticalAlign:'middle'}}></iconify-icon> สร้างภาพ Mockup ({panels.filter(p => mockupPanelSelection[p.id]).length} ด้าน)</>
+                            <><iconify-icon icon="mdi:cube-scan"></iconify-icon> สร้างภาพ Mockup ({panels.filter(p => mockupPanelSelection[p.id]).length} ด้าน)</>
                         )}
                     </button>
 
                     {/* Progress */}
                     {isGenMockup && mockupProgress && (
-                        <div style={{ marginTop: 6 }}>
-                            <div style={{ height: 4, background: '#e9d5ff', borderRadius: 4, overflow: 'hidden' }}>
-                                <div style={{ height: '100%', background: '#7c3aed', borderRadius: 4, width: `${(mockupProgress.step / mockupProgress.total) * 100}%`, transition: 'width 0.3s' }} />
+                        <div className="ai-mockup-progress">
+                            <div className="ai-mockup-progress-track">
+                                <div className="ai-mockup-progress-fill" style={{ width: `${(mockupProgress.step / mockupProgress.total) * 100}%` }} />
                             </div>
-                            <div style={{ fontSize: 10, color: '#7c3aed', marginTop: 3, textAlign: 'center' }}>
+                            <div className="ai-mockup-progress-text">
                                 ขั้นตอน {mockupProgress.step}/{mockupProgress.total}
                             </div>
                         </div>
@@ -1141,106 +1196,507 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
 
                     {/* Result preview — click to open popup */}
                     {aiMockupPreviewUrl && (
-                        <div style={{ marginTop: 8 }}>
+                        <div className="ai-mockup-result">
                             <img src={aiMockupPreviewUrl} alt="AI Mockup"
                                 onClick={() => setLightboxUrl(aiMockupPreviewUrl)}
-                                style={{ width: '100%', borderRadius: 8, border: `1px solid ${C.border}`, cursor: 'pointer' }} />
-                            <div style={{ fontSize: 9, color: '#7c3aed', textAlign: 'center', marginTop: 2 }}>คลิกเพื่อขยาย</div>
+                                className="ai-mockup-result-img" />
+                            <div className="ai-mockup-result-hint">คลิกเพื่อขยาย</div>
                         </div>
                     )}
 
                     {/* Mockup History */}
                     {mockupHistory.length > 0 && (
-                        <div style={{ marginTop: 10 }}>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: '#7c3aed', marginBottom: 4 }}>ประวัติ Mockup ({mockupHistory.length})</div>
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxHeight: 130, overflowY: 'auto' }}>
+                        <div className="ai-mockup-history">
+                            <div className="ai-mockup-history-label">ประวัติ Mockup ({mockupHistory.length})</div>
+                            <div className="ai-mockup-history-list">
                                 {mockupHistory.map(h => (
                                     <div key={h.history_id}
                                         onClick={() => setLightboxUrl(`${API}${h.image_url}`)}
-                                        style={{
-                                            width: 60, height: 60, borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
-                                            border: `1px solid ${C.border}`, flexShrink: 0,
-                                            transition: 'transform 0.15s', position: 'relative'
-                                        }}
-                                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
-                                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
-                                        <img src={`${API}${h.image_url}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        className="ai-mockup-history-thumb">
+                                        <img src={`${API}${h.image_url}`} alt="" />
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    <div style={{ fontSize: 9, color: '#a78bfa', marginTop: 6, textAlign: 'center' }}>ใช้ Gemini AI Credit</div>
+                    <div className="ai-mockup-credit-note">ใช้ Gemini AI Credit</div>
                 </div>
             </div>
 
             {/* === CANVAS AREA === */}
-            <div style={{ flex: 1, background: C.bgPage, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 20, overflow: 'auto', position: 'relative' }}>
+            <div className="pkgdesign-canvas-area">
                 {/* Panel info */}
-                <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <button onClick={() => { const prev = (activePanelIdx - 1 + panels.length) % panels.length; setActivePanelIdx(prev); setSelectedElId(null); }}
-                        style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14, display:'flex', alignItems:'center' }}><iconify-icon icon="mdi:chevron-left"></iconify-icon></button>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
-                        {activePanel?.label} ({activePanel?.w_mm} × {activePanel?.h_mm} mm)
-                    </span>
-                    <button onClick={() => { const next = (activePanelIdx + 1) % panels.length; setActivePanelIdx(next); setSelectedElId(null); }}
-                        style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 14, display:'flex', alignItems:'center' }}><iconify-icon icon="mdi:chevron-right"></iconify-icon></button>
+                <div className="canvas-panel-nav">
+                    <div className="canvas-panel-nav-left">
+                        <button onClick={() => { const prev = (activePanelIdx - 1 + panels.length) % panels.length; setActivePanelIdx(prev); setSelectedElId(null); }}
+                            className="canvas-panel-nav-btn"><iconify-icon icon="mdi:chevron-left"></iconify-icon></button>
+                        <span className="canvas-panel-nav-label">
+                            {activePanel?.label} ({activePanel?.w_mm} × {activePanel?.h_mm} mm)
+                        </span>
+                        <button onClick={() => { const next = (activePanelIdx + 1) % panels.length; setActivePanelIdx(next); setSelectedElId(null); }}
+                            className="canvas-panel-nav-btn"><iconify-icon icon="mdi:chevron-right"></iconify-icon></button>
+                    </div>
+                    <div className="canvas-panel-nav-right">
+                        <button onClick={handleSave} disabled={isSaving} className="canvas-save-btn">
+                            <iconify-icon icon="mdi:content-save-outline"></iconify-icon>
+                            {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Canvas + Mini Map side by side */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                    {/* Konva Stage */}
-                    <div style={{ background: '#fff', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 2 }}>
-                        <Stage ref={stageRef} width={canvasW} height={canvasH} onClick={handleStageClick}>
-                            <Layer>
-                                {/* Background */}
-                                <PanelBackground design={currentDesign} width={canvasW} height={canvasH}
-                                    panel={activePanel} panels={panels} materialData={materialData}
-                                    aiDielineBgImg={aiDielineBgImg} />
+                <div className="canvas-body">
+                    {/* Scrollable canvas area — only stage scales */}
+                    <div className="canvas-scroll-area" onWheel={e => {
+                        if (!e.ctrlKey) return;
+                        e.preventDefault();
+                        const dir = e.deltaY < 0 ? 1 : -1;
+                        setStageScale(s => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, parseFloat((s + dir * ZOOM_STEP).toFixed(2)))));
+                    }}>
+                        <div className="canvas-center-container">
+                            <div className="canvas-stage-scaler" style={{ transform: `scale(${stageScale})`, transformOrigin: 'center top' }}>
+                                <div className="canvas-stage-wrapper">
+                                    <Stage ref={stageRef} width={canvasW} height={canvasH} onClick={handleStageClick}>
+                                        <Layer>
+                                            {/* Background */}
+                                            <PanelBackground design={currentDesign} width={canvasW} height={canvasH}
+                                                panel={activePanel} panels={panels} materialData={materialData}
+                                                aiDielineBgImg={aiDielineBgImg} />
 
-                                {/* Elements */}
-                                {currentDesign?.elements?.map(el => (
-                                    <PanelElement key={el.id} el={el} isSelected={el.id === selectedElId}
-                                        onSelect={() => setSelectedElId(el.id)}
-                                        onChange={(updates) => updateElement(activePanel.id, el.id, updates)} />
-                                ))}
+                                            {/* Elements */}
+                                            {currentDesign?.elements?.map(el => (
+                                                <PanelElement key={el.id} el={el} isSelected={el.id === selectedElId}
+                                                    onSelect={() => setSelectedElId(el.id)}
+                                                    onChange={(updates) => updateElement(activePanel.id, el.id, updates)} />
+                                            ))}
 
-                                <Transformer ref={trRef}
-                                    boundBoxFunc={(oldB, newB) => newB.width < 10 ? oldB : newB}
-                                    rotateEnabled={true} keepRatio={false} />
-                            </Layer>
-                        </Stage>
+                                            <Transformer ref={trRef}
+                                                boundBoxFunc={(oldB, newB) => newB.width < 10 ? oldB : newB}
+                                                rotateEnabled={true} keepRatio={false} />
+                                        </Layer>
+                                    </Stage>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Mini Map (right side) */}
-                    <DielineMiniMap panels={panels} activePanelIdx={activePanelIdx} onClickPanel={idx => { setActivePanelIdx(idx); setSelectedElId(null); }}
-                        materialData={materialData} panelDesigns={panelDesigns} aiDielineBgImg={aiDielineBgImg} />
+                    {/* Die-line mini map — fixed position, never scales */}
+                    <div className="canvas-minimap-panel">
+                        <DielineMiniMap panels={panels} activePanelIdx={activePanelIdx} onClickPanel={idx => { setActivePanelIdx(idx); setSelectedElId(null); }}
+                            materialData={materialData} panelDesigns={panelDesigns} aiDielineBgImg={aiDielineBgImg} />
+                    </div>
+                </div>
+
+                {/* Bottom toolbar */}
+                <div className="canvas-bottom-toolbar">
+                    <button className={`canvas-bottom-toolbar-btn${!canUndo ? ' canvas-bottom-toolbar-btn-dim' : ''}`}
+                        onClick={handleUndo} disabled={!canUndo} title="ย้อนกลับ (Ctrl+Z)">
+                        <iconify-icon icon="mdi:undo"></iconify-icon> ย้อนกลับ
+                    </button>
+                    <button className={`canvas-bottom-toolbar-btn${!canRedo ? ' canvas-bottom-toolbar-btn-dim' : ''}`}
+                        onClick={handleRedo} disabled={!canRedo} title="ทำซ้ำ (Ctrl+Y)">
+                        <iconify-icon icon="mdi:redo"></iconify-icon> ทำซ้ำ
+                    </button>
+                    <div className="canvas-bottom-toolbar-divider"></div>
+                    <button className="canvas-bottom-toolbar-btn" onClick={handleZoomOut} disabled={stageScale <= ZOOM_MIN} title="ซูมออก">
+                        <iconify-icon icon="mdi:minus"></iconify-icon>
+                    </button>
+                    <button className="canvas-bottom-toolbar-zoom-label" onClick={() => setStageScale(1)} title="รีเซ็ตซูม">
+                        {Math.round(stageScale * 100)}%
+                    </button>
+                    <button className="canvas-bottom-toolbar-btn" onClick={handleZoomIn} disabled={stageScale >= ZOOM_MAX} title="ซูมเข้า">
+                        <iconify-icon icon="mdi:plus"></iconify-icon>
+                    </button>
+                    <div className="canvas-bottom-toolbar-divider"></div>
+                    <button className="canvas-bottom-toolbar-btn" onClick={handleFitToScreen} title="พอดีจอ">
+                        <iconify-icon icon="mdi:fit-to-screen-outline"></iconify-icon> พอดีจอ
+                    </button>
+                    <div className="canvas-bottom-toolbar-divider"></div>
+                    <button className="canvas-bottom-toolbar-btn canvas-bottom-toolbar-btn-reset"
+                        onClick={() => { setStageScale(1); }}
+                        title="รีเซ็ตซูม 100%">
+                        <iconify-icon icon="mdi:restore"></iconify-icon> รีเซ็ต
+                    </button>
                 </div>
             </div>
 
+            {/* === RIGHT PROPERTIES PANEL === */}
+            <div className="pkgdesign-props-panel">
+                {/* Tabs */}
+                <div className="props-tabs">
+                    <button
+                        className={`props-tab ${propsPanelTab === 'จัดการชั้น' ? 'props-tab-active' : ''}`}
+                        onClick={() => setPropsPanelTab('จัดการชั้น')}>จัดการชั้น</button>
+                    <button
+                        className={`props-tab ${propsPanelTab === 'คุณสมบัติ' ? 'props-tab-active' : ''}`}
+                        onClick={() => setPropsPanelTab('คุณสมบัติ')}>คุณสมบัติ</button>
+                </div>
+
+                {/* Layer manager tab */}
+                {propsPanelTab === 'จัดการชั้น' && (
+                    <div className="props-layers-list">
+                        {(currentDesign?.elements?.length ?? 0) === 0 ? (
+                            <div className="props-empty">
+                                <div className="props-empty-icon"><iconify-icon icon="mdi:layers-outline"></iconify-icon></div>
+                                <div className="props-empty-text">ยังไม่มีออบเจ็กต์</div>
+                            </div>
+                        ) : (
+                            [...(currentDesign?.elements || [])].reverse().map((el, revIdx) => {
+                                const realIdx = (currentDesign.elements.length - 1) - revIdx;
+                                const isActive = el.id === selectedElId;
+                                const label = el.type === 'text' ? (el.data?.slice(0, 18) || 'ข้อความ')
+                                    : el.type === 'image' ? 'รูปภาพ'
+                                    : el.type === 'barcode' ? 'Barcode'
+                                    : el.type === 'qrcode' ? 'QR Code'
+                                    : el.shapeKind ? el.shapeKind : 'รูปทรง';
+                                const icon = el.type === 'text' ? 'mdi:format-text'
+                                    : el.type === 'image' ? 'mdi:image-outline'
+                                    : el.type === 'barcode' ? 'mdi:barcode'
+                                    : el.type === 'qrcode' ? 'mdi:qrcode'
+                                    : 'mdi:shape-outline';
+                                return (
+                                    <div key={el.id}
+                                        className={`props-layer-item ${isActive ? 'props-layer-item-active' : ''} ${el.hidden ? 'props-layer-item-hidden' : ''}`}
+                                        onClick={() => setSelectedElId(el.id)}>
+                                        <iconify-icon icon={icon} className="props-layer-item-icon"></iconify-icon>
+                                        <span className="props-layer-item-label">{label}</span>
+                                        <div className="props-layer-item-actions">
+                                            {/* Eye toggle */}
+                                            <button
+                                                className={`props-layer-item-btn props-layer-item-eye ${el.hidden ? 'props-layer-item-eye-off' : ''}`}
+                                                title={el.hidden ? 'แสดง' : 'ซ่อน'}
+                                                onClick={e => { e.stopPropagation(); updateElement(activePanel.id, el.id, { hidden: !el.hidden }); }}>
+                                                <iconify-icon icon={el.hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}></iconify-icon>
+                                            </button>
+                                            <button className="props-layer-item-btn" title="ขึ้น"
+                                                onClick={e => { e.stopPropagation(); setPanelDesigns(prev => { const d = {...prev[activePanel.id]}; const els = [...d.elements]; if (realIdx < els.length-1) { [els[realIdx], els[realIdx+1]] = [els[realIdx+1], els[realIdx]]; } d.elements = els; return {...prev, [activePanel.id]: d}; }); }}>
+                                                <iconify-icon icon="mdi:chevron-up"></iconify-icon>
+                                            </button>
+                                            <button className="props-layer-item-btn" title="ลง"
+                                                onClick={e => { e.stopPropagation(); setPanelDesigns(prev => { const d = {...prev[activePanel.id]}; const els = [...d.elements]; if (realIdx > 0) { [els[realIdx], els[realIdx-1]] = [els[realIdx-1], els[realIdx]]; } d.elements = els; return {...prev, [activePanel.id]: d}; }); }}>
+                                                <iconify-icon icon="mdi:chevron-down"></iconify-icon>
+                                            </button>
+                                            <button className="props-layer-item-btn props-layer-item-del" title="ลบ"
+                                                onClick={e => { e.stopPropagation(); deleteElement(el.id); }}>
+                                                <iconify-icon icon="mdi:close"></iconify-icon>
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+
+                {/* Properties tab */}
+                {propsPanelTab === 'คุณสมบัติ' && (
+                    selectedEl ? (
+                        <div className="props-body">
+                            {/* Element type label with delete */}
+                            <div className="props-el-header">
+                                <span className="props-el-type-badge">
+                                    {selectedEl.type === 'text' ? 'ข้อความ'
+                                        : selectedEl.type === 'image' ? 'รูปภาพ'
+                                        : selectedEl.type === 'barcode' ? 'บาร์โค้ด'
+                                        : selectedEl.type === 'qrcode' ? 'QR Code'
+                                        : 'รูปทรง'}
+                                </span>
+                                <button onClick={() => deleteElement(selectedEl.id)} className="props-delete-btn">
+                                    <iconify-icon icon="mdi:delete-outline"></iconify-icon>
+                                </button>
+                            </div>
+
+                            {/* Position */}
+                            <div className="props-section-label">ตำแหน่ง</div>
+                            <div className="props-xy-row">
+                                <div className="props-field">
+                                    <span className="props-field-label">X</span>
+                                    <input type="number"
+                                        value={Math.round(selectedEl.x / mmToPx * 10) / 10}
+                                        onChange={e => {
+                                            const val = parseFloat(e.target.value);
+                                            if (!isNaN(val)) updateElement(activePanel.id, selectedEl.id, { x: val * mmToPx });
+                                        }}
+                                        className="props-mm-input" />
+                                    <span className="props-field-unit">mm</span>
+                                </div>
+                                <div className="props-field">
+                                    <span className="props-field-label">Y</span>
+                                    <input type="number"
+                                        value={Math.round(selectedEl.y / mmToPx * 10) / 10}
+                                        onChange={e => {
+                                            const val = parseFloat(e.target.value);
+                                            if (!isNaN(val)) updateElement(activePanel.id, selectedEl.id, { y: val * mmToPx });
+                                        }}
+                                        className="props-mm-input" />
+                                    <span className="props-field-unit">mm</span>
+                                </div>
+                            </div>
+
+                            {/* Size */}
+                            <div className="props-section-label">ขนาด</div>
+                            <div className="props-xy-row">
+                                <div className="props-field">
+                                    <span className="props-field-label">กว้าง</span>
+                                    <input type="number"
+                                        value={Math.round((selectedEl.type === 'circle' ? (selectedEl.radius || 0) * 2 : (selectedEl.w || 0)) / mmToPx * 10) / 10}
+                                        onChange={e => {
+                                            const val = parseFloat(e.target.value);
+                                            if (isNaN(val) || val <= 0) return;
+                                            const pxW = val * mmToPx;
+                                            if (selectedEl.type === 'circle') {
+                                                const r = pxW / 2;
+                                                updateElement(activePanel.id, selectedEl.id, { radius: r, w: pxW, h: pxW });
+                                            } else if (aspectLocked && selectedEl.w && selectedEl.h) {
+                                                const ratio = selectedEl.h / selectedEl.w;
+                                                updateElement(activePanel.id, selectedEl.id, { w: pxW, h: pxW * ratio });
+                                            } else {
+                                                updateElement(activePanel.id, selectedEl.id, { w: pxW });
+                                            }
+                                        }}
+                                        className="props-mm-input" />
+                                    <span className="props-field-unit">mm</span>
+                                </div>
+                                <button
+                                    className={`props-field-lock-btn ${aspectLocked ? 'props-field-lock-btn-on' : ''}`}
+                                    title={aspectLocked ? 'ปลดล็อกสัดส่วน' : 'ล็อกสัดส่วน'}
+                                    onClick={() => setAspectLocked(v => !v)}>
+                                    <iconify-icon icon={aspectLocked ? 'mdi:link-variant' : 'mdi:link-variant-off'}></iconify-icon>
+                                </button>
+                                <div className="props-field">
+                                    <span className="props-field-label">สูง</span>
+                                    <input type="number"
+                                        value={Math.round((selectedEl.type === 'circle' ? (selectedEl.radius || 0) * 2 : (selectedEl.h || 0)) / mmToPx * 10) / 10}
+                                        onChange={e => {
+                                            const val = parseFloat(e.target.value);
+                                            if (isNaN(val) || val <= 0) return;
+                                            const pxH = val * mmToPx;
+                                            if (selectedEl.type === 'circle') {
+                                                const r = pxH / 2;
+                                                updateElement(activePanel.id, selectedEl.id, { radius: r, w: pxH, h: pxH });
+                                            } else if (aspectLocked && selectedEl.w && selectedEl.h) {
+                                                const ratio = selectedEl.w / selectedEl.h;
+                                                updateElement(activePanel.id, selectedEl.id, { h: pxH, w: pxH * ratio });
+                                            } else {
+                                                updateElement(activePanel.id, selectedEl.id, { h: pxH });
+                                            }
+                                        }}
+                                        className="props-mm-input" />
+                                    <span className="props-field-unit">mm</span>
+                                </div>
+                            </div>
+
+                            {/* Corner radius — rect only, and only when shapeKind is basic rect or rect_round */}
+                            {selectedEl.type === 'shape' && (!selectedEl.shapeKind || selectedEl.shapeKind === 'rect' || selectedEl.shapeKind === 'rect_round') && (
+                                <>
+                                    <div className="props-section-label">มุมโค้ง</div>
+                                    <div className="props-slider-row">
+                                        <input type="range" min="0" max="100" step="1"
+                                            value={selectedEl.cornerRadius || 0}
+                                            onChange={e => updateElement(activePanel.id, selectedEl.id, { cornerRadius: parseInt(e.target.value) })}
+                                            className="props-slider" />
+                                        <span className="props-slider-val">{selectedEl.cornerRadius || 0}%</span>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Fill color — shapes, circles, text */}
+                            {(selectedEl.type === 'shape' || selectedEl.type === 'circle' || selectedEl.type === 'text') && (
+                                <>
+                                    <div className="props-section-label">สีเติม</div>
+                                    <div className="props-color-row">
+                                        <input type="color"
+                                            value={selectedEl.fill && selectedEl.fill !== 'transparent' ? selectedEl.fill : '#FF6B35'}
+                                            onChange={e => updateElement(activePanel.id, selectedEl.id, { fill: e.target.value })}
+                                            className="props-color-swatch" />
+                                        <span className="props-color-hex">{(selectedEl.fill || '#FF6B35').toUpperCase()}</span>
+                                        <div className="props-color-dropdown"><iconify-icon icon="mdi:chevron-down"></iconify-icon></div>
+                                    </div>
+                                    {/* Brand color swatches */}
+                                    {brandAssets?.colors?.length > 0 && (
+                                        <div className="props-brand-swatches">
+                                            {brandAssets.colors.map((c, i) => (
+                                                <button key={i} title={c}
+                                                    onClick={() => updateElement(activePanel.id, selectedEl.id, { fill: c })}
+                                                    className="props-brand-swatch" style={{ background: c }} />
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Stroke — shapes and circles */}
+                            {(selectedEl.type === 'shape' || selectedEl.type === 'circle') && (
+                                <>
+                                    <div className="props-section-label-row">
+                                        <span className="props-section-label" style={{margin:0}}>เส้นขอบ</span>
+                                        <div className={`props-toggle ${selectedEl.stroke ? 'props-toggle-on' : ''}`}
+                                            onClick={() => updateElement(activePanel.id, selectedEl.id, { stroke: !selectedEl.stroke, strokeColor: selectedEl.strokeColor || '#000000', strokeWidth: selectedEl.strokeWidth || 2 })}>
+                                            <div className="props-toggle-knob"></div>
+                                        </div>
+                                    </div>
+                                    {selectedEl.stroke && (
+                                        <>
+                                            <div className="props-color-row" style={{marginTop:6}}>
+                                                <input type="color"
+                                                    value={selectedEl.strokeColor || '#000000'}
+                                                    onChange={e => updateElement(activePanel.id, selectedEl.id, { strokeColor: e.target.value })}
+                                                    className="props-color-swatch" />
+                                                <span className="props-color-hex">{(selectedEl.strokeColor || '#000000').toUpperCase()}</span>
+                                                <div className="props-color-dropdown"><iconify-icon icon="mdi:chevron-down"></iconify-icon></div>
+                                            </div>
+                                            <div className="props-stroke-row">
+                                                <select className="props-stroke-style"
+                                                    value={selectedEl.strokeDash || 'solid'}
+                                                    onChange={e => updateElement(activePanel.id, selectedEl.id, { strokeDash: e.target.value })}>
+                                                    <option value="solid">——</option>
+                                                    <option value="dashed">- - -</option>
+                                                </select>
+                                                <input type="number" min="1" max="20" value={selectedEl.strokeWidth || 2}
+                                                    onChange={e => updateElement(activePanel.id, selectedEl.id, { strokeWidth: Math.max(1, parseInt(e.target.value) || 1) })}
+                                                    className="props-stroke-width" />
+                                                <span className="props-field-unit">px</span>
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Text-specific controls */}
+                            {selectedEl.type === 'text' && (
+                                <>
+                                    <div className="props-section-label">ข้อความ</div>
+                                    <input type="text" value={selectedEl.data || ''}
+                                        onChange={e => updateElement(activePanel.id, selectedEl.id, { data: e.target.value })}
+                                        className="text-content-input" style={{width:'100%', boxSizing:'border-box', marginBottom:8}} />
+                                    <div className="props-text-style-row">
+                                        <div className="props-field">
+                                            <span className="props-field-label" style={{minWidth:24}}>ขนาด</span>
+                                            <input type="number" min="6" max="200" value={selectedEl.fontSize || 20}
+                                                onChange={e => updateElement(activePanel.id, selectedEl.id, { fontSize: Math.max(6, parseInt(e.target.value) || 20) })}
+                                                className="props-mm-input" />
+                                            <span className="props-field-unit">px</span>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Barcode value */}
+                            {selectedEl.type === 'barcode' && (
+                                <>
+                                    <div className="props-section-label">ค่าบาร์โค้ด</div>
+                                    <input type="text" maxLength={13} value={selectedEl.barcodeValue || ''}
+                                        onChange={e => updateElement(activePanel.id, selectedEl.id, { barcodeValue: e.target.value })}
+                                        placeholder="8850000000000"
+                                        className="barcode-input" style={{width:'100%', boxSizing:'border-box'}} />
+                                </>
+                            )}
+
+                            {/* QR value */}
+                            {selectedEl.type === 'qrcode' && (
+                                <>
+                                    <div className="props-section-label">ข้อมูล QR</div>
+                                    <input type="text" value={selectedEl.qrValue || ''}
+                                        onChange={e => updateElement(activePanel.id, selectedEl.id, { qrValue: e.target.value })}
+                                        placeholder="URL หรือข้อความ"
+                                        className="qrcode-input" style={{width:'100%', boxSizing:'border-box'}} />
+                                </>
+                            )}
+
+                            {/* Opacity */}
+                            <div className="props-section-label">ความทึบ</div>
+                            <div className="props-slider-row">
+                                <input type="range" min="0" max="1" step="0.01"
+                                    value={selectedEl.opacity ?? 1}
+                                    onChange={e => updateElement(activePanel.id, selectedEl.id, { opacity: parseFloat(e.target.value) })}
+                                    className="props-slider" />
+                                <span className="props-slider-val">{Math.round((selectedEl.opacity ?? 1) * 100)}%</span>
+                            </div>
+
+                            {/* Alignment */}
+                            <div className="props-section-label">จัดแนว</div>
+                            <div className="props-align-row">
+                                <button className="props-align-btn" title="ชิดซ้าย"
+                                    onClick={() => {
+                                        const offset = selectedEl.type === 'circle' ? -(selectedEl.radius || 0) : 0;
+                                        updateElement(activePanel.id, selectedEl.id, { x: offset });
+                                    }}>
+                                    <iconify-icon icon="mdi:format-horizontal-align-left"></iconify-icon>
+                                </button>
+                                <button className="props-align-btn" title="กึ่งกลางแนวนอน"
+                                    onClick={() => {
+                                        const elW = selectedEl.type === 'circle' ? (selectedEl.radius || 0) * 2 : (selectedEl.w || 0);
+                                        updateElement(activePanel.id, selectedEl.id, { x: (canvasW - elW) / 2 + (selectedEl.type === 'circle' ? (selectedEl.radius || 0) : 0) });
+                                    }}>
+                                    <iconify-icon icon="mdi:format-horizontal-align-center"></iconify-icon>
+                                </button>
+                                <button className="props-align-btn" title="ชิดขวา"
+                                    onClick={() => {
+                                        const elW = selectedEl.type === 'circle' ? (selectedEl.radius || 0) * 2 : (selectedEl.w || 0);
+                                        updateElement(activePanel.id, selectedEl.id, { x: canvasW - elW + (selectedEl.type === 'circle' ? (selectedEl.radius || 0) : 0) });
+                                    }}>
+                                    <iconify-icon icon="mdi:format-horizontal-align-right"></iconify-icon>
+                                </button>
+                                <button className="props-align-btn" title="กึ่งกลางแนวตั้ง"
+                                    onClick={() => {
+                                        const elH = selectedEl.type === 'circle' ? (selectedEl.radius || 0) * 2 : (selectedEl.h || 0);
+                                        updateElement(activePanel.id, selectedEl.id, { y: (canvasH - elH) / 2 + (selectedEl.type === 'circle' ? (selectedEl.radius || 0) : 0) });
+                                    }}>
+                                    <iconify-icon icon="mdi:format-vertical-align-center"></iconify-icon>
+                                </button>
+                            </div>
+
+                            {/* Layer navigation */}
+                            <div className="props-layer-btns">
+                                <button className="props-layer-btn"
+                                    onClick={() => {
+                                        setPanelDesigns(prev => {
+                                            const d = { ...prev[activePanel.id] };
+                                            const els = [...d.elements];
+                                            const idx = els.findIndex(e => e.id === selectedEl.id);
+                                            if (idx < els.length - 1) { [els[idx], els[idx + 1]] = [els[idx + 1], els[idx]]; }
+                                            d.elements = els;
+                                            return { ...prev, [activePanel.id]: d };
+                                        });
+                                    }}>
+                                    <iconify-icon icon="mdi:arrange-bring-to-front"></iconify-icon> นำไปที่ด้านหน้า
+                                </button>
+                                <button className="props-layer-btn"
+                                    onClick={() => {
+                                        setPanelDesigns(prev => {
+                                            const d = { ...prev[activePanel.id] };
+                                            const els = [...d.elements];
+                                            const idx = els.findIndex(e => e.id === selectedEl.id);
+                                            if (idx > 0) { [els[idx], els[idx - 1]] = [els[idx - 1], els[idx]]; }
+                                            d.elements = els;
+                                            return { ...prev, [activePanel.id]: d };
+                                        });
+                                    }}>
+                                    <iconify-icon icon="mdi:arrange-send-to-back"></iconify-icon> นำไปที่ด้านหลัง
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="props-empty">
+                            <div className="props-empty-icon"><iconify-icon icon="mdi:cursor-default-click-outline"></iconify-icon></div>
+                            <div className="props-empty-text">คลิกเลือกออบเจ็กต์เพื่อดูคุณสมบัติ</div>
+                        </div>
+                    )
+                )}
+            </div>
+
+            {/* === Canvas Preview Popup === */}
             {/* === Lightbox Popup === */}
             {lightboxUrl && (
-                <div onClick={() => setLightboxUrl(null)}
-                    style={{
-                        position: 'fixed', inset: 0, zIndex: 9999,
-                        background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
-                    }}>
-                    <div onClick={e => e.stopPropagation()} style={{ position: 'relative' }}>
-                        <img src={lightboxUrl} alt="Mockup Preview"
-                            style={{ width: 1024, maxWidth: '90vw', maxHeight: '80vh', borderRadius: 12, boxShadow: '0 12px 48px rgba(0,0,0,0.5)', objectFit: 'contain', background: '#fff' }} />
-                        <button onClick={() => setLightboxUrl(null)}
-                            style={{
-                                position: 'absolute', top: -12, right: -12, width: 32, height: 32, borderRadius: '50%',
-                                background: '#fff', border: 'none', cursor: 'pointer', fontSize: 18,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                            }}>
+                <div onClick={() => setLightboxUrl(null)} className="lightbox-overlay">
+                    <div onClick={e => e.stopPropagation()} className="lightbox-content">
+                        <img src={lightboxUrl} alt="Mockup Preview" className="lightbox-image" />
+                        <button onClick={() => setLightboxUrl(null)} className="lightbox-close-btn">
                             <iconify-icon icon="mdi:close"></iconify-icon>
                         </button>
                     </div>
-                    <div style={{ marginTop: 16, display: 'flex', gap: 12 }} onClick={e => e.stopPropagation()}>
+                    <div className="lightbox-actions" onClick={e => e.stopPropagation()}>
                         <button onClick={async () => {
                             try {
                                 const resp = await fetch(lightboxUrl);
@@ -1255,18 +1711,10 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                                 URL.revokeObjectURL(url);
                             } catch (e) { console.error('Download error:', e); }
                         }}
-                            style={{
-                                padding: '10px 24px', background: '#7c3aed', color: '#fff', borderRadius: 8,
-                                fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
-                                display: 'flex', alignItems: 'center', gap: 6
-                            }}>
-                            <iconify-icon icon="mdi:download" style={{verticalAlign:'middle'}}></iconify-icon> ดาวน์โหลด
+                            className="lightbox-download-btn">
+                            <iconify-icon icon="mdi:download"></iconify-icon> ดาวน์โหลด
                         </button>
-                        <button onClick={() => setLightboxUrl(null)}
-                            style={{
-                                padding: '10px 24px', background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)',
-                                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer'
-                            }}>
+                        <button onClick={() => setLightboxUrl(null)} className="lightbox-close-text-btn">
                             ปิด
                         </button>
                     </div>
@@ -1404,36 +1852,170 @@ function PanelElement({ el, isSelected, onSelect, onChange }) {
         const scaleY = node.scaleY();
         node.scaleX(1);
         node.scaleY(1);
-        onChange({
+        const newW = Math.max(10, node.width() * scaleX);
+        const newH = Math.max(10, node.height() * scaleY);
+        const updates = {
             x: node.x(), y: node.y(),
-            w: Math.max(10, node.width() * scaleX),
-            h: Math.max(10, node.height() * scaleY),
+            w: newW, h: newH,
             rotation: node.rotation()
-        });
+        };
+        // Keep radius in sync for circles
+        if (el.type === 'circle') {
+            updates.radius = Math.max(5, (newW + newH) / 4);
+        }
+        onChange(updates);
     };
 
     const common = { id: el.id, draggable: true, onClick: onSelect, onTap: onSelect, onDragEnd: handleDragEnd, onTransformEnd: handleTransformEnd };
 
+    // Hidden elements are not rendered on canvas
+    if (el.hidden) return null;
+
+    const opacity = el.opacity ?? 1;
+    const strokeProps = (el.stroke && el.strokeColor) ? {
+        stroke: el.strokeColor,
+        strokeWidth: el.strokeWidth || 2,
+        dash: el.strokeDash === 'dashed' ? [8, 4] : undefined,
+    } : {};
+
     if (el.type === 'text') {
-        return <KText {...common} x={el.x} y={el.y} width={el.w} text={el.data || ''} fontSize={el.fontSize || 20} fill={el.fill || '#222'} fontFamily={el.fontFamily || 'Sarabun'} rotation={el.rotation || 0} />;
+        return <KText {...common} x={el.x} y={el.y} width={el.w} text={el.data || ''} fontSize={el.fontSize || 20} fill={el.fill || '#222'} fontFamily={el.fontFamily || 'Bai Jamjuree'} rotation={el.rotation || 0} opacity={opacity} />;
     }
     if (el.type === 'shape') {
-        return <KRect {...common} x={el.x} y={el.y} width={el.w} height={el.h} fill={el.fill || '#ccc'} rotation={el.rotation || 0} cornerRadius={4} />;
+        const w = el.w || 120;
+        const h = el.h || 120;
+        const kind = el.shapeKind || 'rect';
+        const fill = el.fill || '#ccc';
+        const cr = el.cornerRadius ?? (kind === 'rect_round' ? 20 : 0);
+        const baseProps = { ...common, x: el.x, y: el.y, rotation: el.rotation || 0, opacity, fill, ...strokeProps };
+
+        // Simple rect / rect_round → use KRect (supports cornerRadius natively)
+        if (kind === 'rect' || kind === 'rect_round') {
+            return <KRect {...baseProps} width={w} height={h} cornerRadius={cr} />;
+        }
+
+        // All other shapes → draw via sceneFunc
+        const sceneFunc = (ctx, shape) => {
+            ctx.beginPath();
+            if (kind === 'triangle') {
+                ctx.moveTo(w / 2, 0);
+                ctx.lineTo(w, h);
+                ctx.lineTo(0, h);
+                ctx.closePath();
+            } else if (kind === 'diamond') {
+                ctx.moveTo(w / 2, 0);
+                ctx.lineTo(w, h / 2);
+                ctx.lineTo(w / 2, h);
+                ctx.lineTo(0, h / 2);
+                ctx.closePath();
+            } else if (kind === 'star') {
+                const cx = w / 2, cy = h / 2;
+                const outerR = Math.min(w, h) / 2;
+                const innerR = outerR * 0.42;
+                const points = 5;
+                for (let i = 0; i < points * 2; i++) {
+                    const angle = (i * Math.PI) / points - Math.PI / 2;
+                    const r = i % 2 === 0 ? outerR : innerR;
+                    const px = cx + r * Math.cos(angle);
+                    const py = cy + r * Math.sin(angle);
+                    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+            } else if (kind === 'hexagon') {
+                const cx = w / 2, cy = h / 2;
+                const rx = w / 2, ry = h / 2;
+                for (let i = 0; i < 6; i++) {
+                    const angle = (Math.PI / 3) * i - Math.PI / 6;
+                    const px = cx + rx * Math.cos(angle);
+                    const py = cy + ry * Math.sin(angle);
+                    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+            } else if (kind === 'octagon') {
+                const cx = w / 2, cy = h / 2;
+                const rx = w / 2, ry = h / 2;
+                for (let i = 0; i < 8; i++) {
+                    const angle = (Math.PI / 4) * i - Math.PI / 8;
+                    const px = cx + rx * Math.cos(angle);
+                    const py = cy + ry * Math.sin(angle);
+                    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+            } else if (kind === 'arrow') {
+                const tw = w * 0.35; // tail width (vertical center offset)
+                const hw = w * 0.42; // arrowhead horizontal depth
+                ctx.moveTo(0, h * 0.5 - tw * 0.5);
+                ctx.lineTo(w - hw, h * 0.5 - tw * 0.5);
+                ctx.lineTo(w - hw, 0);
+                ctx.lineTo(w, h / 2);
+                ctx.lineTo(w - hw, h);
+                ctx.lineTo(w - hw, h * 0.5 + tw * 0.5);
+                ctx.lineTo(0, h * 0.5 + tw * 0.5);
+                ctx.closePath();
+            } else if (kind === 'speech') {
+                const r2 = Math.min(w, h) * 0.12;
+                const tailH = h * 0.22;
+                const bubbleH = h - tailH;
+                // Rounded bubble
+                ctx.moveTo(r2, 0);
+                ctx.lineTo(w - r2, 0);
+                ctx.quadraticCurveTo(w, 0, w, r2);
+                ctx.lineTo(w, bubbleH - r2);
+                ctx.quadraticCurveTo(w, bubbleH, w - r2, bubbleH);
+                ctx.lineTo(w * 0.45, bubbleH);
+                ctx.lineTo(w * 0.25, h);        // tail tip
+                ctx.lineTo(w * 0.25, bubbleH);
+                ctx.lineTo(r2, bubbleH);
+                ctx.quadraticCurveTo(0, bubbleH, 0, bubbleH - r2);
+                ctx.lineTo(0, r2);
+                ctx.quadraticCurveTo(0, 0, r2, 0);
+                ctx.closePath();
+            } else if (kind === 'heart') {
+                const cx = w / 2, top = h * 0.25;
+                ctx.moveTo(cx, h * 0.95);
+                ctx.bezierCurveTo(w * -0.1, h * 0.6, w * -0.1, top, cx * 0.5, top);
+                ctx.bezierCurveTo(cx * 0.9, top, cx, h * 0.15, cx, h * 0.25);
+                ctx.bezierCurveTo(cx, h * 0.15, cx * 1.1, top, cx * 1.5, top);
+                ctx.bezierCurveTo(w * 1.1, top, w * 1.1, h * 0.6, cx, h * 0.95);
+                ctx.closePath();
+            } else {
+                // fallback rect
+                ctx.rect(0, 0, w, h);
+            }
+            ctx.fillStrokeShape(shape);
+        };
+
+        return (
+            <KShape
+                {...common}
+                x={el.x} y={el.y}
+                width={w} height={h}
+                rotation={el.rotation || 0}
+                opacity={opacity}
+                fill={fill}
+                stroke={strokeProps.stroke}
+                strokeWidth={strokeProps.strokeWidth}
+                dash={strokeProps.dash}
+                sceneFunc={sceneFunc}
+            />
+        );
     }
     if (el.type === 'circle') {
-        return <KCircle {...common} x={el.x} y={el.y} radius={el.radius || 30} fill={el.fill || '#ccc'} />;
+        const r = Math.max(el.radius || el.w / 2 || 30, 5);
+        return <KCircle {...common} x={el.x} y={el.y} radius={r} fill={el.fill || '#ccc'} opacity={opacity} {...strokeProps} />;
     }
     if (el.type === 'image' && img) {
-        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} />;
+        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} opacity={opacity} />;
     }
     if (el.type === 'barcode' && img) {
-        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} />;
+        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} opacity={opacity} />;
     }
     if (el.type === 'qrcode' && img) {
-        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} />;
+        return <KImg {...common} image={img} x={el.x} y={el.y} width={el.w} height={el.h} rotation={el.rotation || 0} opacity={opacity} />;
     }
     return null;
 }
+
 
 // === Die-line Mini Map ===
 function DielineMiniMap({ panels, activePanelIdx, onClickPanel, materialData, panelDesigns, aiDielineBgImg }) {
@@ -1445,17 +2027,17 @@ function DielineMiniMap({ panels, activePanelIdx, onClickPanel, materialData, pa
     const mapW = dW * scale, mapH = dH * scale;
 
     return (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'inline-block', flexShrink: 0 }}>
-            <div style={{ fontSize: 10, color: C.sub, marginBottom: 6, textAlign: 'center', fontWeight: 600 }}>
+        <div className="dieline-minimap">
+            <div className="dieline-minimap-label">
                 Die-line ({dW} × {dH} mm)
             </div>
-            <svg width={mapW} height={mapH} viewBox={`0 0 ${dW} ${dH}`} style={{ display: 'block' }}>
+            <svg width={mapW} height={mapH} viewBox={`0 0 ${dW} ${dH}`} className="dieline-minimap-svg">
                 <rect x={0} y={0} width={dW} height={dH} fill="#f9fafb" stroke="#e5e7eb" strokeWidth={0.5} />
                 {panels.map((p, idx) => {
                     const d = panelDesigns[p.id];
                     const isActive = idx === activePanelIdx;
                     return (
-                        <g key={p.id} onClick={() => onClickPanel(idx)} style={{ cursor: 'pointer' }}>
+                        <g key={p.id} onClick={() => onClickPanel(idx)} className="dieline-minimap-panel">
                             <rect x={p.x_mm} y={p.y_mm} width={p.w_mm} height={p.h_mm}
                                 fill={d?.bg_mode === 'dalle' ? '#dbeafe' : (d?.bg_color || '#fff')}
                                 stroke={isActive ? '#2563eb' : '#9ca3af'}
@@ -1479,16 +2061,10 @@ function DielineMiniMap({ panels, activePanelIdx, onClickPanel, materialData, pa
 function LabelPartBtn({ icon, label, detail, available, onClick }) {
     return (
         <button onClick={available ? onClick : undefined}
-            style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-                width: '100%', padding: '6px 10px', border: `1px solid ${available ? '#fbbf24' : C.border}`,
-                borderRadius: 6, fontSize: 11, cursor: available ? 'pointer' : 'not-allowed',
-                background: available ? '#fffbeb' : '#f9fafb', color: available ? '#92400e' : '#9ca3af',
-                opacity: available ? 1 : 0.5, textAlign: 'left'
-            }}>
-            <span style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>{icon && <iconify-icon icon={icon} style={{fontSize:14,verticalAlign:'middle'}}></iconify-icon>}{label}</span>
-            {detail && <span style={{ fontSize: 10, color: '#a16207', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{detail}</span>}
-            {available && <span style={{ fontSize: 10, color: '#d97706' }}>+</span>}
+            className={`label-part-btn ${available ? 'label-part-btn-available' : 'label-part-btn-disabled'}`}>
+            <span className="label-part-btn-text">{icon && <iconify-icon icon={icon}></iconify-icon>}{label}</span>
+            {detail && <span className="label-part-btn-detail">{detail}</span>}
+            {available && <span className="label-part-btn-plus">+</span>}
         </button>
     );
 }
@@ -1496,13 +2072,12 @@ function LabelPartBtn({ icon, label, detail, available, onClick }) {
 // === Sidebar Accordion Section ===
 function SidebarSection({ title, open, onToggle, children }) {
     return (
-        <div style={{ marginBottom: 8, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
-            <button onClick={onToggle}
-                style={{ width: '100%', padding: '8px 12px', background: open ? '#f8fafc' : '#fff', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, fontWeight: 600, color: C.text }}>
+        <div className="sidebar-section">
+            <button onClick={onToggle} className="sidebar-section-header">
                 {title}
-                <iconify-icon icon={open ? 'mdi:chevron-up' : 'mdi:chevron-down'} style={{ fontSize: 16 }}></iconify-icon>
+                <iconify-icon icon={open ? 'mdi:chevron-up' : 'mdi:chevron-down'}></iconify-icon>
             </button>
-            {open && <div style={{ padding: '8px 12px 12px' }}>{children}</div>}
+            {open && <div className="sidebar-section-body">{children}</div>}
         </div>
     );
 }
@@ -1510,62 +2085,47 @@ function SidebarSection({ title, open, onToggle, children }) {
 // === Mode Selector ===
 function ModeSelector({ onPick, onBack, productName, hasPanels }) {
     return (
-        <div style={{ padding: 24 }}>
-            <button onClick={onBack} style={{
-                background: 'none', border: 'none', color: C.sub, cursor: 'pointer',
-                marginBottom: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, padding: 0
-            }}>
+        <div className="mode-selector">
+            <button onClick={onBack} className="back-link">
                 <iconify-icon icon="mdi:chevron-left"></iconify-icon>
                 เลือกสินค้าใหม่
             </button>
-            <h2 style={{ color: C.primaryDark, margin: '0 0 8px', fontSize: 22 }}>
+            <h2 className="mode-selector-title">
                 เลือกรูปแบบ Mockup
             </h2>
-            <p style={{ color: C.sub, fontSize: 14, marginBottom: 28 }}>
+            <p className="mode-selector-subtitle">
                 สำหรับสินค้า "{productName}" — เลือกวิธีที่เหมาะกับงานของคุณ
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, maxWidth: 700 }}>
+            <div className="mode-card-grid">
                 <ModeCard iconName="mdi:cube-unfolded" title="ออกแบบบรรจุภัณฑ์ทั้งชิ้น"
                     desc="ออกแบบกราฟิกลงบนพื้นผิวบรรจุภัณฑ์ทุกด้าน ใช้ AI สร้างลวดลาย หรือออกแบบเอง ส่งออกเป็น PDF"
-                    badge="แนะนำ" badgeColor={C.label}
+                    badge="แนะนำ"
                     disabled={!hasPanels}
                     disabledMsg="บรรจุภัณฑ์นี้ยังไม่รองรับการออกแบบทั้งชิ้น"
                     onClick={() => onPick('package_design')} />
                 <ModeCard iconName="mdi:image-auto-adjust" title="AI สร้าง Mockup จากรูปจริง"
                     desc="ส่งรูปฉลากและบรรจุภัณฑ์จริงให้ Gemini AI สร้างภาพ Mockup สมจริง พร้อมเลือกสไตล์พื้นหลังได้"
-                    badge="ใช้ Credit" badgeColor={C.primaryDark} onClick={() => onPick('aimockup')} />
+                    badge="ใช้ Credit" onClick={() => onPick('aimockup')} />
             </div>
         </div>
     );
 }
 
-function ModeCard({ iconName, title, desc, badge, badgeColor, onClick, disabled, disabledMsg }) {
-    const [hover, setHover] = useState(false);
+function ModeCard({ iconName, title, desc, badge, onClick, disabled, disabledMsg }) {
     return (
         <button onClick={disabled ? undefined : onClick}
-            onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
             title={disabled ? disabledMsg : ''}
-            style={{
-                background: disabled ? '#f9fafb' : '#fff',
-                border: `2px solid ${!disabled && hover ? badgeColor : C.border}`, borderRadius: 14, padding: 28,
-                textAlign: 'left', cursor: disabled ? 'not-allowed' : 'pointer', position: 'relative', fontFamily: 'inherit',
-                transform: !disabled && hover ? 'translateY(-2px)' : 'none',
-                boxShadow: !disabled && hover ? '0 12px 32px rgba(0,0,0,0.1)' : '0 4px 16px rgba(0,0,0,0.04)',
-                transition: 'all 0.2s ease',
-                opacity: disabled ? 0.5 : 1
-            }}>
-            <div style={{
-                position: 'absolute', top: 14, right: 14, background: badgeColor, color: '#fff',
-                padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 600
-            }}>
+            disabled={disabled}
+            className={`mode-card ${disabled ? 'mode-card-disabled' : ''}`}>
+            <div className="mode-card-badge">
                 {badge}
             </div>
-            <div style={{ fontSize: 36, color: badgeColor, marginBottom: 10 }}>
+            <div className="mode-card-icon">
                 <iconify-icon icon={iconName}></iconify-icon>
             </div>
-            <h3 style={{ margin: '0 0 8px', color: badgeColor, fontSize: 17 }}>{title}</h3>
-            <p style={{ margin: 0, color: C.sub, fontSize: 13, lineHeight: 1.6 }}>{desc}</p>
+            <h3 className="mode-card-title">{title}</h3>
+            <p className="mode-card-desc">{desc}</p>
         </button>
     );
 }
@@ -1628,93 +2188,70 @@ function AIMockupView({ projectId, packageImageUrl, labelImageUrl, labelData, on
     };
 
     return (
-        <div style={{ padding: 24 }}>
-            <button onClick={onBack} style={{
-                background: 'none', border: 'none', color: C.sub, cursor: 'pointer',
-                marginBottom: 20, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, padding: 0
-            }}>
+        <div className="aimockup-view">
+            <button onClick={onBack} className="back-link">
                 <iconify-icon icon="mdi:chevron-left"></iconify-icon>
                 เปลี่ยนสินค้า / โหมด
             </button>
 
-            <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+            <div className="aimockup-layout">
                 {/* คอลัมน์ซ้าย: ตั้งค่า + สร้าง */}
-                <div style={{ flex: '0 0 320px' }}>
+                <div className="aimockup-sidebar">
                     {/* รูป label + package preview */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                        <div style={{ background: '#fff', padding: 10, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
-                                <iconify-icon icon="mdi:package-variant" style={{ marginRight: 4 }}></iconify-icon>
+                    <div className="aimockup-preview-grid">
+                        <div className="aimockup-preview-card">
+                            <div className="aimockup-preview-label">
+                                <iconify-icon icon="mdi:package-variant"></iconify-icon>
                                 บรรจุภัณฑ์
                             </div>
                             {hasPackage ? (
-                                <img src={packageImageUrl} style={{ width: '100%', borderRadius: 6, maxHeight: 120, objectFit: 'contain' }} alt="pkg" />
-                            ) : <div style={{ padding: 20, textAlign: 'center', color: C.border, fontSize: 11 }}>ไม่มีภาพ</div>}
+                                <img src={packageImageUrl} className="aimockup-preview-img" alt="pkg" />
+                            ) : <div className="aimockup-preview-empty">ไม่มีภาพ</div>}
                         </div>
-                        <div style={{ background: '#fff', padding: 10, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 6 }}>
-                                <iconify-icon icon="mdi:label-outline" style={{ marginRight: 4 }}></iconify-icon>
+                        <div className="aimockup-preview-card">
+                            <div className="aimockup-preview-label">
+                                <iconify-icon icon="mdi:label-outline"></iconify-icon>
                                 ฉลาก
                             </div>
                             {hasLabel ? (
-                                <img src={labelImageUrl} style={{ width: '100%', borderRadius: 6, maxHeight: 120, objectFit: 'contain' }} alt="lbl" />
-                            ) : <div style={{ padding: 20, textAlign: 'center', color: '#b45309', fontSize: 11, background: '#fffbeb', borderRadius: 6 }}>ยังไม่มีฉลาก</div>}
+                                <img src={labelImageUrl} className="aimockup-preview-img" alt="lbl" />
+                            ) : <div className="aimockup-preview-empty aimockup-preview-empty-warn">ยังไม่มีฉลาก</div>}
                         </div>
                     </div>
 
                     {/* ปุ่มสร้าง */}
-                    <button onClick={handleGenerate} disabled={isGenerating || !canGenerate} style={{
-                        width: '100%', padding: '14px 20px',
-                        background: (isGenerating || !canGenerate) ? '#ccc' : C.primaryDark,
-                        color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600,
-                        cursor: (isGenerating || !canGenerate) ? 'not-allowed' : 'pointer',
-                        fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        marginBottom: 16
-                    }}>
+                    <button onClick={handleGenerate} disabled={isGenerating || !canGenerate} className="aimockup-generate-btn">
                         <iconify-icon icon="mdi:image-auto-adjust"></iconify-icon>
                         {isGenerating ? 'AI กำลังสร้าง... (30-60 วินาที)' : 'สร้าง Mockup ใหม่'}
                     </button>
 
                     {/* Gallery ประวัติ */}
-                    <div style={{ background: '#fff', padding: 14, borderRadius: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="aimockup-history-card">
+                        <div className="aimockup-history-header">
                             <span>
-                                <iconify-icon icon="mdi:history" style={{ marginRight: 4 }}></iconify-icon>
+                                <iconify-icon icon="mdi:history"></iconify-icon>
                                 ประวัติที่สร้าง ({history.length})
                             </span>
                         </div>
                         {isLoadingHistory ? (
-                            <div style={{ textAlign: 'center', padding: 20, color: C.sub, fontSize: 12 }}>กำลังโหลด...</div>
+                            <div className="aimockup-history-loading">กำลังโหลด...</div>
                         ) : history.length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: 20, color: C.sub, fontSize: 12, lineHeight: 1.6 }}>
+                            <div className="aimockup-history-empty">
                                 ยังไม่มีภาพ Mockup<br />กดปุ่มด้านบนเพื่อสร้าง
                             </div>
                         ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
+                            <div className="aimockup-history-grid">
                                 {history.map(h => {
                                     const url = `${API}${h.image_url}`;
                                     const isActive = selectedImg === url;
                                     return (
-                                        <div key={h.history_id} style={{
-                                            position: 'relative', borderRadius: 8, overflow: 'hidden',
-                                            border: isActive ? `3px solid ${C.primaryDark}` : '2px solid transparent',
-                                            cursor: 'pointer', transition: 'all 0.15s',
-                                            boxShadow: isActive ? '0 4px 12px rgba(143,29,29,0.25)' : '0 1px 4px rgba(0,0,0,0.08)'
-                                        }}>
+                                        <div key={h.history_id} className={`aimockup-history-thumb ${isActive ? 'aimockup-history-thumb-active' : ''}`}>
                                             <img src={url} onClick={() => setSelectedImg(url)}
-                                                style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} alt="mockup" />
-                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(h.history_id); }} style={{
-                                                position: 'absolute', top: 4, right: 4, width: 22, height: 22,
-                                                background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', borderRadius: '50%',
-                                                cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                padding: 0, lineHeight: 1
-                                            }}>
-                                                <iconify-icon icon="mdi:close" style={{ fontSize: 14 }}></iconify-icon>
+                                                className="aimockup-history-thumb-img" alt="mockup" />
+                                            <button onClick={(e) => { e.stopPropagation(); handleDelete(h.history_id); }} className="aimockup-history-delete-btn">
+                                                <iconify-icon icon="mdi:close"></iconify-icon>
                                             </button>
-                                            <div style={{
-                                                position: 'absolute', bottom: 0, left: 0, right: 0, padding: '3px 6px',
-                                                background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 9, textAlign: 'center'
-                                            }}>
+                                            <div className="aimockup-history-thumb-date">
                                                 {new Date(h.created_at).toLocaleString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                             </div>
                                         </div>
@@ -1726,30 +2263,21 @@ function AIMockupView({ projectId, packageImageUrl, labelImageUrl, labelData, on
                 </div>
 
                 {/* คอลัมน์ขวา: รูปขยายใหญ่ */}
-                <div style={{ flex: 1, background: '#fff', borderRadius: 14, padding: 24, minHeight: 500,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+                <div className="aimockup-main">
                     {isGenerating ? (
-                        <div style={{ textAlign: 'center', width: '100%', maxWidth: 320 }}>
-                            <div style={{ fontSize: 48, color: C.primaryDark, marginBottom: 16 }}>
-                                <iconify-icon icon="mdi:loading" style={{ animation: 'spin 1s linear infinite' }}></iconify-icon>
+                        <div className="aimockup-generating">
+                            <div className="aimockup-generating-icon">
+                                <iconify-icon icon="mdi:loading" className="spin"></iconify-icon>
                             </div>
-                            <p style={{ color: C.text, fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                            <p className="aimockup-generating-message">
                                 {progressInfo?.message || 'กำลังเริ่มต้น...'}
                             </p>
                             {progressInfo?.step && progressInfo?.total && (
                                 <>
-                                    <div style={{
-                                        width: '100%', height: 8, background: '#e5e7eb', borderRadius: 99,
-                                        overflow: 'hidden', marginBottom: 8
-                                    }}>
-                                        <div style={{
-                                            width: `${(progressInfo.step / progressInfo.total) * 100}%`,
-                                            height: '100%', background: C.primaryDark, borderRadius: 99,
-                                            transition: 'width 0.5s ease'
-                                        }} />
+                                    <div className="aimockup-generating-progress-track">
+                                        <div className="aimockup-generating-progress-fill" style={{ width: `${(progressInfo.step / progressInfo.total) * 100}%` }} />
                                     </div>
-                                    <p style={{ color: C.sub, fontSize: 12 }}>
+                                    <p className="aimockup-generating-step">
                                         ขั้นตอน {progressInfo.step} / {progressInfo.total}
                                     </p>
                                 </>
@@ -1757,28 +2285,21 @@ function AIMockupView({ projectId, packageImageUrl, labelImageUrl, labelData, on
                         </div>
                     ) : selectedImg ? (
                         <>
-                            <img src={selectedImg} style={{
-                                maxWidth: '100%', maxHeight: 500, borderRadius: 10,
-                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
-                            }} alt="mockup preview" />
-                            <div style={{ marginTop: 16, display: 'flex', gap: 10 }}>
-                                <button onClick={() => handleDownload(selectedImg)} style={{
-                                    padding: '10px 20px', background: '#22c55e', color: '#fff',
-                                    border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer',
-                                    fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6
-                                }}>
+                            <img src={selectedImg} className="aimockup-result-img" alt="mockup preview" />
+                            <div className="aimockup-result-actions">
+                                <button onClick={() => handleDownload(selectedImg)} className="aimockup-result-download-btn">
                                     <iconify-icon icon="mdi:download"></iconify-icon>
                                     ดาวน์โหลดรูปนี้
                                 </button>
                             </div>
                         </>
                     ) : (
-                        <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 64, color: C.border, marginBottom: 16 }}>
+                        <div className="aimockup-empty-state">
+                            <div className="aimockup-empty-icon">
                                 <iconify-icon icon="mdi:image-plus-outline"></iconify-icon>
                             </div>
-                            <p style={{ color: C.sub, fontSize: 14, fontWeight: 600 }}>ยังไม่มีภาพ Mockup</p>
-                            <p style={{ color: C.sub, fontSize: 12 }}>กดปุ่มสร้างเพื่อให้ AI สร้างภาพ Mockup</p>
+                            <p className="aimockup-empty-title">ยังไม่มีภาพ Mockup</p>
+                            <p className="aimockup-empty-subtitle">กดปุ่มสร้างเพื่อให้ AI สร้างภาพ Mockup</p>
                         </div>
                     )}
                 </div>
@@ -1786,31 +2307,23 @@ function AIMockupView({ projectId, packageImageUrl, labelImageUrl, labelData, on
         </div>
     );
 }
+
 // === Mini Label Preview (static HTML, no html2canvas) สำหรับ thumbnail ===
 function MiniLabelPreview({ labelData, brandAssets }) {
     if (!labelData) return null;
-    const colors = brandAssets?.colors || ['#fff', '#222', '#d3542b'];
-    const bgColor = labelData.bg_color || colors[0] || '#fff';
-    const textColor = colors[1] || '#222';
-    const accent = colors[2] || '#d3542b';
 
     return (
-        <div style={{
-            width: '100%', height: '100%', background: bgColor, color: textColor,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            padding: 6, boxSizing: 'border-box', overflow: 'hidden',
-            fontFamily: brandAssets?.font || "'Sarabun', sans-serif"
-        }}>
+        <div className="mini-label-preview">
             {brandAssets?.logoUrl && (
                 <img src={brandAssets.logoUrl} alt="logo" crossOrigin="anonymous"
-                    style={{ width: 28, height: 28, objectFit: 'contain', marginBottom: 4 }}
+                    className="mini-label-preview-logo"
                     onError={e => e.target.style.display = 'none'} />
             )}
-            <div style={{ fontSize: 10, fontWeight: 800, textAlign: 'center', lineHeight: 1.1, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div className="mini-label-preview-name">
                 {labelData.product_name || ''}
             </div>
             {labelData.tagline && (
-                <div style={{ fontSize: 7, color: accent, marginTop: 2, textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div className="mini-label-preview-tagline">
                     {labelData.tagline}
                 </div>
             )}
@@ -1821,7 +2334,6 @@ function MiniLabelPreview({ labelData, brandAssets }) {
 function ProductCard({ product, brandAssets, onSelect }) {
     const [pkgImg, setPkgImg] = useState(null);
     const [labelData, setLabelData] = useState(null);
-    const [hover, setHover] = useState(false);
 
     useEffect(() => {
         // โหลดภาพบรรจุภัณฑ์
@@ -1854,107 +2366,84 @@ function ProductCard({ product, brandAssets, onSelect }) {
     const productImg = product.image_product ? `${API}/uploads/${product.image_product}` : null;
     const hasLabel = !!labelData;
 
-    let buttonText, buttonColor, buttonIcon, statusType;
+    let buttonText, buttonIcon, statusType;
     if (!product.has_package) {
-        buttonText = 'ไปเลือกบรรจุภัณฑ์'; buttonColor = C.accent;
+        buttonText = 'ไปเลือกบรรจุภัณฑ์';
         buttonIcon = 'mdi:package-variant-closed'; statusType = 'no_package';
     } else if (!hasLabel) {
-        buttonText = 'ไปออกแบบฉลาก'; buttonColor = C.label;
+        buttonText = 'ไปออกแบบฉลาก';
         buttonIcon = 'mdi:tag-outline'; statusType = 'no_label';
     } else {
-        buttonText = 'เริ่มทำ Mockup'; buttonColor = C.primaryDark;
+        buttonText = 'เริ่มทำ Mockup';
         buttonIcon = 'mdi:image-edit-outline'; statusType = 'ready';
     }
 
+    const isReady = statusType === 'ready';
+
     return (
-        <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{
-            background: '#fff', borderRadius: 16, overflow: 'hidden',
-            boxShadow: hover ? '0 12px 32px rgba(0,0,0,0.1)' : '0 4px 16px rgba(0,0,0,0.06)',
-            border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column',
-            transform: hover ? 'translateY(-3px)' : 'none', transition: 'all 0.2s ease'
-        }}>
-            <div style={{
-                position: 'relative', height: 240,
-                background: 'linear-gradient(135deg, #fafafa 0%, #f0f0f0 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
-            }}>
-                {productImg ? (
-                    <img src={productImg} alt={product.name_product}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={e => { e.target.style.display = 'none'; }} />
-                ) : (
-                    <div style={{ color: C.border, fontSize: 64 }}>
-                        <iconify-icon icon="mdi:image-outline"></iconify-icon>
-                    </div>
-                )}
-            </div>
-
-            <div style={{
-                display: 'flex', gap: 10, padding: '14px 16px',
-                background: C.bgLight, borderTop: `1px solid ${C.border}`
-            }}>
-                {/* Package thumbnail */}
-                <div style={{ flex: 1 }}>
-                    <div style={{
-                        width: '100%', aspectRatio: '1', background: '#fff',
-                        border: `1px solid ${C.border}`, borderRadius: 8,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        overflow: 'hidden'
-                    }}>
-                        {pkgImg ? (
-                            <img src={pkgImg} alt="package" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                        ) : (
-                            <div style={{ color: C.border, fontSize: 28 }}>
-                                <iconify-icon icon="mdi:package-variant-closed"></iconify-icon>
-                            </div>
-                        )}
-                    </div>
-                    <div style={{ fontSize: 10, color: C.sub, textAlign: 'center', marginTop: 4 }}>บรรจุภัณฑ์</div>
+        <div className={`product-card ${isReady ? 'product-card-ready' : ''}`}>
+            {/* Top: product image + thumbnails side by side */}
+            <div className="product-card-top">
+                {/* Product image */}
+                <div className="product-card-image">
+                    {productImg ? (
+                        <img src={productImg} alt={product.name_product}
+                            onError={e => { e.target.style.display = 'none'; }} />
+                    ) : (
+                        <div className="product-card-image-placeholder">
+                            <iconify-icon icon="mdi:image-outline"></iconify-icon>
+                        </div>
+                    )}
                 </div>
 
-                {/* Label thumbnail (mini preview) */}
-                <div style={{ flex: 1 }}>
-                    <div style={{
-                        width: '100%', aspectRatio: '1', background: '#fff',
-                        border: `1px solid ${C.border}`, borderRadius: 8,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        overflow: 'hidden'
-                    }}>
-                        {hasLabel ? (
-                            <MiniLabelPreview labelData={labelData} brandAssets={brandAssets} />
-                        ) : (
-                            <div style={{ color: C.border, fontSize: 28 }}>
-                                <iconify-icon icon="mdi:tag-outline"></iconify-icon>
-                            </div>
-                        )}
+                {/* Thumbnails stacked vertically */}
+                <div className="product-card-thumbs">
+                    <div className="product-card-thumb-col">
+                        <div className="product-card-thumb-box">
+                            {pkgImg ? (
+                                <img src={pkgImg} alt="package" />
+                            ) : (
+                                <div className="product-card-thumb-placeholder">
+                                    <iconify-icon icon="mdi:package-variant-closed"></iconify-icon>
+                                </div>
+                            )}
+                        </div>
+                        <div className="product-card-thumb-caption">บรรจุภัณฑ์</div>
                     </div>
-                    <div style={{ fontSize: 10, color: C.sub, textAlign: 'center', marginTop: 4 }}>ฉลาก</div>
+
+                    <div className="product-card-thumb-col">
+                        <div className="product-card-thumb-box">
+                            {hasLabel ? (
+                                <MiniLabelPreview labelData={labelData} brandAssets={brandAssets} />
+                            ) : (
+                                <div className="product-card-thumb-placeholder">
+                                    <iconify-icon icon="mdi:tag-outline"></iconify-icon>
+                                </div>
+                            )}
+                        </div>
+                        <div className="product-card-thumb-caption">ฉลาก</div>
+                    </div>
                 </div>
             </div>
 
-            <div style={{ padding: 18, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: C.text, marginBottom: 4 }}>
-                    {product.name_product}
-                </div>
+            {/* Bottom: info + CTA */}
+            <div className="product-card-body">
+                <div className="product-card-name">{product.name_product}</div>
                 {product.type_product && (
-                    <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>
-                        ประเภท: {product.type_product}
-                    </div>
+                    <div className="product-card-type">{product.type_product}</div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                    <StatusLine ok={product.has_package} okText={`บรรจุภัณฑ์: ${product.name_package || ''}`}
-                        noText="ยังไม่ได้เลือกบรรจุภัณฑ์" />
-                    <StatusLine ok={hasLabel} okText={`ฉลาก: ${labelData?.product_name || 'ออกแบบแล้ว'}`}
-                        noText="ยังไม่ได้ออกแบบฉลาก" />
+                <div className="product-card-status-list">
+                    <StatusLine ok={product.has_package}
+                        okText={product.name_package || 'มีบรรจุภัณฑ์'}
+                        noText="ยังไม่มีบรรจุภัณฑ์" />
+                    <StatusLine ok={hasLabel}
+                        okText={labelData?.product_name || 'มีฉลากแล้ว'}
+                        noText="ยังไม่มีฉลาก" />
                 </div>
 
-                <button onClick={() => onSelect(statusType, labelData)} style={{
-                    marginTop: 'auto', padding: '12px 16px',
-                    background: buttonColor, color: '#fff', border: 'none', borderRadius: 8,
-                    fontWeight: 600, cursor: 'pointer', fontSize: 14,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                }}>
+                <button onClick={() => onSelect(statusType, labelData)}
+                    className={`product-card-cta product-card-cta-${statusType}`}>
                     <iconify-icon icon={buttonIcon}></iconify-icon>
                     {buttonText}
                 </button>
@@ -1965,13 +2454,9 @@ function ProductCard({ product, brandAssets, onSelect }) {
 
 function StatusLine({ ok, okText, noText }) {
     return (
-        <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 12, color: ok ? '#5a7020' : '#9a5e15'
-        }}>
-            <iconify-icon icon={ok ? "mdi:check-circle" : "mdi:alert-circle-outline"}
-                style={{ fontSize: 14 }}></iconify-icon>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div className={`status-line ${ok ? 'status-line-ok' : 'status-line-warn'}`}>
+            <iconify-icon icon={ok ? "mdi:check-circle" : "mdi:alert-circle-outline"}></iconify-icon>
+            <span className="status-line-text">
                 {ok ? okText : noText}
             </span>
         </div>
@@ -1981,12 +2466,12 @@ function StatusLine({ ok, okText, noText }) {
 // === Product Picker ===
 function ProductPickerView({ products, isLoading, brandAssets, onSelectProduct, onRefresh }) {
     if (isLoading) return (
-        <div style={{ padding: 60, textAlign: 'center', color: C.sub }}>กำลังโหลดสินค้า...</div>
+        <div className="product-picker-loading">กำลังโหลดสินค้า...</div>
     );
     if (!products || products.length === 0) {
         return (
-            <div style={{ padding: 60, textAlign: 'center', color: C.sub }}>
-                <div style={{ fontSize: 48, marginBottom: 12, color: C.border }}>
+            <div className="product-picker-empty">
+                <div className="product-picker-empty-icon">
                     <iconify-icon icon="mdi:package-variant-closed-remove"></iconify-icon>
                 </div>
                 ยังไม่มีสินค้าในโปรเจกต์นี้ กรุณาเพิ่มสินค้าก่อน
@@ -1995,27 +2480,23 @@ function ProductPickerView({ products, isLoading, brandAssets, onSelectProduct, 
     }
 
     return (
-        <div style={{ padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, gap: 16 }}>
-                <div style={{ flex: 1 }}>
-                    <h2 style={{ margin: '0 0 6px', color: C.primaryDark, fontSize: 22, fontWeight: 700 }}>
+        <div className="product-picker">
+            <div className="product-picker-header">
+                <div className="product-picker-header-text">
+                    <h2 className="product-picker-title">
                         เลือกสินค้าที่ต้องการทำ Mockup
                     </h2>
-                    <p style={{ margin: 0, color: C.sub, fontSize: 14 }}>
+                    <p className="product-picker-subtitle">
                         แต่ละสินค้ามีฉลากของตัวเอง — เลือกสินค้าที่มีบรรจุภัณฑ์และฉลากครบเพื่อทำภาพ Mockup
                     </p>
                 </div>
-                <button onClick={onRefresh} style={{
-                    padding: '8px 14px', background: '#fff', border: `1px solid ${C.border}`,
-                    borderRadius: 8, cursor: 'pointer', fontSize: 13, color: C.text,
-                    display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500, whiteSpace: 'nowrap'
-                }}>
+                <button onClick={onRefresh} className="product-picker-refresh-btn">
                     <iconify-icon icon="mdi:refresh"></iconify-icon>
                     รีเฟรชข้อมูล
                 </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
+            <div className="product-picker-grid">
                 {products.map(p => (
                     <ProductCard key={p.product_id} product={p}
                         brandAssets={brandAssets}
@@ -2070,7 +2551,7 @@ export default function MockupEditor({ projectId, userId, projectName, onNavigat
             const colors = a.color
                 ? [a.color.color_code_1, a.color.color_code_2, a.color.color_code_3, a.color.color_code_4, a.color.color_code_5].filter(Boolean)
                 : ['#fff', '#222', '#d3542b', '#777', '#eee'];
-            const font = a.font ? `'${a.font.font_name}', sans-serif` : "'Sarabun', sans-serif";
+            const font = a.font ? `'${a.font.font_name}', sans-serif` : "'Bai Jamjuree', sans-serif";
             setBrandAssets({ logoUrl: transparentLogo || logo, font, colors });
         } catch (err) {
             console.error('[Mockup] Brand assets fetch error:', err);

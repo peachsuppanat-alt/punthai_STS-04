@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import './LabelEditor.css';
 
 import { QRCodeSVG } from 'qrcode.react';
 import Barcode from 'react-barcode';
@@ -20,16 +21,20 @@ const API = `${API_URL}`;
 // ============= CONSTANTS =============
 const TEMPLATE_TYPES = [
     { id: 'centered_classic', name: 'จัดกลาง', desc: 'โลโก้กลาง ทุกอย่างจัดกึ่งกลาง' },
-    { id: 'modern_side', name: 'ชิดซ้าย', desc: 'โลโก้ซ้าย ข้อความชิดซ้าย' },
-    { id: 'premium_frame', name: 'พรีเมียม', desc: 'กรอบเส้นบาง สไตล์หรูหรา' },
-    { id: 'minimal_strip', name: 'มินิมอล', desc: 'ชื่อใหญ่ แถบข้อมูลด้านล่าง' },
+    { id: 'modern_side', name: 'จัดซ้าย', desc: 'โลโก้ซ้าย ข้อความชิดซ้าย' },
+    { id: 'premium_frame', name: 'จัดขวา', desc: 'กรอบเส้นบาง สไตล์หรูหรา' },
+    { id: 'minimal_strip', name: 'กำหนดเอง', desc: 'ชื่อใหญ่ แถบข้อมูลด้านล่าง' },
 ];
 
 const CERT_OPTIONS = [
-    { id: 'fda', label: 'อย.' }, { id: 'halal', label: 'ฮาลาล' },
-    { id: 'otop', label: 'OTOP' }, { id: 'gmp', label: 'GMP' },
-    { id: 'organic', label: 'ออร์แกนิก' }, { id: 'tisi', label: 'มผช./มอก.' },
-    { id: 'vegan', label: 'Vegan' }, { id: 'sugar_free', label: 'ปลอดน้ำตาล' },
+    { id: 'fda', label: 'อย.', img: '/src/assets/อย.png' },
+    { id: 'halal', label: 'ฮาลาล', img: '/src/assets/halal.png' },
+    { id: 'otop', label: 'OTOP', img: '/src/assets/OTOP_Logo.svg' },
+    { id: 'gmp', label: 'GMP', img: '/src/assets/gmp.png' },
+    { id: 'organic', label: 'ออร์แกนิก', img: '/src/assets/ดาวน์โหลด.png' },
+    { id: 'tisi', label: 'มผช./มอก.', img: '/src/assets/มผช.png' },
+    { id: 'vegan', label: 'Vegan', img: '/src/assets/Vegan.png' },
+    { id: 'sugar_free', label: 'ปลอดน้ำตาล', img: null },
 ];
 
 const BG_STYLES = [
@@ -137,26 +142,26 @@ const PREVIEW_PX_PER_CM = 38;
 // ============= SUB COMPONENTS =============
 function AccordionSection({ title, open, onToggle, children, disabled }) {
     return (
-        <div style={{ marginBottom: 12, border: '1px solid #eee', borderRadius: 8, overflow: 'hidden', opacity: disabled ? 0.5 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
-            <button onClick={onToggle} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: open ? '#f5f8eb' : '#fafafa', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: 13, display: 'flex', justifyContent: 'space-between' }}>
-                <span>{title}</span><span>{open ? '▾' : '▸'}</span>
+        <div style={{ marginBottom: 8, border: '1px solid #ececec', borderRadius: 10, overflow: 'hidden', opacity: disabled ? 0.5 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
+            <button onClick={onToggle} style={{ width: '100%', textAlign: 'left', padding: '10px 14px', background: open ? '#f5f8eb' : '#fafafa', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#333' }}>
+                <span>{title}</span><span style={{ color: '#aaa', fontSize: 12 }}>{open ? '▾' : '▸'}</span>
             </button>
-            {open && <div style={{ padding: 12 }}>{children}</div>}
+            {open && <div style={{ padding: '10px 14px' }}>{children}</div>}
         </div>
     );
 }
 
 function BgModeBtn({ label, active, onClick }) {
     return (
-        <button onClick={onClick} style={{ flex: 1, padding: 8, fontSize: 12, fontWeight: 'bold', cursor: 'pointer', border: active ? '2px solid #8a9a3c' : '1px solid #ddd', background: active ? '#f5f8eb' : '#fff', borderRadius: 6 }}>{label}</button>
+        <button onClick={onClick} style={{ flex: 1, padding: 8, fontSize: 17, fontWeight: 'bold', cursor: 'pointer', border: active ? '2px solid #8a9a3c' : '1px solid #ddd', background: active ? '#f5f8eb' : '#fff', borderRadius: 6 }}>{label}</button>
     );
 }
 
 function FormInput({ label, value, onChange, type = 'text' }) {
     return (
         <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 'bold', marginBottom: 4 }}>{label}</label>
-            <input type={type} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd', fontSize: 13, boxSizing: 'border-box' }} />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>{label}</label>
+            <input type={type} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, background: '#fafafa', color: '#222', boxSizing: 'border-box' }} />
         </div>
     );
 }
@@ -164,41 +169,55 @@ function FormInput({ label, value, onChange, type = 'text' }) {
 function FormTextarea({ label, value, onChange, rows = 3 }) {
     return (
         <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 'bold', marginBottom: 4 }}>{label}</label>
-            <textarea rows={rows} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }} />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>{label}</label>
+            <textarea rows={rows} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, fontFamily: 'inherit', background: '#fafafa', color: '#222', boxSizing: 'border-box', resize: 'vertical' }} />
         </div>
     );
 }
 
 function TagSelector({ label, options, selectedTags, onTagToggle, customText, onCustomChange, showCustom, onToggleCustom }) {
+    const [open, setOpen] = React.useState(false);
+    const hasSelected = selectedTags.length > 0 || (showCustom && customText);
     return (
-        <div style={{ marginBottom: 15 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 'bold', marginBottom: 6 }}>{label}</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                {options.map(opt => (
-                    <button key={opt} onClick={() => onTagToggle(opt)}
-                        style={{
-                            padding: '6px 10px', fontSize: 11, borderRadius: 20, cursor: 'pointer',
-                            background: selectedTags.includes(opt) ? '#8a9a3c' : '#f0f0f0',
-                            color: selectedTags.includes(opt) ? '#fff' : '#555',
-                            border: '1px solid', borderColor: selectedTags.includes(opt) ? '#8a9a3c' : '#ddd'
-                        }}>
-                        {opt}
-                    </button>
-                ))}
-                <button onClick={onToggleCustom}
-                    style={{
-                        padding: '6px 10px', fontSize: 11, borderRadius: 20, cursor: 'pointer',
-                        background: showCustom ? '#d3542b' : '#f0f0f0',
-                        color: showCustom ? '#fff' : '#555',
-                        border: '1px solid', borderColor: showCustom ? '#d3542b' : '#ddd'
-                    }}>
-                    อื่นๆ +
-                </button>
-            </div>
-            {showCustom && (
-                <input type="text" placeholder="พิมพ์ระบุเพิ่มเติม..." value={customText} onChange={e => onCustomChange(e.target.value)}
-                    style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px dashed #d3542b', fontSize: 12, boxSizing: 'border-box' }} />
+        <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid #e8e8e8', overflow: 'hidden', background: '#fff' }}>
+            <button onClick={() => setOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{label}</span>
+                    {hasSelected && (
+                        <span style={{ fontSize: 17, fontWeight: 700, background: '#FF8A00', color: '#fff', borderRadius: 10, padding: '1px 7px', lineHeight: '16px' }}>
+                            {selectedTags.length + (showCustom && customText ? 1 : 0)}
+                        </span>
+                    )}
+                </div>
+                <span style={{ fontSize: 17, color: '#aaa', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▾</span>
+            </button>
+            {!open && hasSelected && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '0 12px 10px' }}>
+                    {selectedTags.map(t => (
+                        <span key={t} style={{ fontSize: 17, padding: '3px 8px', borderRadius: 12, background: '#fff4e6', color: '#FF8A00', border: '1px solid #FFD699' }}>{t}</span>
+                    ))}
+                    {showCustom && customText && (
+                        <span style={{ fontSize: 17, padding: '3px 8px', borderRadius: 12, background: '#fff0ed', color: '#d3542b', border: '1px solid #f9c4b8' }}>{customText}</span>
+                    )}
+                </div>
+            )}
+            {open && (
+                <div style={{ padding: '4px 12px 12px', borderTop: '1px solid #f0f0f0' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, marginBottom: 8 }}>
+                        {options.map(opt => (
+                            <button key={opt} onClick={() => onTagToggle(opt)} style={{ padding: '6px 12px', fontSize: 17, borderRadius: 20, cursor: 'pointer', background: selectedTags.includes(opt) ? '#FF8A00' : '#f5f5f5', color: selectedTags.includes(opt) ? '#fff' : '#555', border: '1.5px solid', borderColor: selectedTags.includes(opt) ? '#FF8A00' : '#e0e0e0', fontFamily: 'inherit', transition: 'all 0.15s' }}>
+                                {selectedTags.includes(opt) ? '✓ ' : ''}{opt}
+                            </button>
+                        ))}
+                        <button onClick={onToggleCustom} style={{ padding: '6px 12px', fontSize: 17, borderRadius: 20, cursor: 'pointer', background: showCustom ? '#d3542b' : '#f5f5f5', color: showCustom ? '#fff' : '#888', border: '1.5px dashed', borderColor: showCustom ? '#d3542b' : '#ccc', fontFamily: 'inherit' }}>
+                            + ระบุเอง
+                        </button>
+                    </div>
+                    {showCustom && (
+                        <input type="text" placeholder="พิมพ์ระบุเพิ่มเติม..." value={customText} onChange={e => onCustomChange(e.target.value)}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px dashed #d3542b', fontSize: 17, boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                    )}
+                </div>
             )}
         </div>
     );
@@ -260,10 +279,10 @@ function ColorSwatchPicker({ label, value, onChange, palette }) {
     return (
         <div style={{ marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: '#444' }}>{label}</label>
+                <label style={{ fontSize: 17, fontWeight: 600, color: '#444' }}>{label}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div onClick={() => setShowPicker(!showPicker)} style={{ width: 28, height: 28, borderRadius: 6, background: value, border: '2px solid #ddd', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }} />
-                    <span style={{ fontSize: 11, color: '#888', fontFamily: 'monospace' }}>{value}</span>
+                    <span style={{ fontSize: 15, color: '#888', fontFamily: 'monospace' }}>{value}</span>
                 </div>
             </div>
             {showPicker && (
@@ -273,14 +292,14 @@ function ColorSwatchPicker({ label, value, onChange, palette }) {
                             <button key={i} onClick={() => { onChange(c); setShowPicker(false); }}
                                 style={{ width: 30, height: 30, borderRadius: 6, background: c, border: value === c ? '2.5px solid #333' : '1px solid #ddd', cursor: 'pointer', position: 'relative' }}
                                 title={c}>
-                                {value === c && <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, textShadow: '0 0 3px #000' }}>✓</span>}
+                                {value === c && <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 17, textShadow: '0 0 3px #000' }}>✓</span>}
                             </button>
                         ))}
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <input type="color" value={value} onChange={e => onChange(e.target.value)} style={{ width: 32, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0 }} />
                         <input type="text" value={value} onChange={e => { if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) onChange(e.target.value); }}
-                            style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 12, fontFamily: 'monospace' }} />
+                            style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 17, fontFamily: 'monospace' }} />
                     </div>
                 </div>
             )}
@@ -311,12 +330,12 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
             {/* Header */}
             <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid #eee' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <h4 style={{ margin: 0, fontSize: 13, color: '#8a9a3c' }}>
+                    <h4 style={{ margin: 0, fontSize: 15, color: '#8a9a3c' }}>
                         <iconify-icon icon="mdi:package-variant-closed" style={{ marginRight: 4, verticalAlign: 'middle' }}></iconify-icon>
                         Packaging
                     </h4>
                     <button onClick={() => setIsExpanded(!isExpanded)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#999', padding: 2 }}>
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 17, color: '#999', padding: 2 }}>
                         <iconify-icon icon={isExpanded ? 'mdi:chevron-right' : 'mdi:chevron-left'}></iconify-icon>
                     </button>
                 </div>
@@ -328,9 +347,9 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
                     }}>
                         <img src={selectedPkg.thumbnail} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 11, fontWeight: 'bold', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedPkg.name}</div>
+                            <div style={{ fontSize: 15, fontWeight: 'bold', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedPkg.name}</div>
                         </div>
-                        <iconify-icon icon="mdi:check-circle" style={{ color: '#8a9a3c', fontSize: 16, flexShrink: 0 }}></iconify-icon>
+                        <iconify-icon icon="mdi:check-circle" style={{ color: '#8a9a3c', fontSize: 17, flexShrink: 0 }}></iconify-icon>
                     </div>
                 )}
                 {/* Filter pills */}
@@ -338,7 +357,7 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
                     {CATEGORIES.filter(c => ['all', 'pouch', 'box', 'bottle', 'food'].includes(c.id)).map(cat => (
                         <button key={cat.id} onClick={() => setFilterCat(cat.id)}
                             style={{
-                                padding: '2px 8px', fontSize: 10, borderRadius: 12, cursor: 'pointer',
+                                padding: '2px 8px', fontSize: 17, borderRadius: 12, cursor: 'pointer',
                                 background: filterCat === cat.id ? '#8a9a3c' : '#f5f5f5',
                                 color: filterCat === cat.id ? '#fff' : '#888',
                                 border: 'none',
@@ -349,7 +368,7 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
                 </div>
             </div>
             {/* Package list */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 8, scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {filtered.map(pkg => {
                         const isSelected = selectedPackageId === pkg.id;
@@ -364,13 +383,13 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
                                 <img src={pkg.thumbnail} alt={pkg.name}
                                     style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 6, background: '#fff', flexShrink: 0 }} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 'bold', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div style={{ fontSize: 15, fontWeight: 'bold', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         {pkg.name}
                                     </div>
                                     <div style={{ fontSize: 9, color: '#999', marginTop: 1 }}>{pkg.type}</div>
                                 </div>
                                 {isSelected && (
-                                    <iconify-icon icon="mdi:check-circle" style={{ color: '#8a9a3c', fontSize: 16, flexShrink: 0 }}></iconify-icon>
+                                    <iconify-icon icon="mdi:check-circle" style={{ color: '#8a9a3c', fontSize: 17, flexShrink: 0 }}></iconify-icon>
                                 )}
                             </div>
                         );
@@ -381,88 +400,68 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
     );
 }
 
-function PanelSelector({ panels, selectedPanel, onSelectPanel, materialData }) {
+function PanelSelector({ panels, selectedPanel, onSelectPanel }) {
     if (!panels || panels.length === 0) return null;
 
     return (
-        <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 'bold', color: '#333', marginBottom: 8 }}>
-                เลือกด้านที่จะออกแบบฉลาก
-            </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {panels.map(panel => {
-                    const isSelected = selectedPanel?.id === panel.id;
-                    const aspect = panel.w_mm / panel.h_mm;
-                    const previewH = 80;
-                    const previewW = Math.round(previewH * aspect);
-                    const isWrap = aspect > 2;
-                    const isPortrait = aspect < 0.8;
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end' }}>
+            {panels.map(panel => {
+                const isSelected = selectedPanel?.id === panel.id;
+                const aspect = panel.w_mm / panel.h_mm;
+                const isPortrait = aspect < 0.8;
+                const isWrap = aspect > 2;
+                const thumbH = 64;
+                const thumbW = isWrap ? 100 : isPortrait ? Math.round(thumbH * aspect) : thumbH;
 
-                    return (
-                        <div
-                            key={panel.id}
-                            onClick={() => onSelectPanel(panel)}
-                            style={{
-                                cursor: 'pointer',
-                                border: isSelected ? '2px solid #d3542b' : '2px solid #e0e0e0',
-                                borderRadius: 10,
-                                padding: 10,
-                                background: isSelected ? '#fff8f5' : '#fff',
-                                minWidth: 100,
-                                textAlign: 'center',
-                                transition: 'all 0.2s',
-                            }}
-                        >
-                            {/* กรอบแสดงสัดส่วนจริง */}
-                            <div style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                marginBottom: 6, minHeight: 85,
-                            }}>
-                                <div style={{
-                                    width: Math.min(previewW, 120),
-                                    height: Math.min(previewH, 100),
-                                    border: '1.5px dashed #aaa',
-                                    borderRadius: 4,
-                                    background: isSelected
-                                        ? 'repeating-linear-gradient(45deg, #fff8f5, #fff8f5 4px, #fef0ea 4px, #fef0ea 8px)'
-                                        : '#fafafa',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: 9, color: '#999', position: 'relative',
-                                }}>
-                                    <span style={{ fontSize: 8, color: '#aaa' }}>
-                                        {panel.w_mm}×{panel.h_mm} mm
-                                    </span>
-                                    {/* แสดงไอคอนบอกทิศทาง */}
-                                    <span style={{
-                                        position: 'absolute', top: 3, right: 4,
-                                        fontSize: 10, color: '#bbb'
-                                    }}>
-                                        {isWrap ? '↔' : isPortrait ? '↕' : '⬜'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 12, fontWeight: isSelected ? 'bold' : 500, color: isSelected ? '#d3542b' : '#555' }}>
-                                {panel.label}
-                            </div>
-                            <div style={{ fontSize: 9, color: '#999', marginTop: 2 }}>
-                                {isWrap ? 'แนวนอน (wrap)' : isPortrait ? 'แนวตั้ง' : 'สี่เหลี่ยม'}
-                            </div>
+                return (
+                    <div
+                        key={panel.id}
+                        onClick={() => onSelectPanel(panel)}
+                        style={{
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                            opacity: isSelected ? 1 : 0.55,
+                            transition: 'opacity 0.15s',
+                        }}
+                    >
+                        {/* dashed thumbnail */}
+                        <div style={{
+                            width: thumbW,
+                            height: thumbH,
+                            border: isSelected ? '2px dashed #d3542b' : '2px dashed #bbb',
+                            borderRadius: 5,
+                            background: 'transparent',
+                            display: 'flex', flexDirection: 'column',
+                            alignItems: 'center', justifyContent: 'center',
+                            gap: 2,
+                            position: 'relative',
+                        }}>
+                            {/* arrow icon */}
+                            <span style={{ fontSize: 14, color: isSelected ? '#d3542b' : '#aaa' }}>
+                                {isWrap ? '↔' : '↕'}
+                            </span>
+                            <span style={{ fontSize: 9, color: isSelected ? '#d3542b' : '#bbb', lineHeight: 1 }}>
+                                {panel.w_mm}×{panel.h_mm}
+                            </span>
+                            <span style={{ fontSize: 9, color: isSelected ? '#d3542b' : '#bbb', lineHeight: 1 }}>
+                                มม.
+                            </span>
                         </div>
-                    );
-                })}
-            </div>
-            {materialData && (
-                <div style={{
-                    marginTop: 10, padding: '8px 12px', background: '#f8f9fa',
-                    borderRadius: 6, fontSize: 10, color: '#777',
-                    display: 'flex', gap: 16, flexWrap: 'wrap'
-                }}>
-                    <span>วัสดุ: <b style={{ color: '#555' }}>{materialData.name}</b></span>
-                    <span>Bleed: {materialData.bleed_mm || 3} mm</span>
-                    <span>Safe zone: {materialData.safe_zone_mm || 3} mm</span>
-                    <span>ประเภท: {materialData.package_type}</span>
-                </div>
-            )}
+                        {/* label */}
+                        <div style={{
+                            fontSize: 13, fontWeight: isSelected ? 700 : 500,
+                            color: isSelected ? '#d3542b' : '#555',
+                        }}>
+                            {panel.label}
+                        </div>
+                        {/* orientation tag */}
+                        <div style={{ fontSize: 11, color: isSelected ? '#e8896a' : '#aaa', marginTop: -4 }}>
+                            {isWrap ? 'แนวนอน' : isPortrait ? 'แนวตั้ง' : 'สี่เหลี่ยม'}
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 }
@@ -481,11 +480,14 @@ export default function LabelEditor({ projectId, userId }) {
 
     // ====== Packaging ======
     const [selectedPackage, setSelectedPackage] = useState(null);
+    const [showPkgModal, setShowPkgModal] = useState(false);
     const [materialData, setMaterialData] = useState(null);
     const [selectedPanel, setSelectedPanel] = useState(null);
     const [labelMode, setLabelMode] = useState('sticker'); // 'sticker' | 'fullcover'
     const [elemPositions, setElemPositions] = useState(() => ({ ...LAYOUT_PRESETS.centered_classic }));
     const [selectedElem, setSelectedElem] = useState(null);
+    const [layerDraggingId, setLayerDraggingId] = useState(null);
+    const [layerDragOverId, setLayerDragOverId] = useState(null);
     const [bgHistory, setBgHistory] = useState([]);
 
     // ====== Brand Assets ======
@@ -525,9 +527,20 @@ export default function LabelEditor({ projectId, userId }) {
     const [isSavingLabel, setIsSavingLabel] = useState(false);
     const [labelDimensions, setLabelDimensions] = useState({ width: 380, height: 500 });
     const [sectionColors, setSectionColors] = useState({ productName: '#222222', tagline: '#D3542B', details: '#555555' });
+
+    // Per-element text styles: bold, italic, underline, align, color
+    const DEFAULT_ELEM_STYLE = { bold: false, italic: false, underline: false, align: 'center', color: '#222222' };
+    const [elemStyles, setElemStyles] = useState(() =>
+        Object.fromEntries(LABEL_ELEMENTS.map(e => [e.id, { ...DEFAULT_ELEM_STYLE }]))
+    );
+    const updateElemStyle = (elemId, patch) => {
+        if (!elemId) return;
+        setElemStyles(prev => ({ ...prev, [elemId]: { ...prev[elemId], ...patch } }));
+    };
     const [saveStatus, setSaveStatus] = useState('');
 
     const [openAccordions, setOpenAccordions] = useState({
+        elements: true,
         bg: true, settings: true, main: true, product: true, manufacturer: false, legal: false, cert: false, qr: false,
     });
     const toggleAccordion = (key) => setOpenAccordions(p => ({ ...p, [key]: !p[key] }));
@@ -577,8 +590,20 @@ export default function LabelEditor({ projectId, userId }) {
     }, [projectId]);
 
     // ============= GOOGLE FONT LOADING =============
+    // Pre-load Bai Jamjuree on mount
     useEffect(() => {
-        if (!labelAssets.font || labelAssets.font === "'Sarabun', sans-serif") return;
+        const linkId = 'gfont-bai-jamjuree';
+        if (!document.getElementById(linkId)) {
+            const link = document.createElement('link');
+            link.id = linkId;
+            link.rel = 'stylesheet';
+            link.href = 'https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@300;400;500;600;700&display=swap';
+            document.head.appendChild(link);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!labelAssets.font) return;
         const fontName = labelAssets.font.replace(/'/g, '').split(',')[0].trim();
         if (!fontName) return;
         const linkId = `gfont-label-${fontName.replace(/\s+/g, '-')}`;
@@ -590,13 +615,31 @@ export default function LabelEditor({ projectId, userId }) {
         document.head.appendChild(link);
     }, [labelAssets.font]);
 
-    // AUTO-SAVE (เฉพาะเมื่อเลือก packaging แล้ว)
+    // AUTO-SAVE (ทำงานทันทีที่เลือกสินค้า — ไม่ต้องรอเลือก packaging แล้ว)
+    // NOTE: !hasPackaging check removed intentionally; PackagingSidebar moved out of required flow
     useEffect(() => {
-        if (!selectedProduct || !hasPackaging) return;
+        if (!selectedProduct) return;
         setSaveStatus('กำลังบันทึก...');
         const timer = setTimeout(() => { handleSaveLabel(true); }, 1500);
         return () => clearTimeout(timer);
     }, [labelForm, layoutType, bgMode, bgColor, bgPresetId, bgImageUrl, bgOpacity, labelDimensions, sectionColors, elemPositions]);
+
+    // ============= KEYBOARD DELETE =============
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (!selectedElem) return;
+            // ไม่ทำงานถ้า focus อยู่ที่ input/textarea
+            const tag = document.activeElement?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                setElemPositions(prev => ({ ...prev, [selectedElem]: { ...prev[selectedElem], visible: false } }));
+                setSelectedElem(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedElem]);
 
     // ============= FETCHERS =============
     const fetchProducts = async () => {
@@ -801,6 +844,51 @@ export default function LabelEditor({ projectId, userId }) {
         }));
     };
 
+    // ============= LAYER ORDER (เลื่อนเลเยอร์ขึ้น/ลงจริง) =============
+    // ลำดับเลเยอร์เก็บเป็น zIndex ในตัว elemPositions ของแต่ละ element เอง
+    // (ผูกกับการบันทึก/โหลด elem_positions ที่มีอยู่แล้ว ไม่ต้องเพิ่ม field ใหม่)
+    const getOrderedElements = () => {
+        return [...LABEL_ELEMENTS].sort((a, b) => {
+            const za = elemPositions[a.id]?.zIndex ?? LABEL_ELEMENTS.findIndex(e => e.id === a.id);
+            const zb = elemPositions[b.id]?.zIndex ?? LABEL_ELEMENTS.findIndex(e => e.id === b.id);
+            return za - zb;
+        });
+    };
+
+    const reorderLayer = (draggedId, targetId) => {
+        if (draggedId === targetId) return;
+        const ordered = getOrderedElements().map(e => e.id);
+        const fromIdx = ordered.indexOf(draggedId);
+        const toIdx = ordered.indexOf(targetId);
+        if (fromIdx === -1 || toIdx === -1) return;
+        const next = [...ordered];
+        next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, draggedId);
+        setElemPositions(prev => {
+            const updated = { ...prev };
+            next.forEach((id, i) => {
+                updated[id] = { ...updated[id], zIndex: i };
+            });
+            return updated;
+        });
+    };
+
+    const moveLayerStep = (elemId, direction) => {
+        // direction: -1 = เลื่อนขึ้น (ทับซ้อนบนสุดมากขึ้น / zIndex สูงขึ้น), 1 = เลื่อนลง (zIndex ต่ำลง)
+        const ordered = getOrderedElements().map(e => e.id); // เรียงจาก zIndex น้อย -> มาก (ล่างสุด -> บนสุด)
+        const idx = ordered.indexOf(elemId);
+        // เลื่อนขึ้น (direction -1) ต้องขยับไปทาง index ที่มากขึ้นใน ordered (zIndex สูงขึ้น)
+        const targetIdx = idx - direction;
+        if (targetIdx < 0 || targetIdx >= ordered.length) return;
+        const next = [...ordered];
+        [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+        setElemPositions(prev => {
+            const updated = { ...prev };
+            next.forEach((id, i) => { updated[id] = { ...updated[id], zIndex: i }; });
+            return updated;
+        });
+    };
+
     const handleDragStart = (e, elemId) => {
         e.preventDefault();
         if (!labelRef.current) return;
@@ -846,8 +934,13 @@ export default function LabelEditor({ projectId, userId }) {
                 setBgMode('preset');
                 setBgPresetId(null);
                 setBgHistory(prev => [{ history_id: Date.now(), image_url: data.image_url, generation_type: 'LABEL_BG_UPLOAD', created_at: new Date().toISOString() }, ...prev]);
+            } else {
+                alert('อัปโหลดรูปไม่สำเร็จ: ' + (data.message || 'กรุณาลองใหม่อีกครั้ง'));
             }
-        } catch (err) { console.error('Upload bg error:', err); }
+        } catch (err) {
+            console.error('Upload bg error:', err);
+            alert('อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่อีกครั้งครับ');
+        }
     };
     // ============= PACKAGING SELECTION =============
     const handleSelectPackaging = async (pkg) => {
@@ -1163,36 +1256,45 @@ export default function LabelEditor({ projectId, userId }) {
         const subColor = sectionColors.details;
         const align = layoutType === 'modern_side' ? 'left' : 'center';
 
+        // Per-element style overrides
+        const es = elemStyles[elemId] || DEFAULT_ELEM_STYLE;
+        const esColor = es.color || textColor;
+        const esAlign = es.align || align;
+        const esFontWeight = es.bold ? '800' : undefined;
+        const esFontStyle = es.italic ? 'italic' : undefined;
+        const esTextDecoration = es.underline ? 'underline' : undefined;
+        const esBase = { fontWeight: esFontWeight, fontStyle: esFontStyle, textDecoration: esTextDecoration, textAlign: esAlign, color: esColor };
+
         switch (elemId) {
             case 'logo':
                 return labelAssets.logoUrl
                     ? <img src={labelAssets.logoUrl} crossOrigin="anonymous" alt="logo" style={{ maxWidth: 120, maxHeight: 120, width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }} />
-                    : <div style={{ width: 90, height: 90, background: 'rgba(0,0,0,0.06)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 11 }}>LOGO</div>;
+                    : <div style={{ width: 90, height: 90, background: 'rgba(0,0,0,0.06)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 15 }}>LOGO</div>;
             case 'productName':
-                return <div style={{ fontSize: 22, fontWeight: 800, color: textColor, textAlign: align, lineHeight: 1.2 }}>{labelForm.productName || <span style={{ opacity: .35 }}>ชื่อสินค้า</span>}</div>;
+                return <div style={{ fontSize: 22, fontWeight: 800, color: textColor, textAlign: align, lineHeight: 1.2, ...esBase }}>{labelForm.productName || <span style={{ opacity: .35 }}>ชื่อสินค้า</span>}</div>;
             case 'tagline':
-                return labelForm.tagline ? <div style={{ fontSize: 12, fontWeight: 600, color: accentColor, textAlign: align }}>{labelForm.tagline}</div> : <div style={{ fontSize: 10, color: '#ccc', textAlign: align }}>คำโปรย</div>;
+                return labelForm.tagline ? <div style={{ fontSize: 17, fontWeight: 600, color: accentColor, textAlign: align, ...esBase }}>{labelForm.tagline}</div> : <div style={{ fontSize: 17, color: '#ccc', textAlign: align }}>คำโปรย</div>;
             case 'netWeight':
-                return labelForm.netWeight ? <div style={{ fontSize: 11, color: subColor, textAlign: align }}>ปริมาณสุทธิ: {labelForm.netWeight}</div> : null;
+                return labelForm.netWeight ? <div style={{ fontSize: 15, color: subColor, textAlign: align, ...esBase }}>ปริมาณสุทธิ: {labelForm.netWeight}</div> : null;
             case 'certifications':
                 return labelForm.certifications.length > 0 ? (
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: align === 'left' ? 'flex-start' : 'center' }}>
-                        {labelForm.certifications.map(id => { const c = CERT_OPTIONS.find(x => x.id === id); return c ? <span key={id} style={{ background: accentColor, color: '#fff', fontSize: 8, padding: '2px 6px', borderRadius: 999, fontWeight: 'bold' }}>{c.label}</span> : null; })}
+                        {labelForm.certifications.map(id => { const c = CERT_OPTIONS.find(x => x.id === id); return c ? (c.img ? <img key={id} src={c.img} alt={c.label} style={{ width: 28, height: 28, objectFit: 'contain' }} /> : <span key={id} style={{ background: accentColor, color: '#fff', fontSize: 8, padding: '2px 6px', borderRadius: 999, fontWeight: 'bold' }}>{c.label}</span>) : null; })}
                     </div>
                 ) : null;
             case 'ingredients':
                 return labelForm.ingredients ? (
-                    <div style={{ fontSize: 10, lineHeight: 1.5, textAlign: 'left', maxWidth: 280 }}>
-                        <strong style={{ color: textColor }}>ส่วนประกอบ:</strong>
-                        <div style={{ whiteSpace: 'pre-wrap', color: subColor }}>{labelForm.ingredients}</div>
+                    <div style={{ fontSize: 17, lineHeight: 1.5, textAlign: 'left', maxWidth: 280, ...esBase }}>
+                        <strong style={{ color: esColor }}>ส่วนประกอบ:</strong>
+                        <div style={{ whiteSpace: 'pre-wrap', color: esColor }}>{labelForm.ingredients}</div>
                     </div>
                 ) : <div style={{ fontSize: 9, color: '#ccc' }}>ส่วนประกอบ...</div>;
             case 'usage':
-                return finalUsageString ? <div style={{ fontSize: 10, textAlign: 'left', maxWidth: 280 }}><strong style={{ color: textColor }}>วิธีใช้:</strong> <span style={{ color: subColor }}>{finalUsageString}</span></div> : null;
+                return finalUsageString ? <div style={{ fontSize: 17, textAlign: 'left', maxWidth: 280, ...esBase }}><strong style={{ color: esColor }}>วิธีใช้:</strong> <span style={{ color: esColor }}>{finalUsageString}</span></div> : null;
             case 'storage':
-                return finalStorageString ? <div style={{ fontSize: 10, textAlign: 'left', maxWidth: 280 }}><strong style={{ color: textColor }}>วิธีเก็บ:</strong> <span style={{ color: subColor }}>{finalStorageString}</span></div> : null;
+                return finalStorageString ? <div style={{ fontSize: 17, textAlign: 'left', maxWidth: 280, ...esBase }}><strong style={{ color: esColor }}>วิธีเก็บ:</strong> <span style={{ color: esColor }}>{finalStorageString}</span></div> : null;
             case 'warnings':
-                return finalWarningString ? <div style={{ fontSize: 10, color: '#c0392b', textAlign: 'left', maxWidth: 280 }}>⚠ {finalWarningString}</div> : null;
+                return finalWarningString ? <div style={{ fontSize: 17, color: '#c0392b', textAlign: 'left', maxWidth: 280, ...esBase }}>⚠ {finalWarningString}</div> : null;
             case 'codes':
                 return (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1207,11 +1309,11 @@ export default function LabelEditor({ projectId, userId }) {
                 if (labelForm.manufacturerAddress) items.push(labelForm.manufacturerAddress);
                 const contact = [labelForm.manufacturerPhone && 'โทร. ' + labelForm.manufacturerPhone, labelForm.manufacturerLine && 'Line: ' + labelForm.manufacturerLine].filter(Boolean).join(' | ');
                 if (contact) items.push(contact);
-                return items.length > 0 ? <div style={{ fontSize: 9, color: subColor, lineHeight: 1.5, textAlign: align }}>{items.map((t, i) => <div key={i}>{t}</div>)}</div> : <div style={{ fontSize: 9, color: '#ccc' }}>ข้อมูลผู้ผลิต</div>;
+                return items.length > 0 ? <div style={{ fontSize: 9, color: subColor, lineHeight: 1.5, textAlign: align, ...esBase }}>{items.map((t, i) => <div key={i}>{t}</div>)}</div> : <div style={{ fontSize: 9, color: '#ccc' }}>ข้อมูลผู้ผลิต</div>;
             }
             case 'legal': {
                 const legalItems = [labelForm.fdaNumber && 'อย. ' + labelForm.fdaNumber, labelForm.lotNumber && 'Lot: ' + labelForm.lotNumber, labelForm.mfgDate && 'MFG: ' + labelForm.mfgDate, labelForm.expDate && 'EXP: ' + labelForm.expDate].filter(Boolean);
-                return legalItems.length > 0 ? <div style={{ fontSize: 9, color: subColor, textAlign: align }}>{legalItems.join(' • ')}</div> : <div style={{ fontSize: 9, color: '#ccc' }}>กฎหมาย/วันที่</div>;
+                return legalItems.length > 0 ? <div style={{ fontSize: 9, color: subColor, textAlign: align, ...esBase }}>{legalItems.join(' • ')}</div> : <div style={{ fontSize: 9, color: '#ccc' }}>กฎหมาย/วันที่</div>;
             }
             default: return null;
         }
@@ -1242,8 +1344,8 @@ export default function LabelEditor({ projectId, userId }) {
                 {/* Inner padding zone — safe area visual */}
                 <div style={{ position: 'absolute', inset: safeZonePx + 4, pointerEvents: 'none', zIndex: 0 }} />
 
-                {/* Draggable + Resizable elements */}
-                {LABEL_ELEMENTS.map(elem => {
+                {/* Draggable + Resizable elements — เรียงตามลำดับเลเยอร์จริง (เลื่อนขึ้น/ลงแล้วซ้อนทับกันตามนี้) */}
+                {getOrderedElements().map((elem, layerIdx) => {
                     const pos = elemPositions[elem.id];
                     if (!pos || !pos.visible) return null;
                     const content = renderElemContent(elem.id);
@@ -1272,7 +1374,7 @@ export default function LabelEditor({ projectId, userId }) {
                                 top: `${pos.y}%`,
                                 maxWidth: `${Math.min(92, 85 / elemScale)}%`,
                                 cursor: 'move',
-                                zIndex: isSelected ? 50 : 10,
+                                zIndex: isSelected ? 1000 : 10 + layerIdx,
                                 outline: isSelected ? '2px solid #2196F3' : 'none',
                                 outlineOffset: 2,
                                 borderRadius: 2,
@@ -1326,223 +1428,555 @@ export default function LabelEditor({ projectId, userId }) {
         );
     };
 
+    // ============= RENDER: RIGHT TEXT EDITOR PANEL =============
+    const renderTextEditorPanel = () => {
+        const FONT_OPTIONS = [
+            'Bai Jamjuree', 'Prompt', 'Sarabun', 'Kanit', 'Mitr', 'Charm', 'Itim', 'Mali', 'Sriracha',
+            'Noto Serif Thai', 'Thasadith',
+        ];
+        const curElemLabel = LABEL_ELEMENTS.find(e => e.id === selectedElem)?.label || '';
+        const curScale = selectedElem ? (elemPositions[selectedElem]?.scale || 1) : 1;
+        const pct = Math.round(curScale * 100);
+
+        // เลเยอร์ที่มองเห็น
+        const visibleElems = LABEL_ELEMENTS.filter(e => elemPositions[e.id]?.visible);
+        const hiddenElems = LABEL_ELEMENTS.filter(e => !elemPositions[e.id]?.visible);
+
+        return (
+            <div style={{
+                width: 280, flexShrink: 0,
+                maxHeight: 'calc(100vh - 180px)', overflowY: 'auto',
+                background: '#fff', borderRadius: 14,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+                scrollbarWidth: 'none', msOverflowStyle: 'none',
+            }}>
+                {/* Panel Selector — ด้านหน้า/ด้านหลัง */}
+                {labelPanels.length > 0 && (
+                    <div style={{
+                        padding: '16px 16px 14px',
+                        borderBottom: '1px solid #f0f0f0',
+                        display: 'flex', justifyContent: 'center',
+                    }}>
+                        <PanelSelector
+                            panels={labelPanels}
+                            selectedPanel={selectedPanel}
+                            onSelectPanel={handleSelectPanel}
+                            materialData={materialData}
+                        />
+                    </div>
+                )}
+
+                {/* Header */}
+                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#222' }}>ปรับแต่งข้อความ</div>
+                </div>
+
+                <div style={{ padding: '12px 16px' }}>
+                    {/* ฟอนต์ */}
+                    <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, color: '#a0a0a0', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>ฟอนต์</div>
+                        <select
+                            value={labelAssets.font.replace(/'/g, '').split(',')[0].trim()}
+                            onChange={e => setLabelAssets(prev => ({ ...prev, font: `'${e.target.value}', sans-serif` }))}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e8e8', fontSize: 13, background: '#fafafa', cursor: 'pointer' }}
+                        >
+                            {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                        </select>
+                    </div>
+
+                    {/* ขนาด */}
+                    <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 11, color: '#a0a0a0', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                            ขนาด{selectedElem ? ` — ${LABEL_ELEMENTS.find(e => e.id === selectedElem)?.label || ''}` : ''}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input
+                                type="number" min="30" max="400" step="5"
+                                value={pct}
+                                onChange={e => {
+                                    if (!selectedElem) return;
+                                    const v = Math.max(30, Math.min(400, parseInt(e.target.value) || 100));
+                                    setElemPositions(prev => ({ ...prev, [selectedElem]: { ...prev[selectedElem], scale: v / 100 } }));
+                                }}
+                                style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e8e8', fontSize: 15, fontWeight: 600, background: '#fafafa', textAlign: 'center' }}
+                                placeholder="100"
+                            />
+                            <span style={{ fontSize: 13, color: '#888', background: '#f0f0f0', padding: '8px 12px', borderRadius: 8, fontWeight: 600 }}>px</span>
+                        </div>
+                    </div>
+
+                    {/* Bold / Italic / Underline + Align — แยกเป็น 2 กลุ่ม */}
+                    <div style={{ marginBottom: 14 }}>
+                        {!selectedElem && <div style={{ fontSize: 11, color: '#bbb', marginBottom: 6 }}>เลือก element บน canvas เพื่อแก้ไข</div>}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            {/* กลุ่ม Style */}
+                            {[
+                                { icon: 'mdi:format-bold', label: 'Bold', key: 'bold', toggle: true },
+                                { icon: 'mdi:format-italic', label: 'Italic', key: 'italic', toggle: true },
+                                { icon: 'mdi:format-underline', label: 'Underline', key: 'underline', toggle: true },
+                            ].map((btn, i) => {
+                                const curStyle = selectedElem ? (elemStyles[selectedElem] || DEFAULT_ELEM_STYLE) : DEFAULT_ELEM_STYLE;
+                                const isActive = !!curStyle[btn.key];
+                                return (
+                                    <button key={i} title={btn.label}
+                                        disabled={!selectedElem}
+                                        onClick={() => { if (!selectedElem) return; updateElemStyle(selectedElem, { [btn.key]: !curStyle[btn.key] }); }}
+                                        style={{
+                                            flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            border: isActive ? '1.5px solid #2196F3' : '1px solid #e8e8e8',
+                                            borderRadius: 7, background: isActive ? '#e3f2fd' : '#fafafa',
+                                            cursor: selectedElem ? 'pointer' : 'default',
+                                            fontSize: 16, color: isActive ? '#1976D2' : '#888',
+                                            opacity: selectedElem ? 1 : 0.45,
+                                        }}>
+                                        <iconify-icon icon={btn.icon}></iconify-icon>
+                                    </button>
+                                );
+                            })}
+                            <div style={{ width: 1, height: 24, background: '#e8e8e8', flexShrink: 0 }} />
+                            {/* กลุ่ม Align */}
+                            {[
+                                { icon: 'mdi:format-align-left', label: 'Left', value: 'left' },
+                                { icon: 'mdi:format-align-center', label: 'Center', value: 'center' },
+                                { icon: 'mdi:format-align-right', label: 'Right', value: 'right' },
+                                { icon: 'mdi:format-align-justify', label: 'Justify', value: 'justify' },
+                            ].map((btn, i) => {
+                                const curStyle = selectedElem ? (elemStyles[selectedElem] || DEFAULT_ELEM_STYLE) : DEFAULT_ELEM_STYLE;
+                                const isActive = curStyle.align === btn.value;
+                                return (
+                                    <button key={i} title={btn.label}
+                                        disabled={!selectedElem}
+                                        onClick={() => { if (!selectedElem) return; updateElemStyle(selectedElem, { align: btn.value }); }}
+                                        style={{
+                                            flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            border: isActive ? '1.5px solid #2196F3' : '1px solid #e8e8e8',
+                                            borderRadius: 7, background: isActive ? '#e3f2fd' : '#fafafa',
+                                            cursor: selectedElem ? 'pointer' : 'default',
+                                            fontSize: 16, color: isActive ? '#1976D2' : '#888',
+                                            opacity: selectedElem ? 1 : 0.45,
+                                        }}>
+                                        <iconify-icon icon={btn.icon}></iconify-icon>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* สี */}
+                    <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, color: '#a0a0a0', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                            สี{selectedElem ? ` — ${LABEL_ELEMENTS.find(e => e.id === selectedElem)?.label || ''}` : ''}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <input type="text"
+                                value={selectedElem ? (elemStyles[selectedElem]?.color || '#222222') : sectionColors.productName}
+                                onChange={e => {
+                                    if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) {
+                                        if (selectedElem) updateElemStyle(selectedElem, { color: e.target.value });
+                                        else setSectionColors(p => ({ ...p, productName: e.target.value }));
+                                    }
+                                }}
+                                style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid #e8e8e8', fontSize: 13, fontFamily: 'monospace', background: '#fafafa' }} />
+                            <input type="color"
+                                value={selectedElem ? (elemStyles[selectedElem]?.color || '#222222') : sectionColors.productName}
+                                onChange={e => {
+                                    if (selectedElem) updateElemStyle(selectedElem, { color: e.target.value });
+                                    else setSectionColors(p => ({ ...p, productName: e.target.value }));
+                                }}
+                                style={{ width: 36, height: 34, border: '1px solid #e8e8e8', borderRadius: 8, cursor: 'pointer', padding: 2, background: '#fafafa', flexShrink: 0 }} />
+                        </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ borderTop: '1px solid #f0f0f0', marginBottom: 14 }} />
+
+                    {/* เลเยอร์ */}
+                    <div style={{ marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, color: '#a0a0a0', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>เลเยอร์</div>
+                            {hiddenElems.length > 0 && (
+                                <button onClick={() => {
+                                    setElemPositions(prev => {
+                                        const next = { ...prev };
+                                        hiddenElems.forEach(e => { next[e.id] = { ...next[e.id], visible: true }; });
+                                        return next;
+                                    });
+                                }} style={{ fontSize: 11, color: '#d3542b', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                                    แสดงทั้งหมด
+                                </button>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {[...getOrderedElements()].reverse().map((elem, displayIdx, arr) => {
+                                const isVisible = elemPositions[elem.id]?.visible;
+                                const isActive = selectedElem === elem.id;
+                                const isDraggedOver = layerDragOverId === elem.id;
+                                const layerIconMap = {
+                                    logo: 'mdi:image-outline',
+                                    productName: 'mdi:format-text',
+                                    tagline: 'mdi:format-text',
+                                    netWeight: 'mdi:format-text',
+                                    certifications: 'mdi:certificate-outline',
+                                    ingredients: 'mdi:format-text',
+                                    usage: 'mdi:format-text',
+                                    storage: 'mdi:format-text',
+                                    warnings: 'mdi:format-text',
+                                    codes: 'mdi:qrcode',
+                                    manufacturer: 'mdi:format-text',
+                                    legal: 'mdi:format-text',
+                                };
+                                return (
+                                    <div key={elem.id}
+                                        draggable
+                                        onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setLayerDraggingId(elem.id); }}
+                                        onDragOver={(e) => { e.preventDefault(); setLayerDragOverId(elem.id); }}
+                                        onDragLeave={() => setLayerDragOverId(prev => prev === elem.id ? null : prev)}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            if (layerDraggingId) reorderLayer(layerDraggingId, elem.id);
+                                            setLayerDraggingId(null);
+                                            setLayerDragOverId(null);
+                                        }}
+                                        onDragEnd={() => { setLayerDraggingId(null); setLayerDragOverId(null); }}
+                                        onClick={() => setSelectedElem(isActive ? null : elem.id)}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px',
+                                            borderRadius: 8, cursor: 'pointer', transition: 'background 0.1s',
+                                            background: isDraggedOver ? '#eef6ff' : isActive ? '#fff8f5' : 'transparent',
+                                            border: isDraggedOver ? '1px dashed #2196F3' : isActive ? '1px solid #ffddcc' : '1px solid transparent',
+                                            opacity: layerDraggingId === elem.id ? 0.4 : 1,
+                                        }}>
+                                        {/* Eye toggle */}
+                                        <button onClick={(e) => { e.stopPropagation(); toggleElemVisibility(elem.id); }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: isVisible ? '#555' : '#ccc', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
+                                            <iconify-icon icon={isVisible ? 'mdi:eye-outline' : 'mdi:eye-off-outline'}></iconify-icon>
+                                        </button>
+                                        {/* Icon */}
+                                        <span style={{ fontSize: 13, color: isVisible ? '#666' : '#ccc', display: 'flex', flexShrink: 0 }}>
+                                            <iconify-icon icon={layerIconMap[elem.id] || 'mdi:format-text'}></iconify-icon>
+                                        </span>
+                                        {/* Label */}
+                                        <span style={{ flex: 1, fontSize: 13, color: isVisible ? '#333' : '#aaa', fontWeight: isActive ? 600 : 400, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {elem.label}
+                                        </span>
+                                        {/* ปุ่มเลื่อนขึ้น/ลง */}
+                                        <button onClick={(e) => { e.stopPropagation(); moveLayerStep(elem.id, -1); }}
+                                            disabled={displayIdx === 0}
+                                            title="เลื่อนขึ้น"
+                                            style={{ background: 'none', border: 'none', cursor: displayIdx === 0 ? 'default' : 'pointer', padding: 1, display: 'flex', color: displayIdx === 0 ? '#e8e8e8' : '#aaa', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
+                                            <iconify-icon icon="mdi:chevron-up"></iconify-icon>
+                                        </button>
+                                        <button onClick={(e) => { e.stopPropagation(); moveLayerStep(elem.id, 1); }}
+                                            disabled={displayIdx === arr.length - 1}
+                                            title="เลื่อนลง"
+                                            style={{ background: 'none', border: 'none', cursor: displayIdx === arr.length - 1 ? 'default' : 'pointer', padding: 1, display: 'flex', color: displayIdx === arr.length - 1 ? '#e8e8e8' : '#aaa', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
+                                            <iconify-icon icon="mdi:chevron-down"></iconify-icon>
+                                        </button>
+                                        {/* Drag handle */}
+                                        <span style={{ fontSize: 14, color: '#ccc', cursor: 'grab', display: 'flex', flexShrink: 0 }}>
+                                            <iconify-icon icon="mdi:drag-vertical"></iconify-icon>
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ borderTop: '1px solid #f0f0f0', margin: '10px 0 12px' }} />
+
+                    {/* จัดการเลเยอร์ */}
+                    <button
+                        onClick={() => setOpenAccordions(p => ({ ...p, settings: true, main: true, manufacturer: true, legal: true, cert: true, qr: true }))}
+                        style={{
+                            width: '100%', padding: '9px 0', background: '#f5f5f5', border: '1px solid #e8e8e8',
+                            borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#555', cursor: 'pointer',
+                        }}>
+                        จัดการเลเยอร์
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     // ============= RENDER: LEFT FORM PANEL =============
     const renderFormPanel = () => (
-        <div style={{
-            flex: '0 0 440px', maxHeight: 'calc(100vh - 180px)', overflowY: 'auto',
-            background: '#fff', padding: 24, borderRadius: 14,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-            position: 'relative',
-        }}>
-            {/* ปุ่มย้อนกลับ — อยู่เหนือ overlay เสมอ */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, position: 'relative', zIndex: 20 }}>
-                <button onClick={() => { if (hasPackaging) handleSaveLabel(true); setSelectedProduct(null); setSelectedPackage(null); }}
-                    style={{ background: '#eee', border: 'none', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' }}>
-                    ❮ ย้อนกลับ
+        <div className="le-form-panel">
+            {/* ปุ่มย้อนกลับ */}
+            <div className="le-panel-back">
+                <button className="le-panel-back-btn"
+                    onClick={() => { if (hasPackaging) handleSaveLabel(true); setSelectedProduct(null); setSelectedPackage(null); }}>
+                    <iconify-icon icon="mdi:chevron-left"></iconify-icon>
+                    กลับไปเลือกสินค้า
                 </button>
-                <span style={{ fontSize: 12, color: saveStatus.includes('✓') ? '#8a9a3c' : '#888' }}>{saveStatus}</span>
             </div>
-
-            {/* Overlay สำหรับกรณียังไม่ได้เลือก packaging — เริ่มจากใต้ปุ่มย้อนกลับ */}
-            {!hasPackaging && (
-                <div style={{
-                    position: 'absolute', top: 55, left: 0, right: 0, bottom: 0, zIndex: 10,
-                    background: 'rgba(255,255,255,0.75)', borderRadius: '0 0 14px 14px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                    <div style={{ textAlign: 'center', color: '#888', padding: 30 }}>
-                        <iconify-icon icon="mdi:package-variant-closed" style={{ fontSize: 48, color: '#ccc' }}></iconify-icon>
-                        <p style={{ fontSize: 14, fontWeight: 'bold', marginTop: 12 }}>กรุณาเลือก Packaging ก่อน</p>
-                        <p style={{ fontSize: 12, color: '#aaa' }}>เลือกจากแถบ Packaging ด้านขวา</p>
-                    </div>
+            {saveStatus && (
+                <div className={`le-panel-save-status ${saveStatus.includes('✓') ? 'ok' : 'pending'}`}>
+                    {saveStatus}
                 </div>
             )}
 
-            <h3 style={{ marginTop: 0, color: '#8a9a3c' }}>ออกแบบฉลาก: {selectedProduct?.name_product}</h3>
-
-            {/* แสดง packaging ที่เลือกอยู่ */}
-            {hasPackaging && (
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: 10, marginBottom: 16,
-                    background: '#f5f8eb', borderRadius: 8, border: '1px solid #d4e4a0'
-                }}>
-                    <img src={selectedPackage.thumbnail} alt={selectedPackage.name}
-                        style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6 }} />
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 'bold', color: '#333' }}>{selectedPackage.name}</div>
-                        <div style={{ fontSize: 10, color: '#888' }}>{selectedPackage.type}</div>
-                    </div>
-                </div>
-            )}
-
-            {/* โหมดฉลาก: สติกเกอร์ / เต็มพื้นที่ */}
-            <div style={{ marginBottom: 16 }}>
-                <label style={{ fontWeight: 'bold', fontSize: 13, display: 'block', marginBottom: 8 }}>โหมดฉลาก</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => handleModeToggle('sticker')} style={{ flex: 1, padding: '10px 8px', border: labelMode === 'sticker' ? '2px solid #d3542b' : '1px solid #ddd', background: labelMode === 'sticker' ? '#fff8f5' : '#fff', borderRadius: 8, cursor: 'pointer', fontSize: 12, textAlign: 'center' }}>
-                        <div style={{ fontWeight: 'bold', color: labelMode === 'sticker' ? '#d3542b' : '#333' }}>สติกเกอร์</div>
-                        <div style={{ fontSize: 9, color: '#888', marginTop: 2 }}>ลดขนาด 30% แปะบน package</div>
-                    </button>
-                    <button onClick={() => handleModeToggle('fullcover')} style={{ flex: 1, padding: '10px 8px', border: labelMode === 'fullcover' ? '2px solid #d3542b' : '1px solid #ddd', background: labelMode === 'fullcover' ? '#fff8f5' : '#fff', borderRadius: 8, cursor: 'pointer', fontSize: 12, textAlign: 'center' }}>
-                        <div style={{ fontWeight: 'bold', color: labelMode === 'fullcover' ? '#d3542b' : '#333' }}>เต็มพื้นที่</div>
-                        <div style={{ fontSize: 9, color: '#888', marginTop: 2 }}>ออกแบบเต็ม panel</div>
-                    </button>
-                </div>
-            </div>
-
-            {/* Layout Preset + จัดการ elements */}
-            <div style={{ marginBottom: 16 }}>
-                <label style={{ fontWeight: 'bold', fontSize: 13, display: 'block', marginBottom: 8 }}>รูปแบบฉลาก</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 8 }}>
-                    {TEMPLATE_TYPES.map(t => (
-                        <button key={t.id} onClick={() => applyLayoutPreset(t.id)}
-                            style={{ padding: 5, textAlign: 'center', border: layoutType === t.id ? '2.5px solid #8a9a3c' : '1px solid #ddd', background: layoutType === t.id ? '#f5f8eb' : '#fff', borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s' }}>
-                            <LayoutThumbnail type={t.id} />
-                            <div style={{ fontWeight: 700, fontSize: 10, marginTop: 4, color: layoutType === t.id ? '#8a9a3c' : '#555' }}>{t.name}</div>
+            {/* ── ส่วนสินค้า ── */}
+            <div className="le-section">
+                <div className="le-section-body" style={{ borderTop: 'none', paddingTop: 16 }}>
+                    <div className="le-section-label">สินค้า</div>
+                    <div className="le-product-card">
+                        {selectedProduct?.image_product
+                            ? <img className="le-product-thumb" src={`${API}/uploads/${selectedProduct.image_product}`} alt="" />
+                            : <div className="le-product-thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc' }}>
+                                <iconify-icon icon="mdi:package-variant" style={{ fontSize: 22 }}></iconify-icon>
+                              </div>
+                        }
+                        <div className="le-product-info">
+                            <div className="le-product-name">{selectedProduct?.name_product}</div>
+                            {selectedProduct?.type_product && (
+                                <div style={{ fontSize: 'var(--le-fs-xs)', color: 'var(--le-text-sub)', marginTop: 2 }}>
+                                    {selectedProduct.type_product}
+                                </div>
+                            )}
+                        </div>
+                        <button className="le-btn-ghost" style={{ padding: '7px 14px', fontSize: 'var(--le-fs-xs)', flexShrink: 0 }}
+                            onClick={() => { if (hasPackaging) handleSaveLabel(true); setSelectedProduct(null); setSelectedPackage(null); }}>
+                            เปลี่ยนสินค้า
                         </button>
-                    ))}
+                    </div>
                 </div>
-                <div style={{ fontSize: 9, color: '#999', marginBottom: 8 }}>
-                    {TEMPLATE_TYPES.find(t => t.id === layoutType)?.desc} · กดเทมเพลตเพื่อรีเซ็ตตำแหน่ง
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 'bold', marginBottom: 6, color: '#666' }}>แสดง/ซ่อนองค์ประกอบ</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {LABEL_ELEMENTS.map(elem => {
-                        const isVisible = elemPositions[elem.id]?.visible;
-                        return (
-                            <button key={elem.id} onClick={() => toggleElemVisibility(elem.id)}
-                                style={{
-                                    padding: '3px 8px', fontSize: 10, borderRadius: 12, cursor: 'pointer',
-                                    background: isVisible ? '#8a9a3c' : '#f0f0f0',
-                                    color: isVisible ? '#fff' : '#999',
-                                    border: 'none',
-                                }}>
-                                {elem.label}
+            </div>
+
+            {/* ── ส่วน Packaging ── */}
+            <div className="le-section">
+                <div className="le-section-body" style={{ borderTop: 'none', paddingTop: 16 }}>
+                    <div className="le-section-label">บรรจุภัณฑ์</div>
+                    {selectedPackage ? (
+                        <div className="le-pkg-row">
+                            <div className="le-pkg-thumb">
+                                {selectedPackage.thumbnail
+                                    ? <img src={selectedPackage.thumbnail} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="" />
+                                    : <iconify-icon icon="mdi:package-variant-closed" style={{ fontSize: 26, color: '#ccc' }}></iconify-icon>
+                                }
+                            </div>
+                            <div className="le-pkg-info">
+                                <div className="le-pkg-name">{selectedPackage.name}</div>
+                                <div className="le-pkg-type">{selectedPackage.type || 'บรรจุภัณฑ์'}</div>
+                            </div>
+                            <button className="le-pkg-change-btn" onClick={() => setShowPkgModal(true)}>
+                                เปลี่ยน
                             </button>
-                        );
-                    })}
+                        </div>
+                    ) : (
+                        <button className="le-pkg-empty-btn" onClick={() => setShowPkgModal(true)}>
+                            <iconify-icon icon="mdi:package-variant-closed"></iconify-icon>
+                            <span>เลือกบรรจุภัณฑ์...</span>
+                        </button>
+                    )}
                 </div>
-                {/* Scale control สำหรับ element ที่ถูกเลือก */}
-                {selectedElem && elemPositions[selectedElem] && (() => {
-                    const curScale = elemPositions[selectedElem]?.scale || 1;
-                    const pct = Math.round(curScale * 100);
-                    return (
-                        <div style={{ marginTop: 10, padding: 12, background: '#f0f4ff', borderRadius: 10, border: '1px solid #c5d5f7' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#1565C0' }}>
-                                    {LABEL_ELEMENTS.find(e => e.id === selectedElem)?.label}
-                                </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <input
-                                        type="number" min="30" max="400" step="5"
-                                        value={pct}
-                                        onChange={e => {
-                                            const v = Math.max(30, Math.min(400, parseInt(e.target.value) || 100));
-                                            setElemPositions(prev => ({ ...prev, [selectedElem]: { ...prev[selectedElem], scale: v / 100 } }));
-                                        }}
-                                        style={{ width: 52, padding: '3px 6px', border: '1px solid #90CAF9', borderRadius: 4, fontSize: 12, fontWeight: 700, color: '#1565C0', textAlign: 'center', background: '#fff' }}
-                                    />
-                                    <span style={{ fontSize: 11, color: '#1565C0', fontWeight: 600 }}>%</span>
+            </div>
+
+            {/* Modal เลือก Packaging */}
+            {showPkgModal && (
+                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        onClick={() => setShowPkgModal(false)}>
+                        <div style={{ background: '#fff', borderRadius: 14, width: 420, maxHeight: '75vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+                            onClick={e => e.stopPropagation()}>
+                            {/* Header */}
+                            <div style={{ padding: '14px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a' }}>เลือกบรรจุภัณฑ์</div>
+                                <button onClick={() => setShowPkgModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#aaa', lineHeight: 1 }}>×</button>
+                            </div>
+                            {/* Package list */}
+                            <div style={{ flex: 1, overflowY: 'auto', padding: 12, scrollbarWidth: 'none' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {PACKAGES.map(pkg => {
+                                        const isSelected = selectedPackage?.id === pkg.id;
+                                        return (
+                                            <div key={pkg.id} onClick={() => { handleSelectPackaging(pkg); setShowPkgModal(false); }}
+                                                style={{
+                                                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                                                    border: isSelected ? '2px solid #E56F2D' : '1.5px solid #e4e4e7',
+                                                    borderRadius: 10, cursor: 'pointer',
+                                                    background: isSelected ? '#fff4ee' : '#fafafa',
+                                                    transition: 'all 0.15s',
+                                                }}>
+                                                <div style={{ width: 48, height: 48, background: '#fff', borderRadius: 8, border: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    {pkg.thumbnail
+                                                        ? <img src={pkg.thumbnail} alt={pkg.name} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6 }} />
+                                                        : <iconify-icon icon="mdi:package-variant-closed" style={{ fontSize: 24, color: '#ccc' }}></iconify-icon>
+                                                    }
+                                                </div>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontSize: 14, fontWeight: 600, color: isSelected ? '#E56F2D' : '#1a1a1a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pkg.name}</div>
+                                                    <div style={{ fontSize: 12, color: '#a1a1aa', marginTop: 2 }}>{pkg.type || ''}</div>
+                                                </div>
+                                                {isSelected && <iconify-icon icon="mdi:check-circle" style={{ color: '#E56F2D', fontSize: 20, flexShrink: 0 }}></iconify-icon>}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                            </div>
-                            <div style={{ position: 'relative', height: 24, display: 'flex', alignItems: 'center' }}>
-                                {/* Track background */}
-                                <div style={{ position: 'absolute', left: 0, right: 0, height: 4, background: '#dde5f5', borderRadius: 2 }} />
-                                {/* Filled track */}
-                                <div style={{ position: 'absolute', left: 0, width: `${Math.min(100, ((curScale - 0.3) / 3.7) * 100)}%`, height: 4, background: 'linear-gradient(90deg, #42A5F5, #1565C0)', borderRadius: 2 }} />
-                                <input type="range" min="0.3" max="4" step="0.05"
-                                    value={curScale}
-                                    onChange={e => setElemPositions(prev => ({ ...prev, [selectedElem]: { ...prev[selectedElem], scale: parseFloat(e.target.value) } }))}
-                                    style={{ position: 'relative', width: '100%', height: 24, opacity: 0, cursor: 'pointer', zIndex: 2 }}
-                                />
-                                {/* Custom thumb */}
-                                <div style={{
-                                    position: 'absolute',
-                                    left: `calc(${((curScale - 0.3) / 3.7) * 100}% - 8px)`,
-                                    width: 16, height: 16,
-                                    background: '#fff', border: '2px solid #1565C0', borderRadius: '50%',
-                                    boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
-                                    pointerEvents: 'none',
-                                }} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                                <div style={{ display: 'flex', gap: 4 }}>
-                                    {[50, 75, 100, 150, 200].map(v => (
-                                        <button key={v} onClick={() => setElemPositions(prev => ({ ...prev, [selectedElem]: { ...prev[selectedElem], scale: v / 100 } }))}
-                                            style={{
-                                                padding: '2px 6px', fontSize: 9, fontWeight: pct === v ? 700 : 500,
-                                                background: pct === v ? '#1565C0' : '#fff', color: pct === v ? '#fff' : '#666',
-                                                border: `1px solid ${pct === v ? '#1565C0' : '#ccc'}`, borderRadius: 4, cursor: 'pointer',
-                                            }}>{v}%</button>
-                                    ))}
-                                </div>
-                                <button onClick={() => setElemPositions(prev => ({ ...prev, [selectedElem]: { ...prev[selectedElem], visible: false } }))}
-                                    style={{ fontSize: 9, color: '#c0392b', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                    ซ่อน
-                                </button>
-                            </div>
-                            {/* Position info */}
-                            <div style={{ marginTop: 8, display: 'flex', gap: 8, fontSize: 10, color: '#888' }}>
-                                <span>X: {Math.round(elemPositions[selectedElem]?.x || 0)}%</span>
-                                <span>Y: {Math.round(elemPositions[selectedElem]?.y || 0)}%</span>
                             </div>
                         </div>
-                    );
-                })()}
-                <div style={{ fontSize: 9, color: '#aaa', marginTop: 6 }}>ลากองค์ประกอบบน canvas เพื่อย้ายตำแหน่ง · ลากมุมหรือขอบเพื่อปรับขนาด</div>
+                    </div>
+            )}
+
+            {/* ── โหมดฉลาก ── */}
+            <div className="le-section">
+                <div className="le-section-body" style={{ borderTop: 'none', paddingTop: 16 }}>
+                    <div className="le-section-label">โหมดฉลาก</div>
+                    <div className="le-mode-grid">
+                        {[
+                            { id: 'sticker', label: 'สติ๊กเกอร์', sub: 'ฉลากติดสินค้า' },
+                            { id: 'fullwrap', label: 'เต็มพื้นที่', sub: 'ฉลากแบบเต็มถุง' },
+                        ].map(m => {
+                            const isActive = labelMode === m.id;
+                            return (
+                                <button key={m.id} onClick={() => handleModeToggle(m.id)} className={`le-mode-btn${isActive ? ' active' : ''}`}>
+                                    <div className="le-mode-btn-label">{m.label}</div>
+                                    <div className="le-mode-btn-sub">{m.sub}</div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
             </div>
 
-            {/* ตั้งค่าขนาด & สี */}
-            <AccordionSection title="ตั้งค่าขนาด & สี" open={openAccordions.settings} onToggle={() => toggleAccordion('settings')}>
+            {/* ── รูปแบบฉลาก ── */}
+            <div className="le-section">
+                <div className="le-section-body" style={{ borderTop: 'none', paddingTop: 16 }}>
+                    <div className="le-section-label">รูปแบบฉลาก</div>
+                    <div className="le-layout-grid">
+                        {TEMPLATE_TYPES.map(t => {
+                            const isActive = layoutType === t.id;
+                            return (
+                                <button key={t.id} onClick={() => applyLayoutPreset(t.id)} className={`le-layout-btn${isActive ? ' active' : ''}`}>
+                                    <LayoutThumbnail type={t.id} />
+                                    <div className="le-layout-btn-label">{t.name}</div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* ── องค์ประกอบ ── */}
+            <div className="le-section">
+                <button className="le-section-header" onClick={() => toggleAccordion('elements')}>
+                    <span className="le-section-header-left">
+                        <iconify-icon icon="mdi:layers-outline"></iconify-icon>
+                        องค์ประกอบ
+                    </span>
+                    <iconify-icon icon={openAccordions.elements ? 'mdi:chevron-up' : 'mdi:chevron-down'}></iconify-icon>
+                </button>
+                {openAccordions.elements && (
+                    <div className="le-section-body">
+                        <div className="le-elem-chips">
+                            {[
+                                { label: 'โลโก้', elemId: 'logo' },
+                                { label: 'ชื่อสินค้า', elemId: 'productName' },
+                                { label: 'รายละเอียด', elemId: 'ingredients' },
+                                { label: 'ภาพสินค้า', elemId: 'certifications' },
+                                { label: 'ไอคอน', elemId: 'certifications' },
+                                { label: 'ฉลากรับรอง', elemId: 'certifications' },
+                                { label: 'QR Code', toggleField: 'showQR' },
+                                { label: 'บาร์โค้ด', toggleField: 'showBarcode' },
+                            ].map(({ label, elemId, toggleField }) => {
+                                const isOn = toggleField ? labelForm[toggleField] : elemPositions[elemId]?.visible;
+                                return (
+                                    <button key={label}
+                                        onClick={() => {
+                                            if (toggleField) setField(toggleField, !labelForm[toggleField]);
+                                            else if (elemId) toggleElemVisibility(elemId);
+                                        }}
+                                        className={`le-elem-chip${isOn ? ' on' : ''}`}>
+                                        {label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Accordion sections ด้านล่าง (ซ่อนได้) */}
+            <div className="le-accordions">
+                {/* ตั้งค่าขนาด & สี */}
+                <AccordionSection title="ตั้งค่าขนาด & สี" open={openAccordions.settings} onToggle={() => toggleAccordion('settings')}>
                 <div style={{ display: 'flex', gap: 10, marginBottom: 15 }}>
                     <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: 12, fontWeight: 'bold' }}>กว้าง (ซม.)</label>
+                        <label style={{ fontSize: 17, fontWeight: 'bold' }}>กว้าง (ซม.)</label>
                         <input type="number" step="0.1" value={labelDimensions.width}
                             onChange={e => setLabelDimensions({ ...labelDimensions, width: parseFloat(e.target.value) || 1 })}
                             style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #ddd', boxSizing: 'border-box' }} />
                     </div>
                     <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: 12, fontWeight: 'bold' }}>สูง (ซม.)</label>
+                        <label style={{ fontSize: 17, fontWeight: 'bold' }}>สูง (ซม.)</label>
                         <input type="number" step="0.1" value={labelDimensions.height}
                             onChange={e => setLabelDimensions({ ...labelDimensions, height: parseFloat(e.target.value) || 1 })}
                             style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #ddd', boxSizing: 'border-box' }} />
                     </div>
                 </div>
-                <ColorSwatchPicker label="สีชื่อสินค้า" value={sectionColors.productName} onChange={v => setSectionColors({ ...sectionColors, productName: v })} palette={labelAssets.colors} />
-                <ColorSwatchPicker label="สีคำโปรย" value={sectionColors.tagline} onChange={v => setSectionColors({ ...sectionColors, tagline: v })} palette={labelAssets.colors} />
-                <ColorSwatchPicker label="สีรายละเอียด" value={sectionColors.details} onChange={v => setSectionColors({ ...sectionColors, details: v })} palette={labelAssets.colors} />
+
             </AccordionSection>
 
             {/* พื้นหลังฉลาก */}
             <AccordionSection title="พื้นหลังฉลาก" open={openAccordions.bg} onToggle={() => toggleAccordion('bg')}>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-                    <BgModeBtn label="สีพื้น" active={bgMode === 'solid'} onClick={() => setBgMode('solid')} />
+                    <BgModeBtn label="สีพื้น" active={bgMode === 'solid'} onClick={() => { setBgMode('solid'); setBgImageUrl(''); setBgPresetId(null); }} />
                     <BgModeBtn label="Preset" active={bgMode === 'preset'} onClick={() => setBgMode('preset')} />
                     <BgModeBtn label="AI" active={bgMode === 'dalle'} onClick={() => setBgMode('dalle')} />
                 </div>
-                <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 12, fontWeight: 'bold' }}>อัปโหลดรูปภาพเอง</label>
-                    <input type="file" accept="image/*" onChange={handleUploadCustomBg} style={{ width: '100%', fontSize: 12, marginTop: 4 }} />
-                </div>
+                {/* สีพื้น — สีแบรนด์ + hex ไว้แถวเดียว โชว์เฉพาะตอนอยู่โหมด "สีพื้น" */}
                 {bgMode === 'solid' && (
-                    <div>
-                        <div style={{ fontSize: 11, color: '#666', marginBottom: 6, fontWeight: 600 }}>Brand Palette</div>
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-                            {labelAssets.colors.map((c, i) => (
-                                <button key={i} onClick={() => setBgColor(c)}
-                                    style={{ width: 36, height: 36, borderRadius: 8, background: c, border: bgColor === c ? '3px solid #333' : '1.5px solid #ddd', cursor: 'pointer', transition: 'transform 0.1s', transform: bgColor === c ? 'scale(1.15)' : 'scale(1)', position: 'relative', boxShadow: bgColor === c ? '0 2px 8px rgba(0,0,0,0.2)' : 'none' }}
-                                    title={c}>
-                                    {bgColor === c && <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16, textShadow: '0 0 4px #000' }}>✓</span>}
-                                </button>
-                            ))}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                        {labelAssets.colors.map((color, i) => (
+                            <button key={i} onClick={() => setBgColor(color)}
+                                style={{
+                                    width: 28, height: 28, borderRadius: '50%', background: color,
+                                    border: bgColor === color ? '3px solid #555' : '2px solid #e0e0e0',
+                                    cursor: 'pointer', padding: 0, flexShrink: 0,
+                                    boxShadow: bgColor === color ? '0 0 0 2px #fff inset' : 'none',
+                                }} />
+                        ))}
+                        <div style={{ position: 'relative', flexShrink: 0 }}>
+                            <input
+                                type="color"
+                                id="brandColorPicker"
+                                defaultValue="#FF8A00"
+                                onBlur={e => {
+                                    const picked = e.target.value;
+                                    setLabelAssets(prev => ({
+                                        ...prev,
+                                        colors: [...prev.colors, picked],
+                                    }));
+                                    setBgColor(picked);
+                                }}
+                                style={{ position: 'absolute', opacity: 0, width: 28, height: 28, cursor: 'pointer', top: 0, left: 0 }}
+                            />
+                            <button
+                                onClick={() => document.getElementById('brandColorPicker').click()}
+                                style={{
+                                    width: 28, height: 28, borderRadius: '50%', background: '#fff',
+                                    border: '1.5px dashed #ccc', cursor: 'pointer', fontSize: 17, color: '#bbb',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    pointerEvents: 'none',
+                                }}>+</button>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} style={{ width: 36, height: 36, border: 'none', cursor: 'pointer', borderRadius: 6, padding: 0 }} />
-                            <input type="text" value={bgColor} onChange={e => { if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) setBgColor(e.target.value); }} style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 12, fontFamily: 'monospace' }} />
-                            <button onClick={() => setBgColor('#FFFFFF')} style={{ padding: '6px 10px', fontSize: 11, border: '1px solid #ddd', borderRadius: 6, background: '#fff', cursor: 'pointer' }}>ขาว</button>
-                        </div>
+                        <div style={{ width: 1, height: 24, background: '#e0e0e0', margin: '0 2px', flexShrink: 0 }} />
+                        <input type="text" value={bgColor} onChange={e => { if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) setBgColor(e.target.value); }} style={{ flex: 1, minWidth: 90, padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 17, fontFamily: 'monospace' }} />
                     </div>
                 )}
+                <div style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: '#666', display: 'block', marginBottom: 6 }}>อัปโหลดรูปภาพเอง</label>
+                    <label htmlFor="bg-upload-input" style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                        border: '1.5px dashed #d1d1d1', borderRadius: 8, cursor: 'pointer',
+                        background: '#fafafa', color: '#666', fontSize: 13, fontWeight: 500,
+                        transition: 'border-color 0.15s',
+                    }}>
+                        <iconify-icon icon="mdi:image-plus-outline" style={{ fontSize: 18, color: '#aaa' }}></iconify-icon>
+                        <span>เลือกไฟล์รูปภาพ...</span>
+                    </label>
+                    <input id="bg-upload-input" type="file" accept="image/*" onChange={handleUploadCustomBg}
+                        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }} />
+                </div>
                 {bgMode === 'preset' && (
                     <div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
@@ -1552,15 +1986,15 @@ export default function LabelEditor({ projectId, userId }) {
                                 </button>
                             ))}
                         </div>
-                        {bgPresets.length === 0 && <div style={{ fontSize: 11, color: '#999' }}>ยังไม่มี preset</div>}
+                        {bgPresets.length === 0 && <div style={{ fontSize: 15, color: '#999' }}>ยังไม่มี preset</div>}
                     </div>
                 )}
                 {bgMode === 'dalle' && (
                     <div>
-                        <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, fontWeight: 'bold' }}>สไตล์ลาย</label><select value={dalleStyle} onChange={e => setDalleStyle(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}>{BG_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+                        <div style={{ marginBottom: 8 }}><label style={{ fontSize: 15, fontWeight: 'bold' }}>สไตล์ลาย</label><select value={dalleStyle} onChange={e => setDalleStyle(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}>{BG_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                            <div><label style={{ fontSize: 11, fontWeight: 'bold' }}>โทน</label><select value={dalleTone} onChange={e => setDalleTone(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}><option value="auto">Auto</option><option value="bright">สว่าง</option><option value="dark">เข้ม</option><option value="pastel">Pastel</option></select></div>
-                            <div><label style={{ fontSize: 11, fontWeight: 'bold' }}>ความหนาแน่น</label><select value={dalleDensity} onChange={e => setDalleDensity(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}><option value="low">เบาบาง</option><option value="medium">ปานกลาง</option><option value="high">หนาแน่น</option></select></div>
+                            <div><label style={{ fontSize: 15, fontWeight: 'bold' }}>โทน</label><select value={dalleTone} onChange={e => setDalleTone(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}><option value="auto">Auto</option><option value="bright">สว่าง</option><option value="dark">เข้ม</option><option value="pastel">Pastel</option></select></div>
+                            <div><label style={{ fontSize: 15, fontWeight: 'bold' }}>ความหนาแน่น</label><select value={dalleDensity} onChange={e => setDalleDensity(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}><option value="low">เบาบาง</option><option value="medium">ปานกลาง</option><option value="high">หนาแน่น</option></select></div>
                         </div>
                         <button onClick={handleGenerateBgWithAI} disabled={isGeneratingBg} style={{ width: '100%', padding: 12, background: '#8f1d1d', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginBottom: 6 }}>{isGeneratingBg ? 'กำลังสร้างพื้นหลัง...' : 'Generate Background (AI)'}</button>
                         {bgImageUrl && bgMode === 'dalle' && <img src={bgImageUrl} alt="bg preview" style={{ width: '100%', borderRadius: 6, marginTop: 6 }} />}
@@ -1568,35 +2002,57 @@ export default function LabelEditor({ projectId, userId }) {
                 )}
                 {(bgMode === 'preset' || bgMode === 'dalle') && bgImageUrl && (
                     <div style={{ marginTop: 12 }}>
-                        <label style={{ fontSize: 11, fontWeight: 'bold' }}>ความเข้มรูปภาพ: {Math.round(bgOpacity * 100)}%</label>
+                        <label style={{ fontSize: 15, fontWeight: 'bold' }}>ความเข้มรูปภาพ: {Math.round(bgOpacity * 100)}%</label>
                         <input type="range" min="0.2" max="1" step="0.05" value={bgOpacity} onChange={e => setBgOpacity(parseFloat(e.target.value))} style={{ width: '100%' }} />
                     </div>
                 )}
                 {/* แกลเลอรีพื้นหลังที่เคยสร้าง/อัปโหลด */}
                 {bgHistory.length > 0 && (
                     <div style={{ marginTop: 14, borderTop: '1px solid #eee', paddingTop: 10 }}>
-                        <label style={{ fontSize: 11, fontWeight: 'bold', display: 'block', marginBottom: 6 }}>
+                        <label style={{ fontSize: 15, fontWeight: 'bold', display: 'block', marginBottom: 6 }}>
                             ประวัติพื้นหลัง ({bgHistory.length} รูป)
                         </label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
                             {bgHistory.map((item) => {
                                 const url = item.image_url?.startsWith('http') ? item.image_url : `${API}${item.image_url}`;
+                                const isUpload = item.generation_type === 'LABEL_BG_UPLOAD';
                                 const isActive = bgImageUrl === url;
                                 return (
-                                    <button key={item.history_id} onClick={() => { setBgImageUrl(url); setBgMode('preset'); setBgPresetId(null); }}
+                                    <button key={item.history_id}
+                                        onClick={() => {
+                                            setBgImageUrl(url);
+                                            // อัปโหลดเอง -> ยังถือเป็นโหมด preset (รูปคงที่ ไม่ผ่าน AI)
+                                            // สร้างจาก AI -> ต้องกลับไปโหมด AI เพื่อให้แท็บ/ตัวเลือกสไตล์ตรงกับรูปจริง
+                                            setBgMode(isUpload ? 'preset' : 'dalle');
+                                            setBgPresetId(null);
+                                        }}
+                                        title={isUpload ? 'รูปอัปโหลด' : 'สร้างโดย AI'}
                                         style={{
                                             padding: 0, border: isActive ? '3px solid #d3542b' : '1px solid #ddd',
                                             borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
                                             aspectRatio: '1/1', background: '#eee', position: 'relative',
                                         }}>
-                                        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                            onError={(e) => { e.target.style.display = 'none'; }} />
+                                        <img src={url} alt={isUpload ? 'รูปอัปโหลด' : 'พื้นหลังจาก AI'}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                            onError={(e) => {
+                                                e.target.onerror = null;
+                                                e.target.style.display = 'none';
+                                                const fallback = e.target.nextElementSibling;
+                                                if (fallback) fallback.style.display = 'flex';
+                                            }} />
+                                        <div style={{
+                                            display: 'none', width: '100%', height: '100%',
+                                            alignItems: 'center', justifyContent: 'center',
+                                            fontSize: 17, color: '#bbb', background: '#f0f0f0',
+                                        }}>
+                                            <iconify-icon icon="mdi:image-broken-variant"></iconify-icon>
+                                        </div>
                                         <span style={{
                                             position: 'absolute', bottom: 2, right: 2,
                                             fontSize: 7, background: 'rgba(0,0,0,0.5)', color: '#fff',
                                             padding: '1px 3px', borderRadius: 3,
                                         }}>
-                                            {item.generation_type === 'LABEL_BG_UPLOAD' ? 'UP' : 'AI'}
+                                            {isUpload ? 'UP' : 'AI'}
                                         </span>
                                     </button>
                                 );
@@ -1611,7 +2067,13 @@ export default function LabelEditor({ projectId, userId }) {
                 <FormInput label="ชื่อสินค้า *" value={labelForm.productName} onChange={v => setField('productName', v)} />
                 <FormInput label="คำโปรย / Tagline" value={labelForm.tagline} onChange={v => setField('tagline', v)} />
                 <FormInput label="ปริมาณสุทธิ (เช่น 100 g, 250 ml)" value={labelForm.netWeight} onChange={v => setField('netWeight', v)} />
-                <button onClick={handleAIWriteCopy} disabled={isLabelAILoading} style={{ width: '100%', padding: 10, background: '#d3542b', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 6 }}>
+                <button onClick={handleAIWriteCopy} disabled={isLabelAILoading} style={{
+                    width: '100%', padding: '10px 12px', background: isLabelAILoading ? '#e8956a' : '#d3542b',
+                    color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13,
+                    cursor: isLabelAILoading ? 'default' : 'pointer', marginTop: 4,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}>
+                    <iconify-icon icon={isLabelAILoading ? 'mdi:loading' : 'mdi:auto-fix'} style={{ fontSize: 15 }}></iconify-icon>
                     {isLabelAILoading ? 'Gemini กำลังคิด...' : 'ให้ AI ช่วยร่างคำโปรย+ส่วนประกอบ'}
                 </button>
             </AccordionSection>
@@ -1646,12 +2108,22 @@ export default function LabelEditor({ projectId, userId }) {
 
             {/* ตราสัญลักษณ์รับรอง */}
             <AccordionSection title="ตราสัญลักษณ์รับรอง" open={openAccordions.cert} onToggle={() => toggleAccordion('cert')}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                    {CERT_OPTIONS.map(c => (
-                        <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                            <input type="checkbox" checked={labelForm.certifications.includes(c.id)} onChange={() => toggleCertification(c.id)} /> {c.label}
-                        </label>
-                    ))}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                    {CERT_OPTIONS.map(c => {
+                        const selected = labelForm.certifications.includes(c.id);
+                        return (
+                            <button key={c.id} onClick={() => toggleCertification(c.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 4px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: selected ? '2px solid #FF8A00' : '1.5px solid #e8e8e8', background: selected ? '#FFF4E6' : '#fafafa', position: 'relative', transition: 'all 0.15s' }}>
+                                {selected && (
+                                    <span style={{ position: 'absolute', top: 3, right: 3, width: 14, height: 14, borderRadius: '50%', background: '#FF8A00', color: '#fff', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>✓</span>
+                                )}
+                                {c.img
+                                    ? <img src={c.img} alt={c.label} style={{ width: 36, height: 36, objectFit: 'contain' }} />
+                                    : <span style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#888', background: '#eee', borderRadius: 6 }}>{c.label}</span>
+                                }
+                                <span style={{ fontSize: 17, color: selected ? '#FF8A00' : '#666', fontWeight: selected ? 600 : 400, textAlign: 'center', lineHeight: 1.2 }}>{c.label}</span>
+                            </button>
+                        );
+                    })}
                 </div>
             </AccordionSection>
 
@@ -1666,80 +2138,258 @@ export default function LabelEditor({ projectId, userId }) {
                 </label>
                 {labelForm.showBarcode && <FormInput label="ตัวเลข Barcode (เช่น EAN-13)" value={labelForm.barcodeValue} onChange={v => setField('barcodeValue', v)} />}
             </AccordionSection>
+            </div>{/* end accordion wrapper */}
 
             {/* ปุ่มบันทึก + Export */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                <button onClick={() => handleSaveLabel()} disabled={isSavingLabel} style={{ flex: 1, padding: 12, background: '#8a9a3c', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>
+            <div style={{ margin: '4px 14px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+                {/* Save */}
+                <button onClick={() => handleSaveLabel()} disabled={isSavingLabel}
+                    style={{
+                        width: '100%', padding: '11px 12px', background: isSavingLabel ? '#a8b86c' : '#8a9a3c',
+                        color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13,
+                        cursor: isSavingLabel ? 'default' : 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    }}>
+                    <iconify-icon icon={isSavingLabel ? 'mdi:loading' : 'mdi:content-save-outline'} style={{ fontSize: 16 }}></iconify-icon>
                     {isSavingLabel ? 'กำลังบันทึก...' : 'บันทึก'}
                 </button>
-            </div>
 
-            {/* กลุ่มปุ่ม Export */}
-            <div style={{ marginTop: 16, padding: 12, background: '#f8f9fa', borderRadius: 10 }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 'bold', marginBottom: 10, color: '#333' }}>ส่งออกฉลาก</label>
-                <button onClick={handleDownloadLabel} style={{ width: '100%', padding: 10, background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: 8, fontWeight: 600, cursor: 'pointer', marginBottom: 8, fontSize: 12 }}>
-                    ดาวน์โหลด Preview (PNG)
+                {/* PNG Download — hero card */}
+                <button onClick={handleDownloadLabel}
+                    style={{
+                        width: '100%', padding: '12px 14px', marginTop: 6,
+                        background: 'var(--le-orange)',
+                        color: '#fff', border: 'none', borderRadius: 12,
+                        cursor: 'pointer', boxShadow: '0 4px 14px rgba(255,138,0,0.35)',
+                        display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+                    }}>
+                    <div style={{
+                        width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.22)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                        <iconify-icon icon="mdi:download" style={{ fontSize: 19 }}></iconify-icon>
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>ดาวน์โหลด PNG</div>
+                        <div style={{ fontSize: 11.5, opacity: 0.9, marginTop: 1 }}>ไฟล์ภาพความละเอียดสูง</div>
+                    </div>
                 </button>
-                <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportPrintReady(); }} style={{ width: '100%', padding: 10, background: isProUser(getUserFromStorage()) ? '#2d5016' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', marginBottom: 8, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                    ดาวน์โหลด Print-Ready (300 DPI)
-                    {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="14"></iconify-icon>}
-                </button>
-                <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportLabelPDF(); }} style={{ width: '100%', padding: 10, background: isProUser(getUserFromStorage()) ? '#8f1d1d' : '#ccc', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                    ส่งออก PDF พร้อมพิมพ์ (แนะนำ)
-                    {!isProUser(getUserFromStorage()) && <iconify-icon icon="solar:lock-keyhole-linear" width="14"></iconify-icon>}
-                </button>
+
+                {/* Divider + PRO label */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 0 2px' }}>
+                    <iconify-icon icon="mdi:certificate-outline" style={{ fontSize: 14, color: 'var(--le-text-faint)' }}></iconify-icon>
+                    <span style={{ fontSize: 11.5, color: 'var(--le-text-faint)', fontWeight: 600 }}>สำหรับงานพิมพ์ (PRO)</span>
+                </div>
+
+                {/* PDF + Illustrator — 2 cols */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    {/* PDF */}
+                    <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportLabelPDF(); }}
+                        style={{
+                            position: 'relative',
+                            padding: '12px 8px', borderRadius: 10, fontWeight: 600, fontSize: 12.5,
+                            cursor: 'pointer', border: '1px solid var(--le-border)',
+                            background: 'var(--le-bg-muted)', color: 'var(--le-text-sub)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        }}>
+                        <iconify-icon icon="mdi:file-pdf-box" style={{ fontSize: 17 }}></iconify-icon>
+                        <span>PDF</span>
+                        {!isProUser(getUserFromStorage()) && (
+                            <iconify-icon icon="mdi:lock-outline"
+                                style={{ position: 'absolute', top: 6, right: 7, fontSize: 12, color: 'var(--le-text-faint)' }}></iconify-icon>
+                        )}
+                    </button>
+
+                    {/* Illustrator */}
+                    <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportPrintReady(); }}
+                        style={{
+                            position: 'relative',
+                            padding: '12px 8px', borderRadius: 10, fontWeight: 600, fontSize: 12.5,
+                            cursor: 'pointer', border: '1px solid var(--le-border)',
+                            background: 'var(--le-bg-muted)', color: 'var(--le-text-sub)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        }}>
+                        <iconify-icon icon="mdi:vector-square" style={{ fontSize: 17 }}></iconify-icon>
+                        <span>Illustrator</span>
+                        {!isProUser(getUserFromStorage()) && (
+                            <iconify-icon icon="mdi:lock-outline"
+                                style={{ position: 'absolute', top: 6, right: 7, fontSize: 12, color: 'var(--le-text-faint)' }}></iconify-icon>
+                        )}
+                    </button>
+                </div>
+
+                {/* Footnote */}
+                <div style={{ textAlign: 'center', fontSize: 10.5, color: 'var(--le-text-faint)', marginTop: 4 }}>
+                    CMYK · crop marks · fold lines
+                </div>
+
             </div>
         </div>
     );
-    
+
     // ============= RENDER: CENTER PANEL (Preview + Template Selector) =============
+    const [zoomLevel, setZoomLevel] = useState(125);
     const renderCenterPanel = () => {
-        if (!hasPackaging) {
-            return (
-                <div style={{
-                    flex: 1, display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                    background: '#f0f2f5', borderRadius: 14, minHeight: 500,
-                }}>
-                    <iconify-icon icon="mdi:label-outline" style={{ fontSize: 64, color: '#ddd' }}></iconify-icon>
-                    <p style={{ fontSize: 16, fontWeight: 'bold', color: '#bbb', marginTop: 12 }}>ตัวอย่างฉลากจะปรากฏที่นี่</p>
-                    <p style={{ fontSize: 12, color: '#ccc' }}>เลือก Packaging จากแถบด้านขวาเพื่อเริ่มต้น</p>
-                </div>
-            );
-        }
+        // NOTE: hasPackaging gate removed — Packaging selection is no longer a prerequisite
+        // Old gate preserved here for reference (do not restore without design review):
+        // if (!hasPackaging) { return <div>เลือก Packaging จากแถบด้านขวาเพื่อเริ่มต้น</div>; }
+
+        const bleedMm = Number(materialData?.bleed_mm || 3);
+        const safeZoneMm = Number(materialData?.safe_zone_mm || 3);
+        const wMm = selectedPanel?.w_mm || labelDimensions.width * 10;
+        const hMm = selectedPanel?.h_mm || labelDimensions.height * 10;
 
         return (
             <div style={{
-                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                background: '#f0f2f5', padding: 24, borderRadius: 14,
-                maxHeight: 'calc(100vh - 180px)', overflowY: 'auto',
+                flex: 1, display: 'flex', flexDirection: 'column',
+                background: '#F5F6F8', borderRadius: 14,
+                height: 'calc(100vh - 180px)', maxHeight: 'calc(100vh - 180px)', overflow: 'hidden',
             }}>
-                {/* Panel Selector — เลือกด้านของ package */}
-                <PanelSelector
-                    panels={labelPanels}
-                    selectedPanel={selectedPanel}
-                    onSelectPanel={handleSelectPanel}
-                    materialData={materialData}
-                />
-
-                {/* แสดงขนาด panel ที่เลือก */}
-                {selectedPanel && (
-                    <div style={{
-                        textAlign: 'center', marginBottom: 8,
-                        fontSize: 11, color: '#888',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                    }}>
-                        <span style={{ background: '#f0f0f0', padding: '3px 10px', borderRadius: 12, fontSize: 10 }}>
-                            {selectedPanel.label}: {selectedPanel.w_mm} × {selectedPanel.h_mm} mm
-                            {selectedPanel.w_mm > selectedPanel.h_mm * 2 ? ' (wrap)' : ''}
-                        </span>
-                    </div>
-                )}
-
-                {/* Label Preview */}
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-                    {renderLabelPreview()}
+                {/* Secondary info bar */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', gap: 20,
+                    margin: '10px 14px 0', padding: '0 16px', height: 34,
+                    background: '#fff', border: '1px solid #e8e8e8', borderRadius: 17,
+                    flexShrink: 0, fontSize: 12, color: '#666',
+                }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ color: '#aaa' }}>ขนาดงาน:</span>
+                        <span style={{ color: '#333', fontWeight: 500 }}>กว้าง {wMm} × สูง {hMm} มม.</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ color: '#aaa' }}>ตัดตก:</span>
+                        <span style={{ color: '#333', fontWeight: 500 }}>{bleedMm} มม.</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ color: '#aaa' }}>Safe Zone:</span>
+                        <span style={{ color: '#333', fontWeight: 500 }}>{safeZoneMm} มม.</span>
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ color: '#aaa' }}>แนว:</span>
+                        <span style={{ color: '#333', fontWeight: 500 }}>{wMm > hMm ? 'แนวนอน' : 'แนวตั้ง'}</span>
+                    </span>
                 </div>
+
+                {/* Canvas area — เต็มความสูงที่เหลือ */}
+                <div style={{
+                    flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'flex-start', padding: '20px 24px 0',
+                    scrollbarWidth: 'none', msOverflowStyle: 'none',
+                }}>
+                    <div style={{
+                        display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+                        transform: `scale(${zoomLevel / 100})`,
+                        transformOrigin: 'top center',
+                        transition: 'transform 0.2s',
+                    }}>
+                        {renderLabelPreview()}
+                    </div>
+                </div>
+
+                {/* Bottom toolbar pill — compact width:fit-content centered */}
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '8px 0 10px', flexShrink: 0,
+                }}>
+                <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 1,
+                    padding: '3px 6px',
+                    background: '#fff', border: '1px solid #e4e4e7', borderRadius: 999,
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                    fontFamily: 'var(--le-font)',
+                }}>
+                    {/* ย้อนกลับ */}
+                    <button title="ย้อนกลับ" style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '4px 9px', border: 'none', borderRadius: 7, background: 'none',
+                        cursor: 'pointer', color: '#777', fontSize: 12, fontWeight: 500,
+                        fontFamily: 'var(--le-font)', transition: 'background 0.13s, color 0.13s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = '#333'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#777'; }}>
+                        <iconify-icon icon="mdi:undo" style={{ fontSize: 13 }}></iconify-icon>
+                        <span>ย้อนกลับ</span>
+                    </button>
+
+                    {/* ทำซ้ำ */}
+                    <button title="ทำซ้ำ" style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '4px 9px', border: 'none', borderRadius: 7, background: 'none',
+                        cursor: 'pointer', color: '#777', fontSize: 12, fontWeight: 500,
+                        fontFamily: 'var(--le-font)', transition: 'background 0.13s, color 0.13s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = '#333'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#777'; }}>
+                        <iconify-icon icon="mdi:redo" style={{ fontSize: 13 }}></iconify-icon>
+                        <span>ทำซ้ำ</span>
+                    </button>
+
+                    {/* Divider */}
+                    <div style={{ width: 1, height: 16, background: '#e4e4e7', margin: '0 3px', flexShrink: 0 }} />
+
+                    {/* Zoom out */}
+                    <button onClick={() => setZoomLevel(z => Math.max(50, z - 25))} title="ย่อ"
+                        style={{
+                            width: 26, height: 26, border: 'none', borderRadius: 6, background: 'none',
+                            cursor: 'pointer', fontSize: 16, color: '#555', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--le-font)',
+                            transition: 'background 0.13s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f4f4f5'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                        −
+                    </button>
+
+                    {/* Zoom label */}
+                    <span style={{
+                        fontSize: 12, fontWeight: 700, color: '#222',
+                        minWidth: 38, textAlign: 'center', userSelect: 'none',
+                    }}>{zoomLevel}%</span>
+
+                    {/* Zoom in */}
+                    <button onClick={() => setZoomLevel(z => Math.min(200, z + 25))} title="ขยาย"
+                        style={{
+                            width: 26, height: 26, border: 'none', borderRadius: 6, background: 'none',
+                            cursor: 'pointer', fontSize: 16, color: '#555', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--le-font)',
+                            transition: 'background 0.13s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f4f4f5'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                        +
+                    </button>
+
+                    {/* Divider */}
+                    <div style={{ width: 1, height: 16, background: '#e4e4e7', margin: '0 3px', flexShrink: 0 }} />
+
+                    {/* พอดีจอ */}
+                    <button onClick={() => setZoomLevel(100)} title="พอดีจอ" style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '4px 9px', border: 'none', borderRadius: 7, background: 'none',
+                        cursor: 'pointer', color: '#777', fontSize: 12, fontWeight: 500,
+                        fontFamily: 'var(--le-font)', transition: 'background 0.13s, color 0.13s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = '#333'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#777'; }}>
+                        <iconify-icon icon="mdi:fit-to-screen-outline" style={{ fontSize: 13 }}></iconify-icon>
+                        <span>พอดีจอ</span>
+                    </button>
+
+                    {/* รีเซ็ต */}
+                    <button onClick={() => { setZoomLevel(125); setElemPositions({ ...LAYOUT_PRESETS[layoutType] }); }} title="รีเซ็ตตำแหน่ง" style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '4px 9px', border: 'none', borderRadius: 7, background: 'none',
+                        cursor: 'pointer', color: 'var(--le-orange)', fontSize: 12, fontWeight: 600,
+                        fontFamily: 'var(--le-font)', transition: 'background 0.13s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--le-orange-tint)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                        <iconify-icon icon="mdi:refresh" style={{ fontSize: 13 }}></iconify-icon>
+                        <span>รีเซ็ต</span>
+                    </button>
+                </div>{/* end pill */}
+                </div>{/* end toolbar row */}
             </div>
         );
     };
@@ -1748,63 +2398,121 @@ export default function LabelEditor({ projectId, userId }) {
     return (
         <>
             {!selectedProduct ? (
-                <div>
-                    <h2 style={{ color: '#8a9a3c', marginTop: 0 }}>เลือกสินค้าเพื่อออกแบบฉลาก</h2>
-                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 20 }}>
+                <div className="le-product-picker">
+                    <h2>เลือกสินค้าเพื่อออกแบบฉลาก</h2>
+                    <p>เลือกสินค้าที่ต้องการออกแบบฉลาก หรือเพิ่มสินค้าใหม่</p>
+                    <div className="le-product-grid">
                         {products.map(prod => (
                             <div key={prod.product_id} onClick={() => handleSelectProduct(prod)}
-                                style={{ width: 200, background: '#fff', padding: 15, borderRadius: 12, cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', textAlign: 'center', border: '1px solid #eee' }}>
-                                <div style={{ width: '100%', height: 150, background: '#f9f9f9', borderRadius: 8, marginBottom: 10, overflow: 'hidden' }}>
-                                    {prod.image_product ? <img src={`${API}/uploads/${prod.image_product}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : <div style={{ padding: '50px 0', color: '#ccc' }}>No Image</div>}
+                                className="le-product-card-pick">
+                                <div style={{ width: '100%', height: 148, background: 'var(--le-bg-muted)', borderRadius: 'var(--le-radius-sm)', marginBottom: 10, overflow: 'hidden' }}>
+                                    {prod.image_product ? <img src={`${API}/uploads/${prod.image_product}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--le-text-faint)', fontSize: 13 }}>ไม่มีรูปภาพ</div>}
                                 </div>
-                                <h3 style={{ margin: 0, fontSize: 16 }}>{prod.name_product}</h3>
+                                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--le-text)' }}>{prod.name_product}</h3>
                                 {prod.package_id && (
-                                    <div style={{ marginTop: 6, fontSize: 10, color: '#8a9a3c', background: '#f5f8eb', padding: '3px 8px', borderRadius: 10, display: 'inline-block' }}>
-                                        <iconify-icon icon="mdi:package-variant" style={{ verticalAlign: 'middle', marginRight: 3 }}></iconify-icon>
+                                    <div style={{ marginTop: 7, fontSize: 11, color: 'var(--le-orange)', background: 'var(--le-orange-tint)', padding: '3px 9px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid var(--le-orange-border)' }}>
+                                        <iconify-icon icon="mdi:package-variant" style={{ fontSize: 13 }}></iconify-icon>
                                         มี Packaging แล้ว
                                     </div>
                                 )}
                             </div>
                         ))}
-                        <div onClick={() => setIsAddProductOpen(true)}
-                            style={{ width: 200, background: '#f5f8eb', border: '2px dashed #8a9a3c', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 12, cursor: 'pointer', color: '#8a9a3c' }}>
-                            <iconify-icon icon="mdi:plus-circle-outline" style={{ fontSize: 40 }}></iconify-icon>
-                            <h3 style={{ fontSize: 16 }}>เพิ่มสินค้าใหม่</h3>
+                        <div onClick={() => setIsAddProductOpen(true)} className="le-add-product">
+                            <iconify-icon icon="mdi:plus-circle-outline" style={{ fontSize: 38 }}></iconify-icon>
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>เพิ่มสินค้าใหม่</span>
                         </div>
                     </div>
                 </div>
             ) : (
-                /* === 3-COLUMN LAYOUT: ซ้าย=ฟอร์ม | กลาง=Preview | ขวา=Packaging Sidebar === */
-                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', fontFamily: labelAssets.font }}>
+                /* === 3-COLUMN LAYOUT: ซ้าย=ฟอร์ม | กลาง=Preview | ขวา=TextEditor === */
+                /* NOTE: PackagingSidebar (4th column) hidden — Packaging section moved into left form panel (หัวข้อ "สินค้า")
+                   All related code (PackagingSidebar component, selectedPackage state, handleSelectPackaging,
+                   materialData fetch) is preserved for future reconnection. */
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontFamily: labelAssets.font }}>
                     {/* ซ้าย: ฟอร์มออกแบบ */}
                     {renderFormPanel()}
 
-                    {/* กลาง: ตัวอย่างฉลาก + template selector */}
+                    {/* กลาง: ตัวอย่างฉลาก + info bar + zoom */}
                     {renderCenterPanel()}
 
-                    {/* ขวา: Packaging Sidebar แบบย่อ */}
+                    {/* ขวา: Text Editor Panel */}
+                    {renderTextEditorPanel()}
+
+                    {/* ไกลขวา: PackagingSidebar — ซ่อนชั่วคราว รอย้ายเข้าหัวข้อ "สินค้า" ในฟอร์มซ้าย
                     <PackagingSidebar
                         packages={PACKAGES}
                         selectedPackageId={selectedPackage?.id || null}
                         onSelectPackage={handleSelectPackaging}
                     />
+                    */}
                 </div>
             )}
 
             {/* Modal เพิ่มสินค้า */}
             {isAddProductOpen && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999 }}>
-                    <form onSubmit={handleAddProduct} style={{ background: '#fff', padding: 30, borderRadius: 16, width: 400 }}>
-                        <h3 style={{ color: '#d3542b', marginTop: 0 }}>เพิ่มสินค้าใหม่</h3>
-                        <input type="text" placeholder="ชื่อสินค้า" value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} required style={{ width: '100%', padding: 10, marginBottom: 10, boxSizing: 'border-box' }} />
-                        <select value={newProduct.type} onChange={e => setNewProduct({ ...newProduct, type: e.target.value })} required style={{ width: '100%', padding: 10, marginBottom: 10, boxSizing: 'border-box' }}>
-                            <option value="">-- เลือกประเภท --</option><option value="อาหาร / ของกินเล่น">อาหาร / ของกินเล่น</option><option value="เครื่องดื่ม">เครื่องดื่ม</option>
-                        </select>
-                        <input type="file" onChange={e => setNewProduct({ ...newProduct, file: e.target.files[0] })} style={{ marginBottom: 20 }} />
-                        <div style={{ display: 'flex', gap: 10 }}>
-                            <button type="button" onClick={() => setIsAddProductOpen(false)} style={{ flex: 1, padding: 10, border: 'none', borderRadius: 6 }}>ยกเลิก</button>
-                            <button type="submit" style={{ flex: 1, padding: 10, background: '#d3542b', color: '#fff', border: 'none', borderRadius: 6 }}>เพิ่มสินค้า</button>
+                <div className="le-add-modal-overlay" onClick={() => setIsAddProductOpen(false)}>
+                    <form onSubmit={handleAddProduct} className="le-add-modal-box" onClick={e => e.stopPropagation()}>
+
+                        {/* Header */}
+                        <div className="le-add-modal-header">
+                            <h3 className="le-add-modal-title">เพิ่มสินค้าใหม่</h3>
+                            <button type="button" className="le-add-modal-close" onClick={() => setIsAddProductOpen(false)}>
+                                <iconify-icon icon="mdi:close"></iconify-icon>
+                            </button>
                         </div>
+
+                        {/* ชื่อสินค้า */}
+                        <div className="le-add-form-group">
+                            <label>
+                                <span className="le-add-step">1</span>
+                                ชื่อสินค้า <span className="le-add-req">*</span>
+                            </label>
+                            <input type="text" placeholder="เช่น น้ำผึ้งป่า, โดนัทสายรุ้ง"
+                                value={newProduct.name}
+                                onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
+                                required />
+                        </div>
+
+                        {/* ประเภท */}
+                        <div className="le-add-form-group">
+                            <label>
+                                <span className="le-add-step">2</span>
+                                ประเภทสินค้า <span className="le-add-req">*</span>
+                            </label>
+                            <select value={newProduct.type}
+                                onChange={e => setNewProduct({ ...newProduct, type: e.target.value })}
+                                required>
+                                <option value="">— เลือกประเภทสินค้า —</option>
+                                <option value="อาหาร / ของกินเล่น">อาหาร / ของกินเล่น</option>
+                                <option value="เครื่องดื่ม">เครื่องดื่ม</option>
+                            </select>
+                        </div>
+
+                        {/* รูปภาพ */}
+                        <div className="le-add-form-group">
+                            <label>
+                                <span className="le-add-step">3</span>
+                                รูปภาพสินค้า
+                                <span className="le-add-opt">(ไม่บังคับ)</span>
+                            </label>
+                            <label className="le-add-file-label">
+                                <iconify-icon icon="mdi:image-plus-outline"></iconify-icon>
+                                {newProduct.file ? newProduct.file.name : 'เลือกไฟล์รูปภาพ...'}
+                                <input type="file" accept="image/*"
+                                    onChange={e => setNewProduct({ ...newProduct, file: e.target.files[0] })} />
+                            </label>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="le-add-modal-actions">
+                            <button type="button" className="le-add-cancel-btn"
+                                onClick={() => setIsAddProductOpen(false)}>ยกเลิก</button>
+                            <button type="submit" className="le-add-confirm-btn">
+                                <iconify-icon icon="mdi:plus"></iconify-icon>
+                                เพิ่มสินค้า
+                            </button>
+                        </div>
+
                     </form>
                 </div>
             )}
