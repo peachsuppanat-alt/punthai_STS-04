@@ -20,8 +20,12 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 
 import dns from 'node:dns';
+import { fileURLToPath } from 'url';
 dns.setDefaultResultOrder('ipv4first');
 dotenv.config();
+
+// __dirname สำหรับ ESM (ใช้หาไฟล์ฟอนต์ embed ตอน export Illustrator)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(cors({
@@ -4228,6 +4232,161 @@ app.post('/api/labels/export-pdf', async (req, res) => {
         res.status(500).json({ status: 'error', message: err.message });
     }
 });
+
+// =====================================================================
+// POST /api/labels/export-ai — สร้างไฟล์ Illustrator (.ai / PDF เวกเตอร์)
+//   • ข้อความเป็น text จริง แก้ไขต่อได้ (ฝังฟอนต์ไทย Sarabun)
+//   • โลโก้/ตรา/QR/Barcode เป็นรูปแยกชิ้น เลือก/ย้ายได้
+//   • เผื่อขอบตัดตก (bleed) สีพื้นล้นออกมา + crop marks มาตรฐานโรงพิมพ์
+//   ส่งกลับเป็น blob (.ai) โดยตรง
+// =====================================================================
+app.post('/api/labels/export-ai', async (req, res) => {
+    try {
+        const {
+            product_name = 'design',
+            label_width_cm, label_height_cm, bleed_mm = 3,
+            background = { mode: 'solid', color: '#FFFFFF', opacity: 1 },
+            elements = [],
+        } = req.body;
+
+        if (!label_width_cm || !label_height_cm) {
+            return res.status(400).json({ status: 'error', message: 'ไม่มีขนาดฉลาก' });
+        }
+
+        const { PDFDocument, rgb, cmyk } = await import('pdf-lib');
+        const fontkit = (await import('@pdf-lib/fontkit')).default;
+
+        const MM_TO_PT = 2.83465;
+        const bleed = parseFloat(bleed_mm) || 3;
+        const trimWmm = parseFloat(label_width_cm) * 10;
+        const trimHmm = parseFloat(label_height_cm) * 10;
+        const totalWmm = trimWmm + bleed * 2;
+        const totalHmm = trimHmm + bleed * 2;
+        const pageW = totalWmm * MM_TO_PT;
+        const pageH = totalHmm * MM_TO_PT;
+        const offPt = bleed * MM_TO_PT;
+
+        const pdfDoc = await PDFDocument.create();
+
+        // โหลดฟอนต์ Bai Jamjuree ผ่าน fontkit เพื่อดึง "เส้น glyph" มาวาดเป็นเวกเตอร์ (outline)
+        // → ภาษาไทยจัดวางสระ/วรรณยุกต์ถูกต้อง, ไม่แยกเป็นตัวอักษร, ไม่มีขีดแดง/ปัญหาฟอนต์ใน Illustrator
+        const fontDir = path.join(__dirname, 'assets', 'fonts');
+        const fkReg = fontkit.create(fs.readFileSync(path.join(fontDir, 'BaiJamjuree-Regular.ttf')));
+        const fkSemi = fontkit.create(fs.readFileSync(path.join(fontDir, 'BaiJamjuree-SemiBold.ttf')));
+        const fkBold = fontkit.create(fs.readFileSync(path.join(fontDir, 'BaiJamjuree-Bold.ttf')));
+        const pickFk = (weight) => (weight >= 700 ? fkBold : weight >= 600 ? fkSemi : fkReg);
+
+        const page = pdfDoc.addPage([pageW, pageH]);
+
+        // วาดข้อความหนึ่งบรรทัดเป็นเส้นเวกเตอร์ — รวมทุก glyph เป็น path เดียว/บรรทัด
+        // (ใน Illustrator จะเป็น 1 ชิ้นต่อบรรทัด ไม่แตกเป็นตัวอักษร)
+        const drawOutlinedLine = (line, fk, sizePt, startXPt, baselineYPt, color) => {
+            const scl = sizePt / fk.unitsPerEm;
+            const run = fk.layout(line);
+            let penX = 0;            // หน่วย font units (drawSvgPath จะ scale ทีเดียว)
+            let combined = '';
+            for (let i = 0; i < run.glyphs.length; i++) {
+                const g = run.glyphs[i];
+                const p = run.positions[i] || {};
+                try {
+                    if (g.path && g.path.toSVG) {
+                        // flip y (path เป็น y-up) แล้วเลื่อนตามตำแหน่ง glyph ในหน่วย font units
+                        const gp = g.path.scale(1, -1).translate(penX + (p.xOffset || 0), -(p.yOffset || 0));
+                        const d = gp.toSVG();
+                        if (d) combined += d + ' ';
+                    }
+                } catch (e) { /* ข้าม glyph ที่มีปัญหา */ }
+                penX += (p.xAdvance || 0);
+            }
+            if (combined) page.drawSvgPath(combined, { x: startXPt, y: baselineYPt, scale: scl, color });
+        };
+        const lineWidthPt = (line, fk, sizePt) => (fk.layout(line).advanceWidth || 0) * (sizePt / fk.unitsPerEm);
+
+        // ---- สีแบบ CMYK (ไฟล์เปิดใน Illustrator เป็นโหมด CMYK พร้อมพิมพ์) ----
+        const hexToCmyk = (hex) => {
+            const h = (hex || '#000000').replace('#', '');
+            const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0');
+            const r = parseInt(v.slice(0, 2), 16) / 255, g = parseInt(v.slice(2, 4), 16) / 255, b = parseInt(v.slice(4, 6), 16) / 255;
+            const k = 1 - Math.max(r, g, b);
+            if (k >= 0.9999) return cmyk(0, 0, 0, 1);
+            const c = (1 - r - k) / (1 - k), m = (1 - g - k) / (1 - k), y = (1 - b - k) / (1 - k);
+            return cmyk(c, m, y, k);
+        };
+        const embedImg = async (dataUrl) => {
+            const b64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+            const bytes = Buffer.from(b64, 'base64');
+            try { return await pdfDoc.embedPng(bytes); } catch (e) { return await pdfDoc.embedJpg(bytes); }
+        };
+        // กรองอักขระที่ฟอนต์อาจไม่มี glyph (กัน drawText crash)
+        const sanitize = (s = '') => String(s)
+            .replace(/⚠/g, '!').replace(/[•·]/g, '-').replace(/✓/g, '')
+            .replace(/[^฀-๿ -~ -ÿ‘’“”–—]/g, '');
+
+        // ---- เลเยอร์พื้นหลัง (สีล้นเต็มพื้นที่รวม bleed) ----
+        if (background.mode === 'solid') {
+            page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: hexToCmyk(background.color) });
+        } else if (background.imageDataUrl) {
+            try {
+                const bgImg = await embedImg(background.imageDataUrl);
+                page.drawImage(bgImg, { x: 0, y: 0, width: pageW, height: pageH, opacity: Math.max(0, Math.min(1, Number(background.opacity) || 1)) });
+            } catch (e) { page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: cmyk(0, 0, 0, 0) }); }
+        } else {
+            page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: cmyk(0, 0, 0, 0) });
+        }
+
+        // ---- วาดแต่ละ object ตามลำดับ (ล่าง→บน) ----
+        for (const el of elements) {
+            const xPt = (bleed + (el.x_mm || 0)) * MM_TO_PT;
+            const wPt = (el.w_mm || 0) * MM_TO_PT;
+            const hPt = (el.h_mm || 0) * MM_TO_PT;
+
+            if (el.type === 'image' && el.dataUrl) {
+                try {
+                    const img = await embedImg(el.dataUrl);
+                    const yPt = pageH - (bleed + (el.y_mm || 0) + (el.h_mm || 0)) * MM_TO_PT;
+                    page.drawImage(img, { x: xPt, y: yPt, width: wPt, height: hPt });
+                } catch (e) { console.warn('embed image element failed:', e.message); }
+            } else if (el.type === 'text' && Array.isArray(el.lines)) {
+                const fk = pickFk(el.weight || (el.bold ? 700 : 400));
+                const sizePt = (el.fontMm || 3) * MM_TO_PT;
+                const color = hexToCmyk(el.color || '#222222');
+                el.lines.forEach((rawLine, i) => {
+                    const line = sanitize(rawLine);
+                    if (!line) return;
+                    let lw = 0;
+                    try { lw = lineWidthPt(line, fk, sizePt); } catch (e) { lw = 0; }
+                    let startX = xPt;
+                    if (el.align === 'center') startX = xPt + (wPt - lw) / 2;
+                    else if (el.align === 'right') startX = xPt + wPt - lw;
+                    const baselineMm = (el.y_mm || 0) + (el.fontMm || 3) + i * (el.lineHeightMm || (el.fontMm || 3) * 1.4);
+                    const baselineY = pageH - (bleed + baselineMm) * MM_TO_PT;
+                    try { drawOutlinedLine(line, fk, sizePt, startX, baselineY, color); }
+                    catch (e) { console.warn('outline text skip:', e.message); }
+                });
+            }
+        }
+
+        // ---- Crop marks 4 มุม (ตามขอบ trim) ----
+        const cropLen = 5 * MM_TO_PT;
+        const cc = cmyk(0, 0, 0, 1);
+        const dc = (x, y, dx, dy) => page.drawLine({ start: { x, y }, end: { x: x + dx, y: y + dy }, thickness: 0.25, color: cc });
+        dc(0, offPt, cropLen, 0); dc(offPt, 0, 0, cropLen);
+        dc(pageW - cropLen, offPt, cropLen, 0); dc(pageW - offPt, 0, 0, cropLen);
+        dc(0, pageH - offPt, cropLen, 0); dc(offPt, pageH - cropLen, 0, cropLen);
+        dc(pageW - cropLen, pageH - offPt, cropLen, 0); dc(pageW - offPt, pageH - cropLen, 0, cropLen);
+
+        // ---- บันทึก + ส่งกลับเป็น .ai (PDF-compatible) ----
+        const pdfBytes = await pdfDoc.save();
+        const safeName = (product_name || 'design').replace(/[^\w฀-๿.-]+/g, '_').slice(0, 60);
+        res.setHeader('Content-Type', 'application/illustrator');
+        res.setHeader('Content-Disposition', `attachment; filename="Label_${encodeURIComponent(safeName)}_CMYK.ai"`);
+        res.send(Buffer.from(pdfBytes));
+    } catch (err) {
+        console.error('Label Export AI Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 // =====================================================================
 // GET /api/package/:packageId/materials — ดึง materials + panels ของ package
 // =====================================================================

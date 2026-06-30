@@ -37,6 +37,50 @@ const CERT_OPTIONS = [
     { id: 'sugar_free', label: 'ปลอดน้ำตาล', img: null },
 ];
 
+// ============= CERTIFICATION CATALOG (จากโฟลเดอร์ src/assets/ตรา) =============
+// โหลดรูปตราทุกแบบจากทุกโฟลเดอร์ (Vite eager glob → คืน URL ที่ bundle ให้)
+const CERT_IMAGE_MODULES = import.meta.glob('../assets/ตรา/**/*.png', { eager: true, query: '?url', import: 'default' });
+
+// จัดกลุ่มตามชื่อโฟลเดอร์ + เรียงไฟล์ตามเลข (1.png, 2.png, ...)
+const CERT_GROUPS = (() => {
+    const groups = {};
+    for (const path in CERT_IMAGE_MODULES) {
+        const m = path.match(/\/ตรา\/(.+)\/([^/]+)\.png$/);
+        if (!m) continue;
+        (groups[m[1]] ||= []).push({ file: m[2], url: CERT_IMAGE_MODULES[path] });
+    }
+    for (const f in groups) groups[f].sort((a, b) => a.file.localeCompare(b.file, undefined, { numeric: true }));
+    return groups;
+})();
+
+// เมตาดาทาแต่ละประเภทตรา (ลำดับการแสดง + ป้ายภาษาไทย) — variants ดึงจากโฟลเดอร์
+const CERT_CATEGORIES = [
+    { id: 'fda',         folder: 'อย',                                  label: 'อย.' },
+    { id: 'halal',       folder: 'ฮาลาล',                               label: 'ฮาลาล' },
+    { id: 'otop',        folder: 'OTOP',                                label: 'OTOP' },
+    { id: 'gmp',         folder: 'GMP',                                 label: 'GMP' },
+    { id: 'haccp',       folder: 'HACCP',                               label: 'HACCP' },
+    { id: 'organic',     folder: 'Organic Thailand',                    label: 'ออร์แกนิก' },
+    { id: 'ttm',         folder: 'Thailand Trust Mark',                 label: 'Thailand Trust Mark' },
+    { id: 'healthier',   folder: 'ทางเลือกสุขภาพ',                       label: 'ทางเลือกสุขภาพ' },
+    { id: 'sugarfree',   folder: 'ปลอดน้ำตาล',                          label: 'ปลอดน้ำตาล' },
+    { id: 'tisi',        folder: 'มอก',                                 label: 'มอก.' },
+    { id: 'acfs',        folder: 'รับรองมาตรฐานสินค้าเกษตรและอาหาร',    label: 'มกอช.' },
+    { id: 'crueltyfree', folder: 'ไม่ทดลองกับสัตว์ Cruelty-Free',        label: 'Cruelty-Free' },
+].map(c => ({ ...c, variants: CERT_GROUPS[c.folder] || [] })).filter(c => c.variants.length > 0);
+
+// แมปไอดีเก่า (ข้อมูลที่เคยบันทึกเป็น string) → ประเภทใหม่ เพื่อ backward-compat
+const LEGACY_CERT_MAP = { fda: 'fda', halal: 'halal', otop: 'otop', gmp: 'gmp', organic: 'organic', tisi: 'tisi', vegan: 'crueltyfree', sugar_free: 'sugarfree' };
+
+// คืน id ของรายการตราที่เลือก (รองรับทั้ง object ใหม่ และ string เก่า)
+const certEntryId = (c) => (typeof c === 'object' && c ? c.id : LEGACY_CERT_MAP[c] || c);
+// คืน URL รูปของรายการตราที่เลือก
+const certEntryUrl = (c) => {
+    if (typeof c === 'object' && c) return c.url;
+    const cat = CERT_CATEGORIES.find(x => x.id === (LEGACY_CERT_MAP[c] || c));
+    return cat?.variants[0]?.url || null;
+};
+
 const BG_STYLES = [
     { id: 'minimal', label: 'มินิมอล' }, { id: 'thai_traditional', label: 'ลายไทยร่วมสมัย' },
     { id: 'nature', label: 'ธรรมชาติ-ใบไม้' }, { id: 'watercolor', label: 'Watercolor' },
@@ -62,6 +106,14 @@ const LABEL_ELEMENTS = [
     { id: 'manufacturer', label: 'ผู้ผลิต' },
     { id: 'legal', label: 'กฎหมาย/วันที่' },
 ];
+
+// เลเยอร์ข้อความที่กดแก้ไข/พิมพ์ใหม่ได้โดยตรงในพรีวิว (ดับเบิลคลิก)
+const EDITABLE_FIELDS = {
+    productName: { field: 'productName', multiline: false, baseFont: 22, weight: 800, placeholder: 'ชื่อสินค้า' },
+    tagline:     { field: 'tagline',     multiline: false, baseFont: 17, weight: 600, placeholder: 'คำโปรย' },
+    netWeight:   { field: 'netWeight',   multiline: false, baseFont: 15, weight: 400, placeholder: 'ปริมาณสุทธิ' },
+    ingredients: { field: 'ingredients', multiline: true,  baseFont: 17, weight: 400, placeholder: 'ส่วนประกอบ' },
+};
 
 const LAYOUT_PRESETS = {
     centered_classic: {
@@ -140,6 +192,47 @@ const getFinalText = (tags, custom, showCustom) => {
 const PREVIEW_PX_PER_CM = 38;
 
 // ============= SUB COMPONENTS =============
+// แก้ไขข้อความในพรีวิวโดยตรง — ใช้ contentEditable เพื่อให้กล่องคงขนาด/ตำแหน่งเดิม ไม่ดันเลย์เอาต์
+function EditableText({ value, multiline, onCommit, onDone, style }) {
+    const ref = React.useRef(null);
+    React.useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        el.innerText = value || '';
+        el.focus();
+        // เลือกข้อความทั้งหมดเพื่อพิมพ์ทับได้ทันที
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return (
+        <span
+            ref={ref}
+            contentEditable
+            suppressContentEditableWarning
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onInput={(e) => onCommit(e.currentTarget.innerText)}
+            onBlur={() => onDone()}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape') { e.preventDefault(); e.currentTarget.blur(); }
+                if (e.key === 'Enter' && !multiline) { e.preventDefault(); e.currentTarget.blur(); }
+            }}
+            style={{
+                outline: '1px dashed var(--le-orange)',
+                outlineOffset: 1,
+                borderRadius: 2,
+                cursor: 'text',
+                whiteSpace: multiline ? 'pre-wrap' : 'normal',
+                ...style,
+            }}
+        />
+    );
+}
+
 function AccordionSection({ title, open, onToggle, children, disabled }) {
     return (
         <div style={{ marginBottom: 8, border: '1px solid #ececec', borderRadius: 10, overflow: 'hidden', opacity: disabled ? 0.5 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
@@ -486,6 +579,9 @@ export default function LabelEditor({ projectId, userId }) {
     const [labelMode, setLabelMode] = useState('sticker'); // 'sticker' | 'fullcover'
     const [elemPositions, setElemPositions] = useState(() => ({ ...LAYOUT_PRESETS.centered_classic }));
     const [selectedElem, setSelectedElem] = useState(null);
+    const [editingElem, setEditingElem] = useState(null);      // เลเยอร์ที่กำลังแก้ไขข้อความในพรีวิว
+    const [activeCertCat, setActiveCertCat] = useState(null);  // ประเภทตราที่กำลังเลือกแบบลายอยู่
+    const [showCenterGuide, setShowCenterGuide] = useState(false); // เส้นกึ่งกลางแกน y (แนวตั้ง)
     const [layerDraggingId, setLayerDraggingId] = useState(null);
     const [layerDragOverId, setLayerDragOverId] = useState(null);
     const [bgHistory, setBgHistory] = useState([]);
@@ -890,30 +986,45 @@ export default function LabelEditor({ projectId, userId }) {
     };
 
     const handleDragStart = (e, elemId) => {
+        // ขณะกำลังพิมพ์แก้ไขข้อความเลเยอร์นี้ ไม่ต้องลาก
+        if (editingElem === elemId) return;
         e.preventDefault();
         if (!labelRef.current) return;
         setSelectedElem(elemId);
+        const node = e.currentTarget;                 // กล่องของวัตถุที่กำลังลาก (ใช้วัดจุดศูนย์กลาง)
         const rect = labelRef.current.getBoundingClientRect();
         const startX = e.clientX;
         const startY = e.clientY;
         const startPos = { ...elemPositions[elemId] };
+        const SNAP_PCT = 1.5;                          // ระยะดูด (เปอร์เซ็นต์ของความกว้างพรีวิว)
 
         const handleMove = (me) => {
             const dx = ((me.clientX - startX) / rect.width) * 100;
             const dy = ((me.clientY - startY) / rect.height) * 100;
+            let newX = Math.max(0, Math.min(95, startPos.x + dx));
+            const newY = Math.max(0, Math.min(95, startPos.y + dy));
+
+            // คำนวณจุดศูนย์กลางแกน x ของวัตถุ เทียบกับกึ่งกลางพรีวิว (50%)
+            const nodeRect = node.getBoundingClientRect();
+            const elemWidthPct = (nodeRect.width / rect.width) * 100;   // หาร rect.width แล้ว zoom หักล้างกันเอง
+            const centerXPct = newX + elemWidthPct / 2;
+            if (Math.abs(centerXPct - 50) <= SNAP_PCT) {
+                newX = 50 - elemWidthPct / 2;          // ดูดให้ศูนย์กลางตรงแกน y พอดี
+                setShowCenterGuide(true);
+            } else {
+                setShowCenterGuide(false);
+            }
+
             setElemPositions(prev => ({
                 ...prev,
-                [elemId]: {
-                    ...prev[elemId],
-                    x: Math.max(0, Math.min(95, startPos.x + dx)),
-                    y: Math.max(0, Math.min(95, startPos.y + dy)),
-                }
+                [elemId]: { ...prev[elemId], x: newX, y: newY }
             }));
         };
 
         const handleUp = () => {
             document.removeEventListener('mousemove', handleMove);
             document.removeEventListener('mouseup', handleUp);
+            setShowCenterGuide(false);
         };
 
         document.addEventListener('mousemove', handleMove);
@@ -1013,8 +1124,24 @@ export default function LabelEditor({ projectId, userId }) {
         });
     };
 
-    const toggleCertification = (id) => {
-        setLabelForm(p => ({ ...p, certifications: p.certifications.includes(id) ? p.certifications.filter(x => x !== id) : [...p.certifications, id] }));
+    // ตราที่ถูกเลือกแล้วของประเภทนี้หรือยัง
+    const isCertSelected = (catId) => labelForm.certifications.some(c => certEntryId(c) === catId);
+    // URL ของลายที่เลือกในประเภทนี้ (ถ้ามี)
+    const getCertVariantUrl = (catId) => {
+        const found = labelForm.certifications.find(c => certEntryId(c) === catId);
+        return found ? certEntryUrl(found) : null;
+    };
+    // เลือก/เปลี่ยนลายของประเภทตรา → ใส่/แทนที่ในพรีวิว
+    const selectCertVariant = (catId, url) => {
+        setLabelForm(p => {
+            const others = p.certifications.filter(c => certEntryId(c) !== catId);
+            return { ...p, certifications: [...others, { id: catId, url }] };
+        });
+    };
+    // เอาตราออก
+    const removeCert = (catId) => {
+        setLabelForm(p => ({ ...p, certifications: p.certifications.filter(c => certEntryId(c) !== catId) }));
+        setActiveCertCat(prev => prev === catId ? null : prev);
     };
 
     const handleGenerateBgWithAI = async () => {
@@ -1249,6 +1376,428 @@ export default function LabelEditor({ projectId, userId }) {
         } catch (err) { alert('เกิดข้อผิดพลาด: ' + err.message); }
     };
 
+    // ============= EXPORT: ILLUSTRATOR (Layered Vector SVG) =============
+    // สร้างไฟล์ SVG เวกเตอร์ แยกเลเยอร์ ข้อความแก้ไขต่อได้ + เผื่อขอบตัดตก (bleed) สีล้นออกมา
+    const escapeXml = (s = '') => String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+    const imageToDataUrl = async (url) => {
+        if (!url) return null;
+        if (url.startsWith('data:')) return url;
+        try {
+            const res = await fetch(url, { mode: 'cors' });
+            const blob = await res.blob();
+            return await new Promise((resolve) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(fr.result);
+                fr.onerror = () => resolve(null);
+                fr.readAsDataURL(blob);
+            });
+        } catch (e) { return null; }
+    };
+
+    // ข้อความแต่ละ "ย่อหน้า" ของแต่ละ element (ก่อนตัดบรรทัดตามความกว้าง)
+    const getElementParagraphs = (elemId) => {
+        switch (elemId) {
+            case 'productName': return labelForm.productName ? [labelForm.productName] : [];
+            case 'tagline': return labelForm.tagline ? [labelForm.tagline] : [];
+            case 'netWeight': return labelForm.netWeight ? [`ปริมาณสุทธิ: ${labelForm.netWeight}`] : [];
+            case 'ingredients': return labelForm.ingredients ? ['ส่วนประกอบ:', ...labelForm.ingredients.split('\n')] : [];
+            case 'usage': return finalUsageString ? [`วิธีใช้: ${finalUsageString}`] : [];
+            case 'storage': return finalStorageString ? [`วิธีเก็บ: ${finalStorageString}`] : [];
+            case 'warnings': return finalWarningString ? [`⚠ ${finalWarningString}`] : [];
+            case 'manufacturer': {
+                const items = [];
+                if (labelForm.manufacturerName) items.push('ผลิตโดย: ' + labelForm.manufacturerName);
+                if (labelForm.manufacturerAddress) items.push(labelForm.manufacturerAddress);
+                const contact = [labelForm.manufacturerPhone && 'โทร. ' + labelForm.manufacturerPhone, labelForm.manufacturerLine && 'Line: ' + labelForm.manufacturerLine].filter(Boolean).join(' | ');
+                if (contact) items.push(contact);
+                return items;
+            }
+            case 'legal': {
+                const legalItems = [labelForm.fdaNumber && 'อย. ' + labelForm.fdaNumber, labelForm.lotNumber && 'Lot: ' + labelForm.lotNumber, labelForm.mfgDate && 'MFG: ' + labelForm.mfgDate, labelForm.expDate && 'EXP: ' + labelForm.expDate].filter(Boolean);
+                return legalItems.length ? [legalItems.join(' • ')] : [];
+            }
+            default: return [];
+        }
+    };
+
+    const TEXT_BASE_FONT = { productName: 22, tagline: 17, netWeight: 15, ingredients: 17, usage: 17, storage: 17, warnings: 17, manufacturer: 9, legal: 9 };
+    // น้ำหนักฟอนต์ที่ใส่ตายตัวในพรีวิว (productName=800, tagline=600) ต้องส่งไปด้วยให้ไฟล์ตรงกัน
+    const INTRINSIC_WEIGHT = { productName: 700, tagline: 600 };
+    const LEFT_ALIGN_ELEMS = ['ingredients', 'usage', 'storage', 'warnings'];
+
+    const getElementTextStyle = (elemId) => {
+        const es = elemStyles[elemId] || DEFAULT_ELEM_STYLE;
+        let color = es.color;
+        if (!color) {
+            if (elemId === 'tagline') color = sectionColors.tagline;
+            else if (elemId === 'warnings') color = '#c0392b';
+            else if (['netWeight', 'manufacturer', 'legal'].includes(elemId)) color = sectionColors.details;
+            else color = sectionColors.productName;
+        }
+        const align = es.align || (LEFT_ALIGN_ELEMS.includes(elemId) ? 'left' : (layoutType === 'modern_side' ? 'left' : 'center'));
+        const scale = elemPositions[elemId]?.scale || 1;
+        const weight = es.bold ? 700 : (INTRINSIC_WEIGHT[elemId] || 400);
+        return {
+            color,
+            weight,
+            bold: weight >= 700,
+            italic: !!es.italic,
+            align,
+            fontPx: (TEXT_BASE_FONT[elemId] || 12) * scale,
+        };
+    };
+
+    const handleExportIllustratorSVG = async () => {
+        if (!labelRef.current) return;
+        handleSaveLabel(true);
+
+        // ยกเลิกการเลือก/แก้ไขเพื่อไม่ให้มี handle/กรอบติดไปในไฟล์
+        setSelectedElem(null);
+        setEditingElem(null);
+        setShowCenterGuide(false);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        try {
+            // ===== ขนาดงานจริง (mm) + ขอบตัดตก =====
+            const isLikelyCm = (labelDimensions.width <= 100 && labelDimensions.height <= 100);
+            const containerW = isLikelyCm ? Math.round(labelDimensions.width * PREVIEW_PX_PER_CM) : (labelDimensions.width || 380);
+            const containerH = isLikelyCm ? Math.round(labelDimensions.height * PREVIEW_PX_PER_CM) : (labelDimensions.height || 500);
+            const wMm = isLikelyCm ? labelDimensions.width * 10 : (selectedPanel?.w_mm || labelDimensions.width);
+            const hMm = isLikelyCm ? labelDimensions.height * 10 : (selectedPanel?.h_mm || labelDimensions.height);
+            const bleedMm = Number(materialData?.bleed_mm || 3);             // มาตรฐานโรงพิมพ์ 3 มม.
+            const pxPerMm = containerW / wMm;
+            const bleedPx = bleedMm * pxPerMm;
+            const totalPxW = containerW + bleedPx * 2;
+            const totalPxH = containerH + bleedPx * 2;
+            const totalMmW = wMm + bleedMm * 2;
+            const totalMmH = hMm + bleedMm * 2;
+            const OFF = bleedPx;                                             // เลื่อนเนื้อหาเข้ามาตามขอบตัดตก
+
+            // ฟอนต์
+            const fontFamily = (labelAssets.font || 'Bai Jamjuree').replace(/['"]/g, '').split(',')[0].trim();
+
+            // วัดตำแหน่งจริงจาก DOM (หาร zoom ออก)
+            const baseRect = labelRef.current.getBoundingClientRect();
+            const zoomRatio = containerW / baseRect.width;
+            const rectOf = (node) => {
+                const r = node.getBoundingClientRect();
+                return {
+                    x: (r.left - baseRect.left) * zoomRatio,
+                    y: (r.top - baseRect.top) * zoomRatio,
+                    w: r.width * zoomRatio,
+                    h: r.height * zoomRatio,
+                };
+            };
+
+            // ===== เตรียม data URL ของรูปทั้งหมด =====
+            const certEntries = labelForm.certifications.map(c => ({ id: certEntryId(c), url: certEntryUrl(c) })).filter(c => c.url);
+            const urlSet = new Set();
+            if (labelAssets.logoUrl) urlSet.add(labelAssets.logoUrl);
+            if (bgMode !== 'solid' && bgImageUrl) urlSet.add(bgImageUrl);
+            certEntries.forEach(c => urlSet.add(c.url));
+            const dataUrlMap = {};
+            await Promise.all([...urlSet].map(async u => { dataUrlMap[u] = await imageToDataUrl(u); }));
+
+            // ===== ตัวช่วยตัดบรรทัดข้อความตามความกว้างกล่อง =====
+            const measureCtx = document.createElement('canvas').getContext('2d');
+            const wrapParagraph = (text, fontPx, bold, italic, maxW) => {
+                measureCtx.font = `${italic ? 'italic ' : ''}${bold ? '700' : '400'} ${fontPx}px ${fontFamily}, sans-serif`;
+                if (!maxW || maxW <= 0) return [text];
+                const words = text.split(/(\s+)/); // เก็บช่องว่างไว้
+                const lines = [];
+                let cur = '';
+                for (const word of words) {
+                    const test = cur + word;
+                    if (measureCtx.measureText(test).width > maxW && cur.trim() !== '') {
+                        lines.push(cur.trimEnd());
+                        cur = word.trimStart();
+                    } else {
+                        cur = test;
+                    }
+                }
+                if (cur.trim() !== '') lines.push(cur.trimEnd());
+                return lines.length ? lines : [text];
+            };
+
+            // ===== สร้างเลเยอร์ =====
+            const layers = [];
+
+            // เลเยอร์พื้นหลัง (สีล้นเต็มพื้นที่รวมขอบตัดตก)
+            let bgInner = '';
+            if (bgMode === 'solid') {
+                bgInner = `<rect x="0" y="0" width="${totalPxW.toFixed(2)}" height="${totalPxH.toFixed(2)}" fill="${escapeXml(bgColor)}"/>`;
+            } else if (bgImageUrl && dataUrlMap[bgImageUrl]) {
+                bgInner = `<image x="0" y="0" width="${totalPxW.toFixed(2)}" height="${totalPxH.toFixed(2)}" preserveAspectRatio="xMidYMid slice" opacity="${bgOpacity}" xlink:href="${dataUrlMap[bgImageUrl]}"/>`;
+            } else {
+                bgInner = `<rect x="0" y="0" width="${totalPxW.toFixed(2)}" height="${totalPxH.toFixed(2)}" fill="#FFFFFF"/>`;
+            }
+            layers.push(`  <g id="พื้นหลัง" inkscape:groupmode="layer" inkscape:label="พื้นหลัง (Background + Bleed)">\n    ${bgInner}\n  </g>`);
+
+            // เลเยอร์ของแต่ละ object ตามลำดับการซ้อน
+            const ordered = getOrderedElements();
+            for (const elem of ordered) {
+                const pos = elemPositions[elem.id];
+                if (!pos || !pos.visible) continue;
+                const node = labelRef.current.querySelector(`[data-elem-id="${elem.id}"]`);
+                if (!node) continue;
+                const box = rectOf(node);
+                const layerName = elem.label;
+                let inner = '';
+
+                if (elem.id === 'logo') {
+                    const du = dataUrlMap[labelAssets.logoUrl];
+                    if (du) inner = `<image x="${(OFF + box.x).toFixed(2)}" y="${(OFF + box.y).toFixed(2)}" width="${box.w.toFixed(2)}" height="${box.h.toFixed(2)}" preserveAspectRatio="xMidYMid meet" xlink:href="${du}"/>`;
+                } else if (elem.id === 'certifications') {
+                    const imgs = node.querySelectorAll('img');
+                    imgs.forEach((img) => {
+                        const r = rectOf(img);
+                        const du = dataUrlMap[img.getAttribute('src')] || dataUrlMap[img.src];
+                        if (du) inner += `<image x="${(OFF + r.x).toFixed(2)}" y="${(OFF + r.y).toFixed(2)}" width="${r.w.toFixed(2)}" height="${r.h.toFixed(2)}" preserveAspectRatio="xMidYMid meet" xlink:href="${du}"/>`;
+                    });
+                } else if (elem.id === 'codes') {
+                    const svgs = node.querySelectorAll('svg');
+                    svgs.forEach((svgEl) => {
+                        const r = rectOf(svgEl);
+                        const clone = svgEl.cloneNode(true);
+                        let vb = clone.getAttribute('viewBox');
+                        if (!vb) {
+                            const ow = parseFloat(clone.getAttribute('width')) || r.w;
+                            const oh = parseFloat(clone.getAttribute('height')) || r.h;
+                            vb = `0 0 ${ow} ${oh}`;
+                        }
+                        clone.setAttribute('viewBox', vb);
+                        clone.setAttribute('x', (OFF + r.x).toFixed(2));
+                        clone.setAttribute('y', (OFF + r.y).toFixed(2));
+                        clone.setAttribute('width', r.w.toFixed(2));
+                        clone.setAttribute('height', r.h.toFixed(2));
+                        clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                        inner += new XMLSerializer().serializeToString(clone);
+                    });
+                } else {
+                    // เลเยอร์ข้อความ → <text> แก้ไขต่อได้
+                    const paragraphs = getElementParagraphs(elem.id);
+                    if (paragraphs.length) {
+                        const st = getElementTextStyle(elem.id);
+                        const lineH = st.fontPx * 1.4;
+                        const anchor = st.align === 'center' ? 'middle' : st.align === 'right' ? 'end' : 'start';
+                        const tx = st.align === 'center' ? OFF + box.x + box.w / 2 : st.align === 'right' ? OFF + box.x + box.w : OFF + box.x;
+                        // ตัดบรรทัดตามความกว้างกล่องจริง
+                        const allLines = [];
+                        paragraphs.forEach(p => wrapParagraph(p, st.fontPx, st.bold, st.italic, box.w).forEach(l => allLines.push(l)));
+                        const startY = OFF + box.y + st.fontPx;     // baseline บรรทัดแรก
+                        const tspans = allLines.map((line, i) =>
+                            `<tspan x="${tx.toFixed(2)}" ${i === 0 ? `y="${startY.toFixed(2)}"` : `dy="${lineH.toFixed(2)}"`}>${escapeXml(line)}</tspan>`
+                        ).join('');
+                        inner = `<text text-anchor="${anchor}" font-family="${escapeXml(fontFamily)}, sans-serif" font-size="${st.fontPx.toFixed(2)}" font-weight="${st.bold ? '700' : '400'}" font-style="${st.italic ? 'italic' : 'normal'}" fill="${escapeXml(st.color)}" xml:space="preserve">${tspans}</text>`;
+                    }
+                }
+
+                if (inner) {
+                    layers.push(`  <g id="${escapeXml(layerName)}" inkscape:groupmode="layer" inkscape:label="${escapeXml(layerName)}">\n    ${inner}\n  </g>`);
+                }
+            }
+
+            // เลเยอร์เส้นไกด์: ขอบตัดจริง (Trim) + ขอบตัดตก (Bleed) — สำหรับโรงพิมพ์
+            const guide =
+                `  <g id="เส้นไกด์-โรงพิมพ์" inkscape:groupmode="layer" inkscape:label="เส้นไกด์ (Trim/Bleed)">\n` +
+                `    <rect x="${OFF.toFixed(2)}" y="${OFF.toFixed(2)}" width="${containerW.toFixed(2)}" height="${containerH.toFixed(2)}" fill="none" stroke="#FF00FF" stroke-width="${Math.max(0.5, 0.25 * pxPerMm).toFixed(2)}" stroke-dasharray="${(2 * pxPerMm).toFixed(2)},${(2 * pxPerMm).toFixed(2)}"/>\n` +
+                `    <rect x="0" y="0" width="${totalPxW.toFixed(2)}" height="${totalPxH.toFixed(2)}" fill="none" stroke="#00AEEF" stroke-width="${Math.max(0.5, 0.25 * pxPerMm).toFixed(2)}" stroke-dasharray="${(1 * pxPerMm).toFixed(2)},${(1.5 * pxPerMm).toFixed(2)}"/>\n` +
+                `  </g>`;
+            layers.push(guide);
+
+            // ===== ประกอบ SVG =====
+            const svg =
+                `<?xml version="1.0" encoding="UTF-8"?>\n` +
+                `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" ` +
+                `width="${totalMmW}mm" height="${totalMmH}mm" viewBox="0 0 ${totalPxW.toFixed(2)} ${totalPxH.toFixed(2)}">\n` +
+                `<title>${escapeXml(labelForm.productName || 'label')}</title>\n` +
+                `<desc>Trim ${wMm}x${hMm} mm | Bleed ${bleedMm} mm | Total ${totalMmW}x${totalMmH} mm</desc>\n` +
+                layers.join('\n') + '\n' +
+                `</svg>`;
+
+            const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Label_${labelForm.productName || 'design'}_Illustrator.svg`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+
+            alert(
+                `ดาวน์โหลดไฟล์ Illustrator (SVG เวกเตอร์) สำเร็จ!\n\n` +
+                `• ขนาดงานจริง: ${wMm} × ${hMm} มม.\n` +
+                `• เผื่อขอบตัดตก (Bleed): ${bleedMm} มม. รอบด้าน (สีพื้นล้นออกมาแล้ว)\n` +
+                `• ขนาดรวมขอบตัดตก: ${totalMmW} × ${totalMmH} มม.\n` +
+                `• แต่ละ object แยกเป็นเลเยอร์ + ข้อความแก้ไขต่อได้\n\n` +
+                `เปิดใน Illustrator: File > Open ไฟล์ .svg นี้\n` +
+                `แต่ละชิ้นจะถูกจัดเป็นกลุ่ม/เลเยอร์ตามชื่อ — ถ้าต้องการให้แยกเป็น Layer เต็มรูปแบบ ใช้คำสั่ง Layers > Release to Layers ได้`
+            );
+        } catch (err) {
+            console.error('SVG export error:', err);
+            alert('สร้างไฟล์ Illustrator ไม่สำเร็จ: ' + err.message);
+        }
+    };
+
+    // ============= EXPORT: ILLUSTRATOR (.ai เวกเตอร์จริง ผ่าน backend) =============
+    const handleExportIllustratorAI = async () => {
+        if (!labelRef.current) return;
+        handleSaveLabel(true);
+        setSelectedElem(null);
+        setEditingElem(null);
+        setShowCenterGuide(false);
+        setSaveStatus('กำลังสร้างไฟล์ Illustrator...');
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        try {
+            // ขนาด/สเกล
+            const isLikelyCm = (labelDimensions.width <= 100 && labelDimensions.height <= 100);
+            const containerW = isLikelyCm ? Math.round(labelDimensions.width * PREVIEW_PX_PER_CM) : (labelDimensions.width || 380);
+            const containerH = isLikelyCm ? Math.round(labelDimensions.height * PREVIEW_PX_PER_CM) : (labelDimensions.height || 500);
+            const wMm = isLikelyCm ? labelDimensions.width * 10 : (selectedPanel?.w_mm || labelDimensions.width);
+            const hMm = isLikelyCm ? labelDimensions.height * 10 : (selectedPanel?.h_mm || labelDimensions.height);
+            const bleedMm = Number(materialData?.bleed_mm || 3);
+            const pxPerMm = containerW / wMm;
+
+            const baseRect = labelRef.current.getBoundingClientRect();
+            const zoomRatio = containerW / baseRect.width;
+            const rectMm = (node) => {
+                const r = node.getBoundingClientRect();
+                return {
+                    x_mm: ((r.left - baseRect.left) * zoomRatio) / pxPerMm,
+                    y_mm: ((r.top - baseRect.top) * zoomRatio) / pxPerMm,
+                    w_mm: (r.width * zoomRatio) / pxPerMm,
+                    h_mm: (r.height * zoomRatio) / pxPerMm,
+                    w_px: r.width * zoomRatio,
+                };
+            };
+
+            // ลดขนาดรูปก่อนส่ง (เลี่ยง payload ใหญ่ + รูปตราต้นฉบับหนัก 2-6MB)
+            const loadImg = (src) => new Promise((resolve, reject) => {
+                const im = new Image();
+                im.onload = () => resolve(im);
+                im.onerror = reject;
+                im.src = src;
+            });
+            const downscaleDataUrl = async (url, maxDim) => {
+                const dataUrl = await imageToDataUrl(url);
+                if (!dataUrl) return null;
+                try {
+                    const im = await loadImg(dataUrl);
+                    const scale = Math.min(1, maxDim / Math.max(im.width || maxDim, im.height || maxDim));
+                    const cw = Math.max(1, Math.round((im.width || maxDim) * scale));
+                    const ch = Math.max(1, Math.round((im.height || maxDim) * scale));
+                    const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+                    cv.getContext('2d').drawImage(im, 0, 0, cw, ch);
+                    return cv.toDataURL('image/png');
+                } catch (e) { return dataUrl; }
+            };
+            const svgToPng = async (svgEl, scale = 4) => {
+                const xml = new XMLSerializer().serializeToString(svgEl);
+                const src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+                const im = await loadImg(src);
+                const r = svgEl.getBoundingClientRect();
+                const cw = Math.max(1, Math.round((r.width || im.width) * scale));
+                const ch = Math.max(1, Math.round((r.height || im.height) * scale));
+                const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+                cv.getContext('2d').drawImage(im, 0, 0, cw, ch);
+                return cv.toDataURL('image/png');
+            };
+
+            // ตัวช่วยตัดบรรทัด
+            const measureCtx = document.createElement('canvas').getContext('2d');
+            const fontFamily = (labelAssets.font || 'Bai Jamjuree').replace(/['"]/g, '').split(',')[0].trim();
+            const wrap = (text, fontPx, bold, italic, maxWpx) => {
+                measureCtx.font = `${italic ? 'italic ' : ''}${bold ? '700' : '400'} ${fontPx}px ${fontFamily}, sans-serif`;
+                if (!maxWpx || maxWpx <= 0) return [text];
+                const words = text.split(/(\s+)/);
+                const lines = []; let cur = '';
+                for (const w of words) {
+                    const test = cur + w;
+                    if (measureCtx.measureText(test).width > maxWpx && cur.trim() !== '') { lines.push(cur.trimEnd()); cur = w.trimStart(); }
+                    else cur = test;
+                }
+                if (cur.trim() !== '') lines.push(cur.trimEnd());
+                return lines.length ? lines : [text];
+            };
+
+            // สร้างรายการ element (ล่าง→บน)
+            const elements = [];
+            for (const elem of getOrderedElements()) {
+                const pos = elemPositions[elem.id];
+                if (!pos || !pos.visible) continue;
+                const node = labelRef.current.querySelector(`[data-elem-id="${elem.id}"]`);
+                if (!node) continue;
+
+                if (elem.id === 'logo') {
+                    const img = node.querySelector('img');
+                    if (img && labelAssets.logoUrl) {
+                        const dataUrl = await downscaleDataUrl(labelAssets.logoUrl, 700);
+                        if (dataUrl) elements.push({ type: 'image', name: elem.label, ...rectMm(img), dataUrl });
+                    }
+                } else if (elem.id === 'certifications') {
+                    for (const img of node.querySelectorAll('img')) {
+                        const dataUrl = await downscaleDataUrl(img.getAttribute('src') || img.src, 400);
+                        if (dataUrl) elements.push({ type: 'image', name: elem.label, ...rectMm(img), dataUrl });
+                    }
+                } else if (elem.id === 'codes') {
+                    for (const svgEl of node.querySelectorAll('svg')) {
+                        try {
+                            const dataUrl = await svgToPng(svgEl, 4);
+                            elements.push({ type: 'image', name: elem.label, ...rectMm(svgEl), dataUrl });
+                        } catch (e) { /* skip */ }
+                    }
+                } else {
+                    const paragraphs = getElementParagraphs(elem.id);
+                    if (!paragraphs.length) continue;
+                    const st = getElementTextStyle(elem.id);
+                    const box = rectMm(node);
+                    const lines = [];
+                    paragraphs.forEach(p => wrap(p, st.fontPx, st.bold, st.italic, box.w_px).forEach(l => lines.push(l)));
+                    elements.push({
+                        type: 'text', name: elem.label,
+                        x_mm: box.x_mm, y_mm: box.y_mm, w_mm: box.w_mm, h_mm: box.h_mm,
+                        fontMm: st.fontPx / pxPerMm, lineHeightMm: (st.fontPx * 1.4) / pxPerMm,
+                        color: st.color, weight: st.weight, bold: st.bold, italic: st.italic, align: st.align, lines,
+                    });
+                }
+            }
+
+            // พื้นหลัง
+            let background;
+            if (bgMode === 'solid') background = { mode: 'solid', color: bgColor };
+            else background = { mode: 'image', imageDataUrl: await downscaleDataUrl(bgImageUrl, 1600), opacity: bgOpacity };
+
+            const payload = {
+                product_name: labelForm.productName || 'design',
+                label_width_cm: labelDimensions.width, label_height_cm: labelDimensions.height,
+                bleed_mm: bleedMm, background, elements,
+            };
+
+            const resp = await fetch(`${API}/api/labels/export-ai`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+            });
+            if (!resp.ok) {
+                const e = await resp.json().catch(() => ({}));
+                throw new Error(e.message || 'สร้างไฟล์ไม่สำเร็จ');
+            }
+            const blob = await resp.blob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Label_${labelForm.productName || 'design'}_CMYK.ai`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            setSaveStatus('สร้างไฟล์ Illustrator (.ai) สำเร็จ ✓');
+        } catch (err) {
+            console.error('AI export error:', err);
+            setSaveStatus('');
+            alert('สร้างไฟล์ Illustrator ไม่สำเร็จ: ' + err.message);
+        }
+    };
+
     // ============= RENDER LABEL PREVIEW (Draggable Canvas) =============
     const renderElemContent = (elemId) => {
         const textColor = sectionColors.productName;
@@ -1265,28 +1814,48 @@ export default function LabelEditor({ projectId, userId }) {
         const esTextDecoration = es.underline ? 'underline' : undefined;
         const esBase = { fontWeight: esFontWeight, fontStyle: esFontStyle, textDecoration: esTextDecoration, textAlign: esAlign, color: esColor };
 
+        // helper: ช่องแก้ไขข้อความในพรีวิว (กล่องคงขนาดเดิม)
+        const inlineEdit = (field, multiline = false, extraStyle = {}) => (
+            <EditableText
+                value={labelForm[field]}
+                multiline={multiline}
+                onCommit={(v) => setField(field, v)}
+                onDone={() => setEditingElem(null)}
+                style={extraStyle}
+            />
+        );
+
         switch (elemId) {
             case 'logo':
                 return labelAssets.logoUrl
                     ? <img src={labelAssets.logoUrl} crossOrigin="anonymous" alt="logo" style={{ maxWidth: 120, maxHeight: 120, width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }} />
                     : <div style={{ width: 90, height: 90, background: 'rgba(0,0,0,0.06)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 15 }}>LOGO</div>;
             case 'productName':
-                return <div style={{ fontSize: 22, fontWeight: 800, color: textColor, textAlign: align, lineHeight: 1.2, ...esBase }}>{labelForm.productName || <span style={{ opacity: .35 }}>ชื่อสินค้า</span>}</div>;
+                return <div style={{ fontSize: 22, fontWeight: 800, color: textColor, textAlign: align, lineHeight: 1.2, ...esBase }}>{editingElem === 'productName' ? inlineEdit('productName') : (labelForm.productName || <span style={{ opacity: .35 }}>ชื่อสินค้า</span>)}</div>;
             case 'tagline':
-                return labelForm.tagline ? <div style={{ fontSize: 17, fontWeight: 600, color: accentColor, textAlign: align, ...esBase }}>{labelForm.tagline}</div> : <div style={{ fontSize: 17, color: '#ccc', textAlign: align }}>คำโปรย</div>;
+                return editingElem === 'tagline'
+                    ? <div style={{ fontSize: 17, fontWeight: 600, color: accentColor, textAlign: align, ...esBase }}>{inlineEdit('tagline')}</div>
+                    : (labelForm.tagline ? <div style={{ fontSize: 17, fontWeight: 600, color: accentColor, textAlign: align, ...esBase }}>{labelForm.tagline}</div> : <div style={{ fontSize: 17, color: '#ccc', textAlign: align }}>คำโปรย</div>);
             case 'netWeight':
-                return labelForm.netWeight ? <div style={{ fontSize: 15, color: subColor, textAlign: align, ...esBase }}>ปริมาณสุทธิ: {labelForm.netWeight}</div> : null;
+                return (labelForm.netWeight || editingElem === 'netWeight')
+                    ? <div style={{ fontSize: 15, color: subColor, textAlign: align, ...esBase }}>ปริมาณสุทธิ: {editingElem === 'netWeight' ? inlineEdit('netWeight') : labelForm.netWeight}</div>
+                    : null;
             case 'certifications':
                 return labelForm.certifications.length > 0 ? (
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: align === 'left' ? 'flex-start' : 'center' }}>
-                        {labelForm.certifications.map(id => { const c = CERT_OPTIONS.find(x => x.id === id); return c ? (c.img ? <img key={id} src={c.img} alt={c.label} style={{ width: 28, height: 28, objectFit: 'contain' }} /> : <span key={id} style={{ background: accentColor, color: '#fff', fontSize: 8, padding: '2px 6px', borderRadius: 999, fontWeight: 'bold' }}>{c.label}</span>) : null; })}
+                        {labelForm.certifications.map((c, i) => {
+                            const url = certEntryUrl(c);
+                            return url ? <img key={certEntryId(c) || i} src={url} crossOrigin="anonymous" alt="" style={{ width: 36, height: 36, objectFit: 'contain' }} /> : null;
+                        })}
                     </div>
                 ) : null;
             case 'ingredients':
-                return labelForm.ingredients ? (
+                return (labelForm.ingredients || editingElem === 'ingredients') ? (
                     <div style={{ fontSize: 17, lineHeight: 1.5, textAlign: 'left', maxWidth: 280, ...esBase }}>
                         <strong style={{ color: esColor }}>ส่วนประกอบ:</strong>
-                        <div style={{ whiteSpace: 'pre-wrap', color: esColor }}>{labelForm.ingredients}</div>
+                        {editingElem === 'ingredients'
+                            ? inlineEdit('ingredients', true, { display: 'block', color: esColor, lineHeight: 1.5 })
+                            : <div style={{ whiteSpace: 'pre-wrap', color: esColor }}>{labelForm.ingredients}</div>}
                     </div>
                 ) : <div style={{ fontSize: 9, color: '#ccc' }}>ส่วนประกอบ...</div>;
             case 'usage':
@@ -1329,7 +1898,7 @@ export default function LabelEditor({ projectId, userId }) {
         return (
             <div
                 ref={labelRef}
-                onClick={(e) => { if (e.target === e.currentTarget || e.target.dataset.canvas) setSelectedElem(null); }}
+                onClick={(e) => { if (e.target === e.currentTarget || e.target.dataset.canvas) { setSelectedElem(null); setEditingElem(null); } }}
                 style={{
                     width: containerW, height: containerH, position: 'relative', overflow: 'hidden',
                     borderRadius: 4, fontFamily: labelAssets.font,
@@ -1343,11 +1912,21 @@ export default function LabelEditor({ projectId, userId }) {
                 <div style={{ position: 'absolute', inset: safeZonePx, border: '1px dashed rgba(0,120,255,0.15)', pointerEvents: 'none', zIndex: 90 }} />
                 {/* Inner padding zone — safe area visual */}
                 <div style={{ position: 'absolute', inset: safeZonePx + 4, pointerEvents: 'none', zIndex: 0 }} />
+                {/* เส้นกึ่งกลางแกน y (แนวตั้ง) — แสดงเมื่อจุดศูนย์กลางวัตถุตรงกับกึ่งกลางพรีวิว */}
+                {showCenterGuide && (
+                    <div style={{
+                        position: 'absolute', top: 0, bottom: 0, left: '50%',
+                        width: 0, borderLeft: '1.5px solid var(--le-orange)',
+                        transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 95,
+                    }} />
+                )}
 
                 {/* Draggable + Resizable elements — เรียงตามลำดับเลเยอร์จริง (เลื่อนขึ้น/ลงแล้วซ้อนทับกันตามนี้) */}
                 {getOrderedElements().map((elem, layerIdx) => {
                     const pos = elemPositions[elem.id];
                     if (!pos || !pos.visible) return null;
+                    const editCfg = EDITABLE_FIELDS[elem.id];
+                    const isEditing = editingElem === elem.id && !!editCfg;
                     const content = renderElemContent(elem.id);
                     if (!content) return null;
                     const isSelected = selectedElem === elem.id;
@@ -1366,14 +1945,19 @@ export default function LabelEditor({ projectId, userId }) {
                     return (
                         <div
                             key={elem.id}
+                            data-elem-id={elem.id}
                             onMouseDown={(e) => handleDragStart(e, elem.id)}
                             onClick={(e) => { e.stopPropagation(); setSelectedElem(elem.id); }}
+                            onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                if (editCfg) { setSelectedElem(elem.id); setEditingElem(elem.id); }
+                            }}
                             style={{
                                 position: 'absolute',
                                 left: `${pos.x}%`,
                                 top: `${pos.y}%`,
                                 maxWidth: `${Math.min(92, 85 / elemScale)}%`,
-                                cursor: 'move',
+                                cursor: isEditing ? 'text' : 'move',
                                 zIndex: isSelected ? 1000 : 10 + layerIdx,
                                 outline: isSelected ? '2px solid #2196F3' : 'none',
                                 outlineOffset: 2,
@@ -1381,7 +1965,7 @@ export default function LabelEditor({ projectId, userId }) {
                                 transform: `scale(${elemScale})`,
                                 transformOrigin: 'top left',
                             }}
-                            title={`${elem.label} — ลากเพื่อย้าย / ลากมุมเพื่อปรับขนาด`}
+                            title={editCfg ? `${elem.label} — ลากเพื่อย้าย / ดับเบิลคลิกเพื่อพิมพ์แก้ไข / ลากมุมเพื่อปรับขนาด` : `${elem.label} — ลากเพื่อย้าย / ลากมุมเพื่อปรับขนาด`}
                         >
                             {content}
                             {isSelected && (
@@ -1628,12 +2212,13 @@ export default function LabelEditor({ projectId, userId }) {
                                 return (
                                     <div key={elem.id}
                                         draggable
-                                        onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setLayerDraggingId(elem.id); }}
-                                        onDragOver={(e) => { e.preventDefault(); setLayerDragOverId(elem.id); }}
+                                        onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', elem.id); setLayerDraggingId(elem.id); }}
+                                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setLayerDragOverId(elem.id); }}
                                         onDragLeave={() => setLayerDragOverId(prev => prev === elem.id ? null : prev)}
                                         onDrop={(e) => {
                                             e.preventDefault();
-                                            if (layerDraggingId) reorderLayer(layerDraggingId, elem.id);
+                                            const draggedId = layerDraggingId || e.dataTransfer.getData('text/plain');
+                                            if (draggedId) reorderLayer(draggedId, elem.id);
                                             setLayerDraggingId(null);
                                             setLayerDragOverId(null);
                                         }}
@@ -2106,25 +2691,64 @@ export default function LabelEditor({ projectId, userId }) {
                 <FormInput label="Lot Number" value={labelForm.lotNumber} onChange={v => setField('lotNumber', v)} />
             </AccordionSection>
 
-            {/* ตราสัญลักษณ์รับรอง */}
+            {/* ตราสัญลักษณ์รับรอง — ขั้นที่ 1 เลือกประเภท / ขั้นที่ 2 เลือกแบบลาย */}
             <AccordionSection title="ตราสัญลักษณ์รับรอง" open={openAccordions.cert} onToggle={() => toggleAccordion('cert')}>
+                <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>
+                    เลือกประเภทตรา แล้วเลือกแบบลายที่ต้องการ — ตราจะไปปรากฏในพรีวิวให้จัดวางต่อ
+                </div>
+                {/* ขั้นที่ 1: ประเภทตรา (ใช้ภาพแรกของแต่ละโฟลเดอร์เป็นไอคอนปุ่ม) */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                    {CERT_OPTIONS.map(c => {
-                        const selected = labelForm.certifications.includes(c.id);
+                    {CERT_CATEGORIES.map(cat => {
+                        const selected = isCertSelected(cat.id);
+                        const isActive = activeCertCat === cat.id;
+                        const thumb = getCertVariantUrl(cat.id) || cat.variants[0]?.url;
                         return (
-                            <button key={c.id} onClick={() => toggleCertification(c.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 4px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: selected ? '2px solid #FF8A00' : '1.5px solid #e8e8e8', background: selected ? '#FFF4E6' : '#fafafa', position: 'relative', transition: 'all 0.15s' }}>
+                            <button key={cat.id}
+                                onClick={() => setActiveCertCat(prev => prev === cat.id ? null : cat.id)}
+                                title={cat.label}
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 4, padding: '8px 4px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: selected ? '2px solid #FF8A00' : isActive ? '2px solid #FFD699' : '1.5px solid #e8e8e8', background: selected ? '#FFF4E6' : isActive ? '#FFFaf3' : '#fafafa', position: 'relative', transition: 'all 0.15s' }}>
                                 {selected && (
                                     <span style={{ position: 'absolute', top: 3, right: 3, width: 14, height: 14, borderRadius: '50%', background: '#FF8A00', color: '#fff', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>✓</span>
                                 )}
-                                {c.img
-                                    ? <img src={c.img} alt={c.label} style={{ width: 36, height: 36, objectFit: 'contain' }} />
-                                    : <span style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#888', background: '#eee', borderRadius: 6 }}>{c.label}</span>
-                                }
-                                <span style={{ fontSize: 17, color: selected ? '#FF8A00' : '#666', fontWeight: selected ? 600 : 400, textAlign: 'center', lineHeight: 1.2 }}>{c.label}</span>
+                                <img src={thumb} alt={cat.label} style={{ width: 36, height: 36, objectFit: 'contain' }} />
+                                <span style={{ fontSize: 11, color: selected ? '#FF8A00' : '#666', fontWeight: selected ? 600 : 400, textAlign: 'center', lineHeight: 1.15, wordBreak: 'break-word' }}>{cat.label}</span>
                             </button>
                         );
                     })}
                 </div>
+
+                {/* ขั้นที่ 2: เลือกแบบลายของประเภทที่กดเลือก */}
+                {activeCertCat && (() => {
+                    const cat = CERT_CATEGORIES.find(c => c.id === activeCertCat);
+                    if (!cat) return null;
+                    const selectedUrl = getCertVariantUrl(cat.id);
+                    return (
+                        <div style={{ marginTop: 12, padding: 10, background: '#FFF8F0', border: '1px solid #FFE0C2', borderRadius: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#C8441A' }}>เลือกแบบลาย — {cat.label}</span>
+                                {isCertSelected(cat.id) && (
+                                    <button onClick={() => removeCert(cat.id)} style={{ fontSize: 11, color: '#DC2626', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <iconify-icon icon="mdi:trash-can-outline"></iconify-icon> เอาออก
+                                    </button>
+                                )}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                                {cat.variants.map(v => {
+                                    const isChosen = selectedUrl === v.url;
+                                    return (
+                                        <button key={v.file} onClick={() => selectCertVariant(cat.id, v.url)}
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6, borderRadius: 8, cursor: 'pointer', background: '#fff', border: isChosen ? '2px solid #FF8A00' : '1.5px solid #e8e8e8', position: 'relative', transition: 'all 0.15s' }}>
+                                            {isChosen && (
+                                                <span style={{ position: 'absolute', top: 2, right: 2, width: 13, height: 13, borderRadius: '50%', background: '#FF8A00', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>✓</span>
+                                            )}
+                                            <img src={v.url} alt={`${cat.label} ${v.file}`} style={{ width: 44, height: 44, objectFit: 'contain' }} />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })()}
             </AccordionSection>
 
             {/* QR Code & Barcode */}
@@ -2202,7 +2826,7 @@ export default function LabelEditor({ projectId, userId }) {
                     </button>
 
                     {/* Illustrator */}
-                    <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportPrintReady(); }}
+                    <button onClick={() => { if (!isProUser(getUserFromStorage())) { setShowProModal(true); return; } handleExportIllustratorAI(); }}
                         style={{
                             position: 'relative',
                             padding: '12px 8px', borderRadius: 10, fontWeight: 600, fontSize: 12.5,
