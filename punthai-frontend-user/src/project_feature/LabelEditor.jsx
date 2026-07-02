@@ -191,6 +191,37 @@ const getFinalText = (tags, custom, showCustom) => {
 
 const PREVIEW_PX_PER_CM = 38;
 
+// ============= LOCAL (CUSTOM) FONTS =============
+// ต้องตรงกับ CNCPT_LOCAL_FONTS ใน CreateConcept.jsx — ฟอนต์เหล่านี้ไม่มีใน Google Fonts
+// ถ้าผู้ใช้เลือกฟอนต์กลุ่มนี้ใน CreateConcept ต้อง inject @font-face เอง ไม่งั้นพรีวิว Label จะ fallback เป็น sans-serif
+const LABEL_LOCAL_FONTS = [
+    { name: '399PANI TuayJiew',   file: '../font/399PANITuayJiew/399PANITuayJiewDemo-Regular.ttf' },
+    { name: 'Jao Chathai',        file: '../font/JaoChathai/JaoChathaiThin.ttf' },
+    { name: 'Kart-Thai Esan',     file: '../font/Kart-Thai-Esan/Kart-Thai Esan DEMO.ttf' },
+    { name: 'Kart-Kean Fome',     file: '../font/kart-kean-fome/Kart-Kean Fome DEMO.ttf' },
+    { name: 'MN Nugget',          file: '../font/MN-Nugget/นักเก็ตแจก/MN Nugget.otf' },
+    { name: 'MN Nugget Italic',   file: '../font/MN-Nugget/นักเก็ตแจก/MN Nugget Italic.otf' },
+    { name: 'MN Tam Thai',        file: '../font/MN-Tam-Thai/ตำไทย/MN Tam Thai.ttf' },
+    { name: 'MN Tam Thai Italic', file: '../font/MN-Tam-Thai/ตำไทย/MN Tam Thai Italic.ttf' },
+    { name: 'RD Konmek',          file: '../font/RDKonmek/RDKonmek.ttf' },
+    { name: 'RD Konmek SPC',      file: '../font/RDKonmek/RDKonmekSPC.ttf' },
+    { name: 'TCS 4KhaiMook',      file: '../font/TCS-4KhaiMook/TCS-4KhaiMook-PersonalOnly.ttf' },
+    { name: 'was iittrakorn',     file: '../font/was-iittrakorn/was@iittrakornFont.ttf' },
+];
+const LABEL_LOCAL_FONT_NAMES = new Set(LABEL_LOCAL_FONTS.map(f => f.name));
+
+// inject @font-face ของฟอนต์ local (ใช้ id เดียวกับ CreateConcept เพื่อไม่ซ้ำซ้อน)
+function injectLabelLocalFontFaces() {
+    if (document.getElementById('cncpt-local-font-faces')) return;
+    const style = document.createElement('style');
+    style.id = 'cncpt-local-font-faces';
+    style.textContent = LABEL_LOCAL_FONTS.map(f => {
+        const fmt = f.file.endsWith('.otf') ? 'opentype' : 'truetype';
+        return `@font-face { font-family: '${f.name}'; src: url('${f.file}') format('${fmt}'); font-display: swap; }`;
+    }).join('\n');
+    document.head.appendChild(style);
+}
+
 // ============= SUB COMPONENTS =============
 // แก้ไขข้อความในพรีวิวโดยตรง — ใช้ contentEditable เพื่อให้กล่องคงขนาด/ตำแหน่งเดิม ไม่ดันเลย์เอาต์
 function EditableText({ value, multiline, onCommit, onDone, style }) {
@@ -698,10 +729,15 @@ export default function LabelEditor({ projectId, userId }) {
         }
     }, []);
 
+    // inject ฟอนต์ local ทั้งหมดตั้งแต่ต้น (เผื่อฟอนต์ที่เลือกจาก CreateConcept เป็นฟอนต์ local)
+    useEffect(() => { injectLabelLocalFontFaces(); }, []);
+
     useEffect(() => {
         if (!labelAssets.font) return;
         const fontName = labelAssets.font.replace(/'/g, '').split(',')[0].trim();
         if (!fontName) return;
+        // ฟอนต์ local (RD Konmek ฯลฯ) ไม่มีใน Google Fonts → ใช้ @font-face ที่ inject ไว้ ไม่ต้องโหลดจาก Google
+        if (LABEL_LOCAL_FONT_NAMES.has(fontName)) { injectLabelLocalFontFaces(); return; }
         const linkId = `gfont-label-${fontName.replace(/\s+/g, '-')}`;
         if (document.getElementById(linkId)) return;
         const link = document.createElement('link');
@@ -2014,10 +2050,11 @@ export default function LabelEditor({ projectId, userId }) {
 
     // ============= RENDER: RIGHT TEXT EDITOR PANEL =============
     const renderTextEditorPanel = () => {
-        const FONT_OPTIONS = [
+        const GOOGLE_FONT_OPTIONS = [
             'Bai Jamjuree', 'Prompt', 'Sarabun', 'Kanit', 'Mitr', 'Charm', 'Itim', 'Mali', 'Sriracha',
             'Noto Serif Thai', 'Thasadith',
         ];
+        const LOCAL_FONT_OPTIONS = LABEL_LOCAL_FONTS.map(f => f.name);
         const curElemLabel = LABEL_ELEMENTS.find(e => e.id === selectedElem)?.label || '';
         const curScale = selectedElem ? (elemPositions[selectedElem]?.scale || 1) : 1;
         const pct = Math.round(curScale * 100);
@@ -2064,7 +2101,12 @@ export default function LabelEditor({ projectId, userId }) {
                             onChange={e => setLabelAssets(prev => ({ ...prev, font: `'${e.target.value}', sans-serif` }))}
                             style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e8e8', fontSize: 13, background: '#fafafa', cursor: 'pointer' }}
                         >
-                            {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                            <optgroup label="Google Fonts">
+                                {GOOGLE_FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                            </optgroup>
+                            <optgroup label="ฟอนต์แบรนด์ (Local)">
+                                {LOCAL_FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                            </optgroup>
                         </select>
                     </div>
 
