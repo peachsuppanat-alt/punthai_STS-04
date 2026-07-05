@@ -3,11 +3,31 @@
 // =====================================================================
 import React, { useState, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import { toCanvas as htiToCanvas } from 'html-to-image';
+
+// จับภาพพรีวิวด้วย html-to-image (foreignObject) แทน html2canvas
+// เพราะ html2canvas ตัดคำไทยผิด ทำให้ตัวอักษรเว้นวรรค — foreignObject ให้เบราว์เซอร์เรนเดอร์เอง (ตรงกับพรีวิว 100%)
+const captureLabelCanvas = async (node, scale = 2) => {
+    return await htiToCanvas(node, {
+        pixelRatio: scale,
+        backgroundColor: null,
+        cacheBust: true,
+        style: { transform: 'none', margin: '0' }, // กันการ scale/zoom ของพรีวิวติดไปด้วย
+    });
+};
 import { jsPDF } from 'jspdf';
 import './LabelEditor.css';
 
 import { QRCodeSVG } from 'qrcode.react';
 import Barcode from 'react-barcode';
+
+// memoize QR/Barcode — ไม่ให้สร้างใหม่ทุก re-render ตอนลาก/ขยับ (คำนวณหนัก) นอกจากค่าจะเปลี่ยน
+const MemoQR = React.memo(function MemoQR({ value, size }) {
+    return <QRCodeSVG value={value} size={size} />;
+});
+const MemoBarcode = React.memo(function MemoBarcode({ value, height, fontSize, width, margin }) {
+    return <Barcode value={value} height={height} fontSize={fontSize} width={width} margin={margin} />;
+});
 
 
 import { loadLogoTransparent } from './logoUtils';
@@ -192,32 +212,32 @@ const getFinalText = (tags, custom, showCustom) => {
 const PREVIEW_PX_PER_CM = 38;
 
 // ============= LOCAL (CUSTOM) FONTS =============
-// ต้องตรงกับ CNCPT_LOCAL_FONTS ใน CreateConcept.jsx — ฟอนต์เหล่านี้ไม่มีใน Google Fonts
-// ถ้าผู้ใช้เลือกฟอนต์กลุ่มนี้ใน CreateConcept ต้อง inject @font-face เอง ไม่งั้นพรีวิว Label จะ fallback เป็น sans-serif
+// ฟอนต์แบรนด์ (font_name ตรงกับ CNCPT_LOCAL_FONTS ใน CreateConcept) — ไม่มีใน Google Fonts
+// เสิร์ฟจาก public/font/*.ttf|otf (ชื่อไฟล์ ASCII) → URL /font/... ใช้ได้จริงทั้ง dev/prod
 const LABEL_LOCAL_FONTS = [
-    { name: '399PANI TuayJiew',   file: '../font/399PANITuayJiew/399PANITuayJiewDemo-Regular.ttf' },
-    { name: 'Jao Chathai',        file: '../font/JaoChathai/JaoChathaiThin.ttf' },
-    { name: 'Kart-Thai Esan',     file: '../font/Kart-Thai-Esan/Kart-Thai Esan DEMO.ttf' },
-    { name: 'Kart-Kean Fome',     file: '../font/kart-kean-fome/Kart-Kean Fome DEMO.ttf' },
-    { name: 'MN Nugget',          file: '../font/MN-Nugget/นักเก็ตแจก/MN Nugget.otf' },
-    { name: 'MN Nugget Italic',   file: '../font/MN-Nugget/นักเก็ตแจก/MN Nugget Italic.otf' },
-    { name: 'MN Tam Thai',        file: '../font/MN-Tam-Thai/ตำไทย/MN Tam Thai.ttf' },
-    { name: 'MN Tam Thai Italic', file: '../font/MN-Tam-Thai/ตำไทย/MN Tam Thai Italic.ttf' },
-    { name: 'RD Konmek',          file: '../font/RDKonmek/RDKonmek.ttf' },
-    { name: 'RD Konmek SPC',      file: '../font/RDKonmek/RDKonmekSPC.ttf' },
-    { name: 'TCS 4KhaiMook',      file: '../font/TCS-4KhaiMook/TCS-4KhaiMook-PersonalOnly.ttf' },
-    { name: 'was iittrakorn',     file: '../font/was-iittrakorn/was@iittrakornFont.ttf' },
+    { name: '399PANI TuayJiew',   url: '/font/399PANITuayJiew.ttf' },
+    { name: 'Jao Chathai',        url: '/font/JaoChathai.ttf' },
+    { name: 'Kart-Thai Esan',     url: '/font/KartThaiEsan.ttf' },
+    { name: 'Kart-Kean Fome',     url: '/font/KartKeanFome.ttf' },
+    { name: 'MN Nugget',          url: '/font/MNNugget.otf' },
+    { name: 'MN Nugget Italic',   url: '/font/MNNuggetItalic.otf' },
+    { name: 'MN Tam Thai',        url: '/font/MNTamThai.ttf' },
+    { name: 'MN Tam Thai Italic', url: '/font/MNTamThaiItalic.ttf' },
+    { name: 'RD Konmek',          url: '/font/RDKonmek.ttf' },
+    { name: 'RD Konmek SPC',      url: '/font/RDKonmekSPC.ttf' },
+    { name: 'TCS 4KhaiMook',      url: '/font/TCS4KhaiMook.ttf' },
+    { name: 'was iittrakorn',     url: '/font/wasiittrakorn.ttf' },
 ];
 const LABEL_LOCAL_FONT_NAMES = new Set(LABEL_LOCAL_FONTS.map(f => f.name));
 
-// inject @font-face ของฟอนต์ local (ใช้ id เดียวกับ CreateConcept เพื่อไม่ซ้ำซ้อน)
+// inject @font-face ของฟอนต์แบรนด์ (id แยกจาก CreateConcept เพื่อให้ src ที่ใช้ได้จริงมี priority)
 function injectLabelLocalFontFaces() {
-    if (document.getElementById('cncpt-local-font-faces')) return;
+    if (document.getElementById('label-local-font-faces')) return;
     const style = document.createElement('style');
-    style.id = 'cncpt-local-font-faces';
+    style.id = 'label-local-font-faces';
     style.textContent = LABEL_LOCAL_FONTS.map(f => {
-        const fmt = f.file.endsWith('.otf') ? 'opentype' : 'truetype';
-        return `@font-face { font-family: '${f.name}'; src: url('${f.file}') format('${fmt}'); font-display: swap; }`;
+        const fmt = f.url.toLowerCase().endsWith('.otf') ? 'opentype' : 'truetype';
+        return `@font-face { font-family: '${f.name}'; src: url('${f.url}') format('${fmt}'); font-display: swap; }`;
     }).join('\n');
     document.head.appendChild(style);
 }
@@ -267,7 +287,7 @@ function EditableText({ value, multiline, onCommit, onDone, style }) {
 function AccordionSection({ title, open, onToggle, children, disabled }) {
     return (
         <div style={{ marginBottom: 8, border: '1px solid #ececec', borderRadius: 10, overflow: 'hidden', opacity: disabled ? 0.5 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
-            <button onClick={onToggle} style={{ width: '100%', textAlign: 'left', padding: '10px 14px', background: open ? '#f5f8eb' : '#fafafa', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', justifyContent: 'space-between', color: '#333' }}>
+            <button onClick={onToggle} style={{ width: '100%', textAlign: 'left', padding: '10px 14px', background: open ? '#f5f8eb' : 'var(--le-bg-sidebar)', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 13, display: 'flex', justifyContent: 'space-between', color: 'var(--le-text)' }}>
                 <span>{title}</span><span style={{ color: '#aaa', fontSize: 12 }}>{open ? '▾' : '▸'}</span>
             </button>
             {open && <div style={{ padding: '10px 14px' }}>{children}</div>}
@@ -277,15 +297,15 @@ function AccordionSection({ title, open, onToggle, children, disabled }) {
 
 function BgModeBtn({ label, active, onClick }) {
     return (
-        <button onClick={onClick} style={{ flex: 1, padding: 8, fontSize: 17, fontWeight: 'bold', cursor: 'pointer', border: active ? '2px solid #8a9a3c' : '1px solid #ddd', background: active ? '#f5f8eb' : '#fff', borderRadius: 6 }}>{label}</button>
+        <button onClick={onClick} style={{ flex: 1, padding: 8, fontSize: 17, fontWeight: 'bold', cursor: 'pointer', border: active ? '2px solid #8a9a3c' : '1px solid var(--le-border)', background: active ? '#f5f8eb' : '#fff', borderRadius: 6 }}>{label}</button>
     );
 }
 
 function FormInput({ label, value, onChange, type = 'text' }) {
     return (
         <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>{label}</label>
-            <input type={type} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, background: '#fafafa', color: '#222', boxSizing: 'border-box' }} />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--le-text-sub)', marginBottom: 4 }}>{label}</label>
+            <input type={type} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--le-border)', fontSize: 13, background: 'var(--le-bg-sidebar)', color: 'var(--le-text)', boxSizing: 'border-box' }} />
         </div>
     );
 }
@@ -293,8 +313,8 @@ function FormInput({ label, value, onChange, type = 'text' }) {
 function FormTextarea({ label, value, onChange, rows = 3 }) {
     return (
         <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>{label}</label>
-            <textarea rows={rows} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e4e4e7', fontSize: 13, fontFamily: 'inherit', background: '#fafafa', color: '#222', boxSizing: 'border-box', resize: 'vertical' }} />
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--le-text-sub)', marginBottom: 4 }}>{label}</label>
+            <textarea rows={rows} value={value} onChange={e => onChange(e.target.value)} style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--le-border)', fontSize: 13, fontFamily: 'inherit', background: 'var(--le-bg-sidebar)', color: 'var(--le-text)', boxSizing: 'border-box', resize: 'vertical' }} />
         </div>
     );
 }
@@ -303,7 +323,7 @@ function TagSelector({ label, options, selectedTags, onTagToggle, customText, on
     const [open, setOpen] = React.useState(false);
     const hasSelected = selectedTags.length > 0 || (showCustom && customText);
     return (
-        <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid #e8e8e8', overflow: 'hidden', background: '#fff' }}>
+        <div style={{ marginBottom: 8, borderRadius: 10, border: '1px solid var(--le-border)', overflow: 'hidden', background: '#fff' }}>
             <button onClick={() => setOpen(o => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{label}</span>
@@ -326,14 +346,14 @@ function TagSelector({ label, options, selectedTags, onTagToggle, customText, on
                 </div>
             )}
             {open && (
-                <div style={{ padding: '4px 12px 12px', borderTop: '1px solid #f0f0f0' }}>
+                <div style={{ padding: '4px 12px 12px', borderTop: '1px solid var(--le-border)' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, marginBottom: 8 }}>
                         {options.map(opt => (
-                            <button key={opt} onClick={() => onTagToggle(opt)} style={{ padding: '6px 12px', fontSize: 17, borderRadius: 20, cursor: 'pointer', background: selectedTags.includes(opt) ? '#FF8A00' : '#f5f5f5', color: selectedTags.includes(opt) ? '#fff' : '#555', border: '1.5px solid', borderColor: selectedTags.includes(opt) ? '#FF8A00' : '#e0e0e0', fontFamily: 'inherit', transition: 'all 0.15s' }}>
+                            <button key={opt} onClick={() => onTagToggle(opt)} style={{ padding: '6px 12px', fontSize: 17, borderRadius: 20, cursor: 'pointer', background: selectedTags.includes(opt) ? '#FF8A00' : '#f5f5f5', color: selectedTags.includes(opt) ? '#fff' : 'var(--le-text-sub)', border: '1.5px solid', borderColor: selectedTags.includes(opt) ? '#FF8A00' : '#e0e0e0', fontFamily: 'inherit', transition: 'all 0.15s' }}>
                                 {selectedTags.includes(opt) ? '✓ ' : ''}{opt}
                             </button>
                         ))}
-                        <button onClick={onToggleCustom} style={{ padding: '6px 12px', fontSize: 17, borderRadius: 20, cursor: 'pointer', background: showCustom ? '#d3542b' : '#f5f5f5', color: showCustom ? '#fff' : '#888', border: '1.5px dashed', borderColor: showCustom ? '#d3542b' : '#ccc', fontFamily: 'inherit' }}>
+                        <button onClick={onToggleCustom} style={{ padding: '6px 12px', fontSize: 17, borderRadius: 20, cursor: 'pointer', background: showCustom ? '#d3542b' : '#f5f5f5', color: showCustom ? '#fff' : 'var(--le-text-sub)', border: '1.5px dashed', borderColor: showCustom ? '#d3542b' : '#ccc', fontFamily: 'inherit' }}>
                             + ระบุเอง
                         </button>
                     </div>
@@ -392,7 +412,7 @@ function LayoutThumbnail({ type }) {
             <div style={line('30%', 30, '40%', 3)} />
             <div style={line('20%', 38, '60%', 3)} />
             <div style={line('20%', 44, '40%', 3)} />
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 12, background: '#555', borderRadius: '0 0 4px 4px' }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 12, background: 'var(--le-text-sub)', borderRadius: '0 0 4px 4px' }} />
         </div>
     );
     return <div style={base} />;
@@ -406,15 +426,15 @@ function ColorSwatchPicker({ label, value, onChange, palette }) {
                 <label style={{ fontSize: 17, fontWeight: 600, color: '#444' }}>{label}</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div onClick={() => setShowPicker(!showPicker)} style={{ width: 28, height: 28, borderRadius: 6, background: value, border: '2px solid #ddd', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }} />
-                    <span style={{ fontSize: 15, color: '#888', fontFamily: 'monospace' }}>{value}</span>
+                    <span style={{ fontSize: 15, color: 'var(--le-text-sub)', fontFamily: 'monospace' }}>{value}</span>
                 </div>
             </div>
             {showPicker && (
-                <div style={{ padding: 8, background: '#f9f9f9', borderRadius: 8, border: '1px solid #eee' }}>
+                <div style={{ padding: 8, background: '#f9f9f9', borderRadius: 8, border: '1px solid var(--le-border)' }}>
                     <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
                         {palette.map((c, i) => (
                             <button key={i} onClick={() => { onChange(c); setShowPicker(false); }}
-                                style={{ width: 30, height: 30, borderRadius: 6, background: c, border: value === c ? '2.5px solid #333' : '1px solid #ddd', cursor: 'pointer', position: 'relative' }}
+                                style={{ width: 30, height: 30, borderRadius: 6, background: c, border: value === c ? '2.5px solid #333' : '1px solid var(--le-border)', cursor: 'pointer', position: 'relative' }}
                                 title={c}>
                                 {value === c && <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 17, textShadow: '0 0 3px #000' }}>✓</span>}
                             </button>
@@ -423,7 +443,7 @@ function ColorSwatchPicker({ label, value, onChange, palette }) {
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <input type="color" value={value} onChange={e => onChange(e.target.value)} style={{ width: 32, height: 32, border: 'none', borderRadius: 4, cursor: 'pointer', padding: 0 }} />
                         <input type="text" value={value} onChange={e => { if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) onChange(e.target.value); }}
-                            style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 17, fontFamily: 'monospace' }} />
+                            style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--le-border)', fontSize: 17, fontFamily: 'monospace' }} />
                     </div>
                 </div>
             )}
@@ -452,7 +472,7 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
             overflow: 'hidden',
         }}>
             {/* Header */}
-            <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid #eee' }}>
+            <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid var(--le-border)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                     <h4 style={{ margin: 0, fontSize: 15, color: '#8a9a3c' }}>
                         <iconify-icon icon="mdi:package-variant-closed" style={{ marginRight: 4, verticalAlign: 'middle' }}></iconify-icon>
@@ -471,7 +491,7 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
                     }}>
                         <img src={selectedPkg.thumbnail} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 4 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 15, fontWeight: 'bold', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedPkg.name}</div>
+                            <div style={{ fontSize: 15, fontWeight: 'bold', color: 'var(--le-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedPkg.name}</div>
                         </div>
                         <iconify-icon icon="mdi:check-circle" style={{ color: '#8a9a3c', fontSize: 17, flexShrink: 0 }}></iconify-icon>
                     </div>
@@ -483,7 +503,7 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
                             style={{
                                 padding: '2px 8px', fontSize: 17, borderRadius: 12, cursor: 'pointer',
                                 background: filterCat === cat.id ? '#8a9a3c' : '#f5f5f5',
-                                color: filterCat === cat.id ? '#fff' : '#888',
+                                color: filterCat === cat.id ? '#fff' : 'var(--le-text-sub)',
                                 border: 'none',
                             }}>
                             {cat.label}
@@ -500,14 +520,14 @@ function PackagingSidebar({ packages, selectedPackageId, onSelectPackage }) {
                             <div key={pkg.id} onClick={() => onSelectPackage(pkg)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: 8, padding: 8,
-                                    background: isSelected ? '#f5f8eb' : '#fafafa', borderRadius: 8, cursor: 'pointer',
-                                    border: isSelected ? '2px solid #8a9a3c' : '1px solid #eee',
+                                    background: isSelected ? '#f5f8eb' : 'var(--le-bg-sidebar)', borderRadius: 8, cursor: 'pointer',
+                                    border: isSelected ? '2px solid #8a9a3c' : '1px solid var(--le-border)',
                                     transition: 'all 0.15s',
                                 }}>
                                 <img src={pkg.thumbnail} alt={pkg.name}
                                     style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 6, background: '#fff', flexShrink: 0 }} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 15, fontWeight: 'bold', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div style={{ fontSize: 15, fontWeight: 'bold', color: 'var(--le-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                         {pkg.name}
                                     </div>
                                     <div style={{ fontSize: 9, color: '#999', marginTop: 1 }}>{pkg.type}</div>
@@ -575,7 +595,7 @@ function PanelSelector({ panels, selectedPanel, onSelectPanel }) {
                         {/* label */}
                         <div style={{
                             fontSize: 13, fontWeight: isSelected ? 700 : 500,
-                            color: isSelected ? '#d3542b' : '#555',
+                            color: isSelected ? '#d3542b' : 'var(--le-text-sub)',
                         }}>
                             {panel.label}
                         </div>
@@ -612,6 +632,7 @@ export default function LabelEditor({ projectId, userId }) {
     const [selectedElem, setSelectedElem] = useState(null);
     const [editingElem, setEditingElem] = useState(null);      // เลเยอร์ที่กำลังแก้ไขข้อความในพรีวิว
     const [activeCertCat, setActiveCertCat] = useState(null);  // ประเภทตราที่กำลังเลือกแบบลายอยู่
+    const [customImages, setCustomImages] = useState([]);      // รูปภาพที่ผู้ใช้อัปโหลดเอง [{ id, label, url }]
     const [showCenterGuide, setShowCenterGuide] = useState(false); // เส้นกึ่งกลางแกน y (แนวตั้ง)
     const [layerDraggingId, setLayerDraggingId] = useState(null);
     const [layerDragOverId, setLayerDragOverId] = useState(null);
@@ -936,11 +957,15 @@ export default function LabelEditor({ projectId, userId }) {
         const startY = e.clientY;
         const startScale = elemPositions[elemId]?.scale || 1;
 
-        const handleMove = (me) => {
-            // For corner handles, use the diagonal distance for proportional scaling
-            let dx = me.clientX - startX;
-            let dy = me.clientY - startY;
-
+        // throttle ด้วย rAF (กันค้างจาก re-render ถี่)
+        let rafPending = false;
+        let latestEvent = null;
+        const process = () => {
+            rafPending = false;
+            const me = latestEvent;
+            if (!me) return;
+            const dx = me.clientX - startX;
+            const dy = me.clientY - startY;
             let scaleDelta = 0;
             if (handle === 'se') scaleDelta = (dx + dy) / 150;
             else if (handle === 'sw') scaleDelta = (-dx + dy) / 150;
@@ -956,6 +981,12 @@ export default function LabelEditor({ projectId, userId }) {
                 ...prev,
                 [elemId]: { ...prev[elemId], scale: Math.round(newScale * 100) / 100 }
             }));
+        };
+        const handleMove = (me) => {
+            latestEvent = me;
+            if (rafPending) return;
+            rafPending = true;
+            requestAnimationFrame(process);
         };
 
         const handleUp = () => {
@@ -979,12 +1010,44 @@ export default function LabelEditor({ projectId, userId }) {
     // ============= LAYER ORDER (เลื่อนเลเยอร์ขึ้น/ลงจริง) =============
     // ลำดับเลเยอร์เก็บเป็น zIndex ในตัว elemPositions ของแต่ละ element เอง
     // (ผูกกับการบันทึก/โหลด elem_positions ที่มีอยู่แล้ว ไม่ต้องเพิ่ม field ใหม่)
+    // element ทั้งหมด = element มาตรฐาน + รูปภาพที่อัปโหลดเอง (แสดงเป็นเลเยอร์เหมือนกัน)
+    const getAllBaseElements = () => [
+        ...LABEL_ELEMENTS,
+        ...customImages.map((im, i) => ({ id: im.id, label: im.label || `รูปภาพ ${i + 1}`, isCustomImage: true })),
+    ];
+
     const getOrderedElements = () => {
-        return [...LABEL_ELEMENTS].sort((a, b) => {
-            const za = elemPositions[a.id]?.zIndex ?? LABEL_ELEMENTS.findIndex(e => e.id === a.id);
-            const zb = elemPositions[b.id]?.zIndex ?? LABEL_ELEMENTS.findIndex(e => e.id === b.id);
+        const all = getAllBaseElements();
+        return [...all].sort((a, b) => {
+            const za = elemPositions[a.id]?.zIndex ?? all.findIndex(e => e.id === a.id);
+            const zb = elemPositions[b.id]?.zIndex ?? all.findIndex(e => e.id === b.id);
             return za - zb;
         });
+    };
+
+    // อัปโหลดรูปภาพจากเครื่อง → เพิ่มเป็นเลเยอร์ในพรีวิว
+    const handleUploadCustomImage = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const id = `img_${Date.now()}`;
+            setCustomImages(prev => [...prev, { id, label: `รูปภาพ ${prev.length + 1}`, url: reader.result }]);
+            setElemPositions(prev => {
+                const maxZ = Math.max(0, ...Object.values(prev).map(p => p?.zIndex ?? 0));
+                return { ...prev, [id]: { x: 32, y: 40, scale: 1, visible: true, zIndex: maxZ + 1 } };
+            });
+            setSelectedElem(id);
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
+    // ลบรูปภาพที่อัปโหลด
+    const removeCustomImage = (id) => {
+        setCustomImages(prev => prev.filter(im => im.id !== id));
+        setElemPositions(prev => { const n = { ...prev }; delete n[id]; return n; });
+        setSelectedElem(cur => (cur === id ? null : cur));
     };
 
     const reorderLayer = (draggedId, targetId) => {
@@ -1034,22 +1097,27 @@ export default function LabelEditor({ projectId, userId }) {
         const startPos = { ...elemPositions[elemId] };
         const SNAP_PCT = 1.5;                          // ระยะดูด (เปอร์เซ็นต์ของความกว้างพรีวิว)
 
-        const handleMove = (me) => {
+        // throttle ด้วย rAF — อัปเดต state มากสุด 1 ครั้ง/เฟรม (กันค้างจาก re-render ถี่เกินไป)
+        let rafPending = false;
+        let latestEvent = null;
+        let guideOn = false;
+
+        const process = () => {
+            rafPending = false;
+            const me = latestEvent;
+            if (!me) return;
             const dx = ((me.clientX - startX) / rect.width) * 100;
             const dy = ((me.clientY - startY) / rect.height) * 100;
             let newX = Math.max(0, Math.min(95, startPos.x + dx));
             const newY = Math.max(0, Math.min(95, startPos.y + dy));
 
-            // คำนวณจุดศูนย์กลางแกน x ของวัตถุ เทียบกับกึ่งกลางพรีวิว (50%)
+            // เส้นกึ่งกลางแกน y — คำนวณจุดศูนย์กลางแกน x เทียบกึ่งกลางพรีวิว (50%)
             const nodeRect = node.getBoundingClientRect();
-            const elemWidthPct = (nodeRect.width / rect.width) * 100;   // หาร rect.width แล้ว zoom หักล้างกันเอง
+            const elemWidthPct = (nodeRect.width / rect.width) * 100;
             const centerXPct = newX + elemWidthPct / 2;
-            if (Math.abs(centerXPct - 50) <= SNAP_PCT) {
-                newX = 50 - elemWidthPct / 2;          // ดูดให้ศูนย์กลางตรงแกน y พอดี
-                setShowCenterGuide(true);
-            } else {
-                setShowCenterGuide(false);
-            }
+            const snap = Math.abs(centerXPct - 50) <= SNAP_PCT;
+            if (snap) newX = 50 - elemWidthPct / 2;
+            if (snap !== guideOn) { guideOn = snap; setShowCenterGuide(snap); }   // อัปเดตเฉพาะตอนค่าเปลี่ยน
 
             setElemPositions(prev => ({
                 ...prev,
@@ -1057,10 +1125,17 @@ export default function LabelEditor({ projectId, userId }) {
             }));
         };
 
+        const handleMove = (me) => {
+            latestEvent = me;
+            if (rafPending) return;
+            rafPending = true;
+            requestAnimationFrame(process);
+        };
+
         const handleUp = () => {
             document.removeEventListener('mousemove', handleMove);
             document.removeEventListener('mouseup', handleUp);
-            setShowCenterGuide(false);
+            if (guideOn) setShowCenterGuide(false);
         };
 
         document.addEventListener('mousemove', handleMove);
@@ -1225,9 +1300,7 @@ export default function LabelEditor({ projectId, userId }) {
             let labelImageBase64 = null;
             if (labelRef.current) {
                 try {
-                    const canvas = await html2canvas(labelRef.current, {
-                        scale: 2, useCORS: true, allowTaint: true, backgroundColor: null, logging: false
-                    });
+                    const canvas = await captureLabelCanvas(labelRef.current, 2);
                     labelImageBase64 = canvas.toDataURL('image/png');
                 } catch (e) { console.warn('label capture error:', e); }
             }
@@ -1279,7 +1352,7 @@ export default function LabelEditor({ projectId, userId }) {
         if (!labelRef.current) return;
         handleSaveLabel(true);
         try {
-            const canvas = await html2canvas(labelRef.current, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: null });
+            const canvas = await captureLabelCanvas(labelRef.current, 2);
             const link = document.createElement("a");
             link.href = canvas.toDataURL("image/png");
             link.download = `Label_Preview_${labelForm.productName || 'design'}.png`;
@@ -1304,7 +1377,7 @@ export default function LabelEditor({ projectId, userId }) {
         }
         try {
             const scale = calculateScaleFor300DPI();
-            const canvas = await html2canvas(labelRef.current, { scale, useCORS: true, allowTaint: true, backgroundColor: null, logging: false });
+            const canvas = await captureLabelCanvas(labelRef.current, scale);
             const link = document.createElement("a");
             link.href = canvas.toDataURL("image/png", 1.0);
             link.download = `Label_PrintReady_${labelForm.productName || 'design'}_300dpi.png`;
@@ -1320,7 +1393,7 @@ export default function LabelEditor({ projectId, userId }) {
         handleSaveLabel(true);
         try {
             const scale = calculateScaleFor300DPI();
-            const canvas = await html2canvas(labelRef.current, { scale, useCORS: true, allowTaint: true, backgroundColor: null, logging: false });
+            const canvas = await captureLabelCanvas(labelRef.current, scale);
             const imageData = canvas.toDataURL("image/png", 1.0);
 
             const widthCm = labelDimensions.width;
@@ -1766,7 +1839,13 @@ export default function LabelEditor({ projectId, userId }) {
                 const node = labelRef.current.querySelector(`[data-elem-id="${elem.id}"]`);
                 if (!node) continue;
 
-                if (elem.id === 'logo') {
+                if (elem.isCustomImage) {
+                    const img = node.querySelector('img');
+                    if (img) {
+                        const dataUrl = await downscaleDataUrl(img.getAttribute('src') || img.src, 900);
+                        if (dataUrl) elements.push({ type: 'image', name: elem.label, ...rectMm(img), dataUrl });
+                    }
+                } else if (elem.id === 'logo') {
                     const img = node.querySelector('img');
                     if (img && labelAssets.logoUrl) {
                         const dataUrl = await downscaleDataUrl(labelAssets.logoUrl, 700);
@@ -1809,6 +1888,7 @@ export default function LabelEditor({ projectId, userId }) {
                 product_name: labelForm.productName || 'design',
                 label_width_cm: labelDimensions.width, label_height_cm: labelDimensions.height,
                 bleed_mm: bleedMm, background, elements,
+                font_family: (labelAssets.font || 'Bai Jamjuree').replace(/['"]/g, '').split(',')[0].trim(),
             };
 
             const resp = await fetch(`${API}/api/labels/export-ai`, {
@@ -1836,6 +1916,13 @@ export default function LabelEditor({ projectId, userId }) {
 
     // ============= RENDER LABEL PREVIEW (Draggable Canvas) =============
     const renderElemContent = (elemId) => {
+        // รูปภาพที่อัปโหลดเอง
+        const customImg = customImages.find(im => im.id === elemId);
+        if (customImg) {
+            return <img src={customImg.url} crossOrigin="anonymous" alt={customImg.label}
+                style={{ maxWidth: 220, maxHeight: 220, width: 'auto', height: 'auto', objectFit: 'contain', display: 'block', pointerEvents: 'none' }} />;
+        }
+
         const textColor = sectionColors.productName;
         const accentColor = sectionColors.tagline;
         const subColor = sectionColors.details;
@@ -1848,7 +1935,8 @@ export default function LabelEditor({ projectId, userId }) {
         const esFontWeight = es.bold ? '800' : undefined;
         const esFontStyle = es.italic ? 'italic' : undefined;
         const esTextDecoration = es.underline ? 'underline' : undefined;
-        const esBase = { fontWeight: esFontWeight, fontStyle: esFontStyle, textDecoration: esTextDecoration, textAlign: esAlign, color: esColor };
+        // fontFamily ต้องกำหนด inline บนตัวข้อความเอง เพราะมีกฎ CSS ระดับ global (Poppins) override การ inherit จาก labelRef
+        const esBase = { fontFamily: labelAssets.font, fontWeight: esFontWeight, fontStyle: esFontStyle, textDecoration: esTextDecoration, textAlign: esAlign, color: esColor };
 
         // helper: ช่องแก้ไขข้อความในพรีวิว (กล่องคงขนาดเดิม)
         const inlineEdit = (field, multiline = false, extraStyle = {}) => (
@@ -1903,8 +1991,8 @@ export default function LabelEditor({ projectId, userId }) {
             case 'codes':
                 return (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        {labelForm.showQR && labelForm.qrValue && <div style={{ background: '#fff', padding: 4, borderRadius: 4 }}><QRCodeSVG value={labelForm.qrValue} size={48} /></div>}
-                        {labelForm.showBarcode && labelForm.barcodeValue && <div style={{ background: '#fff', padding: 3, borderRadius: 4 }}><Barcode value={labelForm.barcodeValue} height={30} fontSize={8} width={1} margin={0} /></div>}
+                        {labelForm.showQR && labelForm.qrValue && <div style={{ background: '#fff', padding: 4, borderRadius: 4 }}><MemoQR value={labelForm.qrValue} size={48} /></div>}
+                        {labelForm.showBarcode && labelForm.barcodeValue && <div style={{ background: '#fff', padding: 3, borderRadius: 4 }}><MemoBarcode value={labelForm.barcodeValue} height={30} fontSize={8} width={1} margin={0} /></div>}
                         {!labelForm.showQR && !labelForm.showBarcode && <div style={{ fontSize: 9, color: '#ccc' }}>QR/Barcode</div>}
                     </div>
                 );
@@ -1934,6 +2022,7 @@ export default function LabelEditor({ projectId, userId }) {
         return (
             <div
                 ref={labelRef}
+                className="le-label-canvas"
                 onClick={(e) => { if (e.target === e.currentTarget || e.target.dataset.canvas) { setSelectedElem(null); setEditingElem(null); } }}
                 style={{
                     width: containerW, height: containerH, position: 'relative', overflow: 'hidden',
@@ -1992,6 +2081,8 @@ export default function LabelEditor({ projectId, userId }) {
                                 position: 'absolute',
                                 left: `${pos.x}%`,
                                 top: `${pos.y}%`,
+                                // width:max-content → ขนาดกล่องยึดตามเนื้อหาจริง ไม่หดตามพื้นที่ที่เหลือเมื่อเข้าใกล้ขอบ (กันสัดส่วนเพี้ยน)
+                                width: 'max-content',
                                 maxWidth: `${Math.min(92, 85 / elemScale)}%`,
                                 cursor: isEditing ? 'text' : 'move',
                                 zIndex: isSelected ? 1000 : 10 + layerIdx,
@@ -2060,14 +2151,14 @@ export default function LabelEditor({ projectId, userId }) {
         const pct = Math.round(curScale * 100);
 
         // เลเยอร์ที่มองเห็น
-        const visibleElems = LABEL_ELEMENTS.filter(e => elemPositions[e.id]?.visible);
-        const hiddenElems = LABEL_ELEMENTS.filter(e => !elemPositions[e.id]?.visible);
+        const visibleElems = getAllBaseElements().filter(e => elemPositions[e.id]?.visible);
+        const hiddenElems = getAllBaseElements().filter(e => !elemPositions[e.id]?.visible);
 
         return (
             <div style={{
                 width: 280, flexShrink: 0,
                 maxHeight: 'calc(100vh - 180px)', overflowY: 'auto',
-                background: '#fff', borderRadius: 14,
+                background: 'var(--le-bg-card)', borderRadius: 14,
                 boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
                 scrollbarWidth: 'none', msOverflowStyle: 'none',
             }}>
@@ -2075,7 +2166,7 @@ export default function LabelEditor({ projectId, userId }) {
                 {labelPanels.length > 0 && (
                     <div style={{
                         padding: '16px 16px 14px',
-                        borderBottom: '1px solid #f0f0f0',
+                        borderBottom: '1px solid var(--le-border)',
                         display: 'flex', justifyContent: 'center',
                     }}>
                         <PanelSelector
@@ -2088,18 +2179,18 @@ export default function LabelEditor({ projectId, userId }) {
                 )}
 
                 {/* Header */}
-                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#222' }}>ปรับแต่งข้อความ</div>
+                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid var(--le-border)' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--le-text)' }}>ปรับแต่งข้อความ</div>
                 </div>
 
                 <div style={{ padding: '12px 16px' }}>
                     {/* ฟอนต์ */}
                     <div style={{ marginBottom: 14 }}>
-                        <div style={{ fontSize: 11, color: '#a0a0a0', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>ฟอนต์</div>
+                        <div style={{ fontSize: 11, color: 'var(--le-text-faint)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>ฟอนต์</div>
                         <select
                             value={labelAssets.font.replace(/'/g, '').split(',')[0].trim()}
                             onChange={e => setLabelAssets(prev => ({ ...prev, font: `'${e.target.value}', sans-serif` }))}
-                            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e8e8', fontSize: 13, background: '#fafafa', cursor: 'pointer' }}
+                            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--le-border)', fontSize: 13, background: 'var(--le-bg-sidebar)', cursor: 'pointer' }}
                         >
                             <optgroup label="Google Fonts">
                                 {GOOGLE_FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
@@ -2112,7 +2203,7 @@ export default function LabelEditor({ projectId, userId }) {
 
                     {/* ขนาด */}
                     <div style={{ marginBottom: 14 }}>
-                        <div style={{ fontSize: 11, color: '#a0a0a0', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                        <div style={{ fontSize: 11, color: 'var(--le-text-faint)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
                             ขนาด{selectedElem ? ` — ${LABEL_ELEMENTS.find(e => e.id === selectedElem)?.label || ''}` : ''}
                         </div>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -2124,10 +2215,10 @@ export default function LabelEditor({ projectId, userId }) {
                                     const v = Math.max(30, Math.min(400, parseInt(e.target.value) || 100));
                                     setElemPositions(prev => ({ ...prev, [selectedElem]: { ...prev[selectedElem], scale: v / 100 } }));
                                 }}
-                                style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #e8e8e8', fontSize: 15, fontWeight: 600, background: '#fafafa', textAlign: 'center' }}
+                                style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--le-border)', fontSize: 15, fontWeight: 600, background: 'var(--le-bg-sidebar)', textAlign: 'center' }}
                                 placeholder="100"
                             />
-                            <span style={{ fontSize: 13, color: '#888', background: '#f0f0f0', padding: '8px 12px', borderRadius: 8, fontWeight: 600 }}>px</span>
+                            <span style={{ fontSize: 13, color: 'var(--le-text-sub)', background: 'var(--le-border)', padding: '8px 12px', borderRadius: 8, fontWeight: 600 }}>px</span>
                         </div>
                     </div>
 
@@ -2149,17 +2240,17 @@ export default function LabelEditor({ projectId, userId }) {
                                         onClick={() => { if (!selectedElem) return; updateElemStyle(selectedElem, { [btn.key]: !curStyle[btn.key] }); }}
                                         style={{
                                             flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            border: isActive ? '1.5px solid #2196F3' : '1px solid #e8e8e8',
-                                            borderRadius: 7, background: isActive ? '#e3f2fd' : '#fafafa',
+                                            border: isActive ? '1.5px solid #2196F3' : '1px solid var(--le-border)',
+                                            borderRadius: 7, background: isActive ? '#e3f2fd' : 'var(--le-bg-sidebar)',
                                             cursor: selectedElem ? 'pointer' : 'default',
-                                            fontSize: 16, color: isActive ? '#1976D2' : '#888',
+                                            fontSize: 16, color: isActive ? '#1976D2' : 'var(--le-text-sub)',
                                             opacity: selectedElem ? 1 : 0.45,
                                         }}>
                                         <iconify-icon icon={btn.icon}></iconify-icon>
                                     </button>
                                 );
                             })}
-                            <div style={{ width: 1, height: 24, background: '#e8e8e8', flexShrink: 0 }} />
+                            <div style={{ width: 1, height: 24, background: 'var(--le-border)', flexShrink: 0 }} />
                             {/* กลุ่ม Align */}
                             {[
                                 { icon: 'mdi:format-align-left', label: 'Left', value: 'left' },
@@ -2175,10 +2266,10 @@ export default function LabelEditor({ projectId, userId }) {
                                         onClick={() => { if (!selectedElem) return; updateElemStyle(selectedElem, { align: btn.value }); }}
                                         style={{
                                             flex: 1, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            border: isActive ? '1.5px solid #2196F3' : '1px solid #e8e8e8',
-                                            borderRadius: 7, background: isActive ? '#e3f2fd' : '#fafafa',
+                                            border: isActive ? '1.5px solid #2196F3' : '1px solid var(--le-border)',
+                                            borderRadius: 7, background: isActive ? '#e3f2fd' : 'var(--le-bg-sidebar)',
                                             cursor: selectedElem ? 'pointer' : 'default',
-                                            fontSize: 16, color: isActive ? '#1976D2' : '#888',
+                                            fontSize: 16, color: isActive ? '#1976D2' : 'var(--le-text-sub)',
                                             opacity: selectedElem ? 1 : 0.45,
                                         }}>
                                         <iconify-icon icon={btn.icon}></iconify-icon>
@@ -2190,7 +2281,7 @@ export default function LabelEditor({ projectId, userId }) {
 
                     {/* สี */}
                     <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 11, color: '#a0a0a0', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                        <div style={{ fontSize: 11, color: 'var(--le-text-faint)', marginBottom: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
                             สี{selectedElem ? ` — ${LABEL_ELEMENTS.find(e => e.id === selectedElem)?.label || ''}` : ''}
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -2202,24 +2293,24 @@ export default function LabelEditor({ projectId, userId }) {
                                         else setSectionColors(p => ({ ...p, productName: e.target.value }));
                                     }
                                 }}
-                                style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid #e8e8e8', fontSize: 13, fontFamily: 'monospace', background: '#fafafa' }} />
+                                style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--le-border)', fontSize: 13, fontFamily: 'monospace', background: 'var(--le-bg-sidebar)' }} />
                             <input type="color"
                                 value={selectedElem ? (elemStyles[selectedElem]?.color || '#222222') : sectionColors.productName}
                                 onChange={e => {
                                     if (selectedElem) updateElemStyle(selectedElem, { color: e.target.value });
                                     else setSectionColors(p => ({ ...p, productName: e.target.value }));
                                 }}
-                                style={{ width: 36, height: 34, border: '1px solid #e8e8e8', borderRadius: 8, cursor: 'pointer', padding: 2, background: '#fafafa', flexShrink: 0 }} />
+                                style={{ width: 36, height: 34, border: '1px solid var(--le-border)', borderRadius: 8, cursor: 'pointer', padding: 2, background: 'var(--le-bg-sidebar)', flexShrink: 0 }} />
                         </div>
                     </div>
 
                     {/* Divider */}
-                    <div style={{ borderTop: '1px solid #f0f0f0', marginBottom: 14 }} />
+                    <div style={{ borderTop: '1px solid var(--le-border)', marginBottom: 14 }} />
 
                     {/* เลเยอร์ */}
                     <div style={{ marginBottom: 8 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <div style={{ fontSize: 11, color: '#a0a0a0', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>เลเยอร์</div>
+                            <div style={{ fontSize: 11, color: 'var(--le-text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>เลเยอร์</div>
                             {hiddenElems.length > 0 && (
                                 <button onClick={() => {
                                     setElemPositions(prev => {
@@ -2275,30 +2366,38 @@ export default function LabelEditor({ projectId, userId }) {
                                         }}>
                                         {/* Eye toggle */}
                                         <button onClick={(e) => { e.stopPropagation(); toggleElemVisibility(elem.id); }}
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: isVisible ? '#555' : '#ccc', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: isVisible ? 'var(--le-text-sub)' : '#ccc', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
                                             <iconify-icon icon={isVisible ? 'mdi:eye-outline' : 'mdi:eye-off-outline'}></iconify-icon>
                                         </button>
                                         {/* Icon */}
-                                        <span style={{ fontSize: 13, color: isVisible ? '#666' : '#ccc', display: 'flex', flexShrink: 0 }}>
-                                            <iconify-icon icon={layerIconMap[elem.id] || 'mdi:format-text'}></iconify-icon>
+                                        <span style={{ fontSize: 13, color: isVisible ? 'var(--le-text-sub)' : '#ccc', display: 'flex', flexShrink: 0 }}>
+                                            <iconify-icon icon={layerIconMap[elem.id] || (elem.isCustomImage ? 'mdi:image-outline' : 'mdi:format-text')}></iconify-icon>
                                         </span>
                                         {/* Label */}
-                                        <span style={{ flex: 1, fontSize: 13, color: isVisible ? '#333' : '#aaa', fontWeight: isActive ? 600 : 400, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <span style={{ flex: 1, fontSize: 13, color: isVisible ? 'var(--le-text)' : '#aaa', fontWeight: isActive ? 600 : 400, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {elem.label}
                                         </span>
                                         {/* ปุ่มเลื่อนขึ้น/ลง */}
                                         <button onClick={(e) => { e.stopPropagation(); moveLayerStep(elem.id, -1); }}
                                             disabled={displayIdx === 0}
                                             title="เลื่อนขึ้น"
-                                            style={{ background: 'none', border: 'none', cursor: displayIdx === 0 ? 'default' : 'pointer', padding: 1, display: 'flex', color: displayIdx === 0 ? '#e8e8e8' : '#aaa', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
+                                            style={{ background: 'none', border: 'none', cursor: displayIdx === 0 ? 'default' : 'pointer', padding: 1, display: 'flex', color: displayIdx === 0 ? 'var(--le-border)' : '#aaa', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
                                             <iconify-icon icon="mdi:chevron-up"></iconify-icon>
                                         </button>
                                         <button onClick={(e) => { e.stopPropagation(); moveLayerStep(elem.id, 1); }}
                                             disabled={displayIdx === arr.length - 1}
                                             title="เลื่อนลง"
-                                            style={{ background: 'none', border: 'none', cursor: displayIdx === arr.length - 1 ? 'default' : 'pointer', padding: 1, display: 'flex', color: displayIdx === arr.length - 1 ? '#e8e8e8' : '#aaa', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
+                                            style={{ background: 'none', border: 'none', cursor: displayIdx === arr.length - 1 ? 'default' : 'pointer', padding: 1, display: 'flex', color: displayIdx === arr.length - 1 ? 'var(--le-border)' : '#aaa', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
                                             <iconify-icon icon="mdi:chevron-down"></iconify-icon>
                                         </button>
+                                        {/* ลบรูปภาพที่อัปโหลด (เฉพาะเลเยอร์รูปภาพเอง) */}
+                                        {elem.isCustomImage && (
+                                            <button onClick={(e) => { e.stopPropagation(); removeCustomImage(elem.id); }}
+                                                title="ลบรูปภาพ"
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 1, display: 'flex', color: '#d99', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
+                                                <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
+                                            </button>
+                                        )}
                                         {/* Drag handle */}
                                         <span style={{ fontSize: 14, color: '#ccc', cursor: 'grab', display: 'flex', flexShrink: 0 }}>
                                             <iconify-icon icon="mdi:drag-vertical"></iconify-icon>
@@ -2310,14 +2409,14 @@ export default function LabelEditor({ projectId, userId }) {
                     </div>
 
                     {/* Divider */}
-                    <div style={{ borderTop: '1px solid #f0f0f0', margin: '10px 0 12px' }} />
+                    <div style={{ borderTop: '1px solid var(--le-border)', margin: '10px 0 12px' }} />
 
                     {/* จัดการเลเยอร์ */}
                     <button
                         onClick={() => setOpenAccordions(p => ({ ...p, settings: true, main: true, manufacturer: true, legal: true, cert: true, qr: true }))}
                         style={{
-                            width: '100%', padding: '9px 0', background: '#f5f5f5', border: '1px solid #e8e8e8',
-                            borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#555', cursor: 'pointer',
+                            width: '100%', padding: '9px 0', background: '#f5f5f5', border: '1px solid var(--le-border)',
+                            borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--le-text-sub)', cursor: 'pointer',
                         }}>
                         จัดการเลเยอร์
                     </button>
@@ -2403,10 +2502,10 @@ export default function LabelEditor({ projectId, userId }) {
             {showPkgModal && (
                     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         onClick={() => setShowPkgModal(false)}>
-                        <div style={{ background: '#fff', borderRadius: 14, width: 420, maxHeight: '75vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
+                        <div style={{ background: 'var(--le-bg-card)', borderRadius: 14, width: 420, maxHeight: '75vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}
                             onClick={e => e.stopPropagation()}>
                             {/* Header */}
-                            <div style={{ padding: '14px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--le-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a' }}>เลือกบรรจุภัณฑ์</div>
                                 <button onClick={() => setShowPkgModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#aaa', lineHeight: 1 }}>×</button>
                             </div>
@@ -2421,10 +2520,10 @@ export default function LabelEditor({ projectId, userId }) {
                                                     display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
                                                     border: isSelected ? '2px solid #E56F2D' : '1.5px solid #e4e4e7',
                                                     borderRadius: 10, cursor: 'pointer',
-                                                    background: isSelected ? '#fff4ee' : '#fafafa',
+                                                    background: isSelected ? '#fff4ee' : 'var(--le-bg-sidebar)',
                                                     transition: 'all 0.15s',
                                                 }}>
-                                                <div style={{ width: 48, height: 48, background: '#fff', borderRadius: 8, border: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                <div style={{ width: 48, height: 48, background: '#fff', borderRadius: 8, border: '1px solid var(--le-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                     {pkg.thumbnail
                                                         ? <img src={pkg.thumbnail} alt={pkg.name} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6 }} />
                                                         : <iconify-icon icon="mdi:package-variant-closed" style={{ fontSize: 24, color: '#ccc' }}></iconify-icon>
@@ -2518,6 +2617,30 @@ export default function LabelEditor({ projectId, userId }) {
                                 );
                             })}
                         </div>
+
+                        {/* อัปโหลดรูปภาพจากเครื่อง → เพิ่มเป็นเลเยอร์ */}
+                        <label className="le-pkg-empty-btn" style={{ marginTop: 10 }}>
+                            <iconify-icon icon="mdi:image-plus"></iconify-icon>
+                            <span>อัปโหลดรูปภาพ</span>
+                            <input type="file" accept="image/*" onChange={handleUploadCustomImage} style={{ display: 'none' }} />
+                        </label>
+
+                        {/* รายการรูปที่อัปโหลด */}
+                        {customImages.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                                {customImages.map(im => (
+                                    <div key={im.id} onClick={() => setSelectedElem(im.id)}
+                                        style={{ position: 'relative', width: 54, height: 54, borderRadius: 8, overflow: 'hidden', cursor: 'pointer', border: selectedElem === im.id ? '2px solid var(--le-orange)' : '1px solid var(--le-border)', background: 'var(--le-bg-sidebar)' }}>
+                                        <img src={im.url} alt={im.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        <button onClick={(e) => { e.stopPropagation(); removeCustomImage(im.id); }}
+                                            title="ลบรูปภาพ"
+                                            style={{ position: 'absolute', top: 1, right: 1, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                                            ×
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -2531,13 +2654,13 @@ export default function LabelEditor({ projectId, userId }) {
                         <label style={{ fontSize: 17, fontWeight: 'bold' }}>กว้าง (ซม.)</label>
                         <input type="number" step="0.1" value={labelDimensions.width}
                             onChange={e => setLabelDimensions({ ...labelDimensions, width: parseFloat(e.target.value) || 1 })}
-                            style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #ddd', boxSizing: 'border-box' }} />
+                            style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid var(--le-border)', boxSizing: 'border-box' }} />
                     </div>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: 17, fontWeight: 'bold' }}>สูง (ซม.)</label>
                         <input type="number" step="0.1" value={labelDimensions.height}
                             onChange={e => setLabelDimensions({ ...labelDimensions, height: parseFloat(e.target.value) || 1 })}
-                            style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid #ddd', boxSizing: 'border-box' }} />
+                            style={{ width: '100%', padding: 6, borderRadius: 6, border: '1px solid var(--le-border)', boxSizing: 'border-box' }} />
                     </div>
                 </div>
 
@@ -2587,15 +2710,15 @@ export default function LabelEditor({ projectId, userId }) {
                                 }}>+</button>
                         </div>
                         <div style={{ width: 1, height: 24, background: '#e0e0e0', margin: '0 2px', flexShrink: 0 }} />
-                        <input type="text" value={bgColor} onChange={e => { if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) setBgColor(e.target.value); }} style={{ flex: 1, minWidth: 90, padding: '8px 10px', borderRadius: 6, border: '1px solid #ddd', fontSize: 17, fontFamily: 'monospace' }} />
+                        <input type="text" value={bgColor} onChange={e => { if (/^#[0-9A-Fa-f]{0,6}$/.test(e.target.value)) setBgColor(e.target.value); }} style={{ flex: 1, minWidth: 90, padding: '8px 10px', borderRadius: 6, border: '1px solid var(--le-border)', fontSize: 17, fontFamily: 'monospace' }} />
                     </div>
                 )}
                 <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#666', display: 'block', marginBottom: 6 }}>อัปโหลดรูปภาพเอง</label>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--le-text-sub)', display: 'block', marginBottom: 6 }}>อัปโหลดรูปภาพเอง</label>
                     <label htmlFor="bg-upload-input" style={{
                         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                         border: '1.5px dashed #d1d1d1', borderRadius: 8, cursor: 'pointer',
-                        background: '#fafafa', color: '#666', fontSize: 13, fontWeight: 500,
+                        background: 'var(--le-bg-sidebar)', color: 'var(--le-text-sub)', fontSize: 13, fontWeight: 500,
                         transition: 'border-color 0.15s',
                     }}>
                         <iconify-icon icon="mdi:image-plus-outline" style={{ fontSize: 18, color: '#aaa' }}></iconify-icon>
@@ -2608,7 +2731,7 @@ export default function LabelEditor({ projectId, userId }) {
                     <div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                             {bgPresets.map(p => (
-                                <button key={p.bg_preset_id} onClick={() => handleSelectPreset(p)} style={{ padding: 0, border: bgPresetId === p.bg_preset_id ? '3px solid #8a9a3c' : '1px solid #ddd', borderRadius: 6, overflow: 'hidden', cursor: 'pointer', aspectRatio: '1/1', background: '#eee' }} title={p.name}>
+                                <button key={p.bg_preset_id} onClick={() => handleSelectPreset(p)} style={{ padding: 0, border: bgPresetId === p.bg_preset_id ? '3px solid #8a9a3c' : '1px solid var(--le-border)', borderRadius: 6, overflow: 'hidden', cursor: 'pointer', aspectRatio: '1/1', background: '#eee' }} title={p.name}>
                                     <img src={p.thumbnail_url || p.image_url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 </button>
                             ))}
@@ -2618,10 +2741,10 @@ export default function LabelEditor({ projectId, userId }) {
                 )}
                 {bgMode === 'dalle' && (
                     <div>
-                        <div style={{ marginBottom: 8 }}><label style={{ fontSize: 15, fontWeight: 'bold' }}>สไตล์ลาย</label><select value={dalleStyle} onChange={e => setDalleStyle(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}>{BG_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+                        <div style={{ marginBottom: 8 }}><label style={{ fontSize: 15, fontWeight: 'bold' }}>สไตล์ลาย</label><select value={dalleStyle} onChange={e => setDalleStyle(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid var(--le-border)' }}>{BG_STYLES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                            <div><label style={{ fontSize: 15, fontWeight: 'bold' }}>โทน</label><select value={dalleTone} onChange={e => setDalleTone(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}><option value="auto">Auto</option><option value="bright">สว่าง</option><option value="dark">เข้ม</option><option value="pastel">Pastel</option></select></div>
-                            <div><label style={{ fontSize: 15, fontWeight: 'bold' }}>ความหนาแน่น</label><select value={dalleDensity} onChange={e => setDalleDensity(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #ddd' }}><option value="low">เบาบาง</option><option value="medium">ปานกลาง</option><option value="high">หนาแน่น</option></select></div>
+                            <div><label style={{ fontSize: 15, fontWeight: 'bold' }}>โทน</label><select value={dalleTone} onChange={e => setDalleTone(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid var(--le-border)' }}><option value="auto">Auto</option><option value="bright">สว่าง</option><option value="dark">เข้ม</option><option value="pastel">Pastel</option></select></div>
+                            <div><label style={{ fontSize: 15, fontWeight: 'bold' }}>ความหนาแน่น</label><select value={dalleDensity} onChange={e => setDalleDensity(e.target.value)} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid var(--le-border)' }}><option value="low">เบาบาง</option><option value="medium">ปานกลาง</option><option value="high">หนาแน่น</option></select></div>
                         </div>
                         <button onClick={handleGenerateBgWithAI} disabled={isGeneratingBg} style={{ width: '100%', padding: 12, background: '#8f1d1d', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginBottom: 6 }}>{isGeneratingBg ? 'กำลังสร้างพื้นหลัง...' : 'Generate Background (AI)'}</button>
                         {bgImageUrl && bgMode === 'dalle' && <img src={bgImageUrl} alt="bg preview" style={{ width: '100%', borderRadius: 6, marginTop: 6 }} />}
@@ -2635,7 +2758,7 @@ export default function LabelEditor({ projectId, userId }) {
                 )}
                 {/* แกลเลอรีพื้นหลังที่เคยสร้าง/อัปโหลด */}
                 {bgHistory.length > 0 && (
-                    <div style={{ marginTop: 14, borderTop: '1px solid #eee', paddingTop: 10 }}>
+                    <div style={{ marginTop: 14, borderTop: '1px solid var(--le-border)', paddingTop: 10 }}>
                         <label style={{ fontSize: 15, fontWeight: 'bold', display: 'block', marginBottom: 6 }}>
                             ประวัติพื้นหลัง ({bgHistory.length} รูป)
                         </label>
@@ -2655,7 +2778,7 @@ export default function LabelEditor({ projectId, userId }) {
                                         }}
                                         title={isUpload ? 'รูปอัปโหลด' : 'สร้างโดย AI'}
                                         style={{
-                                            padding: 0, border: isActive ? '3px solid #d3542b' : '1px solid #ddd',
+                                            padding: 0, border: isActive ? '3px solid #d3542b' : '1px solid var(--le-border)',
                                             borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
                                             aspectRatio: '1/1', background: '#eee', position: 'relative',
                                         }}>
@@ -2670,7 +2793,7 @@ export default function LabelEditor({ projectId, userId }) {
                                         <div style={{
                                             display: 'none', width: '100%', height: '100%',
                                             alignItems: 'center', justifyContent: 'center',
-                                            fontSize: 17, color: '#bbb', background: '#f0f0f0',
+                                            fontSize: 17, color: '#bbb', background: 'var(--le-border)',
                                         }}>
                                             <iconify-icon icon="mdi:image-broken-variant"></iconify-icon>
                                         </div>
@@ -2748,12 +2871,12 @@ export default function LabelEditor({ projectId, userId }) {
                             <button key={cat.id}
                                 onClick={() => setActiveCertCat(prev => prev === cat.id ? null : cat.id)}
                                 title={cat.label}
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 4, padding: '8px 4px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: selected ? '2px solid #FF8A00' : isActive ? '2px solid #FFD699' : '1.5px solid #e8e8e8', background: selected ? '#FFF4E6' : isActive ? '#FFFaf3' : '#fafafa', position: 'relative', transition: 'all 0.15s' }}>
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 4, padding: '8px 4px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', border: selected ? '2px solid #FF8A00' : isActive ? '2px solid #FFD699' : '1.5px solid #e8e8e8', background: selected ? '#FFF4E6' : isActive ? '#FFFaf3' : 'var(--le-bg-sidebar)', position: 'relative', transition: 'all 0.15s' }}>
                                 {selected && (
                                     <span style={{ position: 'absolute', top: 3, right: 3, width: 14, height: 14, borderRadius: '50%', background: '#FF8A00', color: '#fff', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>✓</span>
                                 )}
                                 <img src={thumb} alt={cat.label} style={{ width: 36, height: 36, objectFit: 'contain' }} />
-                                <span style={{ fontSize: 11, color: selected ? '#FF8A00' : '#666', fontWeight: selected ? 600 : 400, textAlign: 'center', lineHeight: 1.15, wordBreak: 'break-word' }}>{cat.label}</span>
+                                <span style={{ fontSize: 11, color: selected ? '#FF8A00' : 'var(--le-text-sub)', fontWeight: selected ? 600 : 400, textAlign: 'center', lineHeight: 1.15, wordBreak: 'break-word' }}>{cat.label}</span>
                             </button>
                         );
                     })}
@@ -2909,31 +3032,31 @@ export default function LabelEditor({ projectId, userId }) {
         return (
             <div style={{
                 flex: 1, display: 'flex', flexDirection: 'column',
-                background: '#F5F6F8', borderRadius: 14,
+                background: 'var(--le-bg-app)', borderRadius: 14,
                 height: 'calc(100vh - 180px)', maxHeight: 'calc(100vh - 180px)', overflow: 'hidden',
             }}>
                 {/* Secondary info bar */}
                 <div style={{
                     display: 'flex', alignItems: 'center', gap: 20,
                     margin: '10px 14px 0', padding: '0 16px', height: 34,
-                    background: '#fff', border: '1px solid #e8e8e8', borderRadius: 17,
-                    flexShrink: 0, fontSize: 12, color: '#666',
+                    background: 'var(--le-bg-card)', border: '1px solid var(--le-border)', borderRadius: 17,
+                    flexShrink: 0, fontSize: 12, color: 'var(--le-text-sub)',
                 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ color: '#aaa' }}>ขนาดงาน:</span>
-                        <span style={{ color: '#333', fontWeight: 500 }}>กว้าง {wMm} × สูง {hMm} มม.</span>
+                        <span style={{ color: 'var(--le-text)', fontWeight: 500 }}>กว้าง {wMm} × สูง {hMm} มม.</span>
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ color: '#aaa' }}>ตัดตก:</span>
-                        <span style={{ color: '#333', fontWeight: 500 }}>{bleedMm} มม.</span>
+                        <span style={{ color: 'var(--le-text)', fontWeight: 500 }}>{bleedMm} มม.</span>
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ color: '#aaa' }}>Safe Zone:</span>
-                        <span style={{ color: '#333', fontWeight: 500 }}>{safeZoneMm} มม.</span>
+                        <span style={{ color: 'var(--le-text)', fontWeight: 500 }}>{safeZoneMm} มม.</span>
                     </span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ color: '#aaa' }}>แนว:</span>
-                        <span style={{ color: '#333', fontWeight: 500 }}>{wMm > hMm ? 'แนวนอน' : 'แนวตั้ง'}</span>
+                        <span style={{ color: 'var(--le-text)', fontWeight: 500 }}>{wMm > hMm ? 'แนวนอน' : 'แนวตั้ง'}</span>
                     </span>
                 </div>
 
@@ -2961,7 +3084,7 @@ export default function LabelEditor({ projectId, userId }) {
                 <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: 1,
                     padding: '3px 6px',
-                    background: '#fff', border: '1px solid #e4e4e7', borderRadius: 999,
+                    background: 'var(--le-bg-card)', border: '1px solid var(--le-border)', borderRadius: 999,
                     boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
                     fontFamily: 'var(--le-font)',
                 }}>
@@ -2972,7 +3095,7 @@ export default function LabelEditor({ projectId, userId }) {
                         cursor: 'pointer', color: '#777', fontSize: 12, fontWeight: 500,
                         fontFamily: 'var(--le-font)', transition: 'background 0.13s, color 0.13s',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = '#333'; }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = 'var(--le-text)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#777'; }}>
                         <iconify-icon icon="mdi:undo" style={{ fontSize: 13 }}></iconify-icon>
                         <span>ย้อนกลับ</span>
@@ -2985,20 +3108,20 @@ export default function LabelEditor({ projectId, userId }) {
                         cursor: 'pointer', color: '#777', fontSize: 12, fontWeight: 500,
                         fontFamily: 'var(--le-font)', transition: 'background 0.13s, color 0.13s',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = '#333'; }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = 'var(--le-text)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#777'; }}>
                         <iconify-icon icon="mdi:redo" style={{ fontSize: 13 }}></iconify-icon>
                         <span>ทำซ้ำ</span>
                     </button>
 
                     {/* Divider */}
-                    <div style={{ width: 1, height: 16, background: '#e4e4e7', margin: '0 3px', flexShrink: 0 }} />
+                    <div style={{ width: 1, height: 16, background: 'var(--le-border)', margin: '0 3px', flexShrink: 0 }} />
 
                     {/* Zoom out */}
                     <button onClick={() => setZoomLevel(z => Math.max(50, z - 25))} title="ย่อ"
                         style={{
                             width: 26, height: 26, border: 'none', borderRadius: 6, background: 'none',
-                            cursor: 'pointer', fontSize: 16, color: '#555', display: 'flex',
+                            cursor: 'pointer', fontSize: 16, color: 'var(--le-text-sub)', display: 'flex',
                             alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--le-font)',
                             transition: 'background 0.13s',
                         }}
@@ -3009,7 +3132,7 @@ export default function LabelEditor({ projectId, userId }) {
 
                     {/* Zoom label */}
                     <span style={{
-                        fontSize: 12, fontWeight: 700, color: '#222',
+                        fontSize: 12, fontWeight: 700, color: 'var(--le-text)',
                         minWidth: 38, textAlign: 'center', userSelect: 'none',
                     }}>{zoomLevel}%</span>
 
@@ -3017,7 +3140,7 @@ export default function LabelEditor({ projectId, userId }) {
                     <button onClick={() => setZoomLevel(z => Math.min(200, z + 25))} title="ขยาย"
                         style={{
                             width: 26, height: 26, border: 'none', borderRadius: 6, background: 'none',
-                            cursor: 'pointer', fontSize: 16, color: '#555', display: 'flex',
+                            cursor: 'pointer', fontSize: 16, color: 'var(--le-text-sub)', display: 'flex',
                             alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--le-font)',
                             transition: 'background 0.13s',
                         }}
@@ -3027,7 +3150,7 @@ export default function LabelEditor({ projectId, userId }) {
                     </button>
 
                     {/* Divider */}
-                    <div style={{ width: 1, height: 16, background: '#e4e4e7', margin: '0 3px', flexShrink: 0 }} />
+                    <div style={{ width: 1, height: 16, background: 'var(--le-border)', margin: '0 3px', flexShrink: 0 }} />
 
                     {/* พอดีจอ */}
                     <button onClick={() => setZoomLevel(100)} title="พอดีจอ" style={{
@@ -3036,7 +3159,7 @@ export default function LabelEditor({ projectId, userId }) {
                         cursor: 'pointer', color: '#777', fontSize: 12, fontWeight: 500,
                         fontFamily: 'var(--le-font)', transition: 'background 0.13s, color 0.13s',
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = '#333'; }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f4f4f5'; e.currentTarget.style.color = 'var(--le-text)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#777'; }}>
                         <iconify-icon icon="mdi:fit-to-screen-outline" style={{ fontSize: 13 }}></iconify-icon>
                         <span>พอดีจอ</span>

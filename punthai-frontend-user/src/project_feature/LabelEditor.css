@@ -1323,6 +1323,15 @@
 ════════════════════════════════════════════ */
 .le-root *::-webkit-scrollbar { display: none; }
 
+/* ════════════════════════════════════════════
+   PREVIEW FONT — บังคับให้ทุก element ในพรีวิวใช้ฟอนต์ที่เลือก
+   (กันกฎ global เช่น Poppins/:lang(en) ที่เจาะจง element โดยตรง จน override การ inherit)
+   labelRef ตั้ง fontFamily = ฟอนต์ที่เลือกแบบ inline → ลูกหลาน inherit ต่อด้วย !important
+════════════════════════════════════════════ */
+.le-label-canvas * {
+    font-family: inherit !important;
+}
+
 .spin { animation: le-spin 1s linear infinite; }
 @keyframes le-spin {
     from { transform: rotate(0deg); }

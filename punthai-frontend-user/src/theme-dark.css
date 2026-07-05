@@ -302,3 +302,48 @@ html[data-theme="dark"] ::-webkit-scrollbar-track { background: var(--c-bg); }
 html[data-theme="dark"] ::-webkit-scrollbar-thumb {
   background: #4a4a4a; border-radius: 6px; border: 3px solid var(--c-bg);
 }
+
+/* =====================================================================
+   LABEL EDITOR (--le-*) & MOCKUP EDITOR (--pe-*) — dark overrides
+   คงสีส้ม accent ไว้ เปลี่ยนเฉพาะพื้นหลัง/เส้นขอบ/ตัวอักษรของ "เครื่องมือ"
+   (ตัวชิ้นงานฉลาก/Konva ใช้สีในตัวเอง ไม่โดนกระทบ)
+   ===================================================================== */
+html[data-theme="dark"] {
+  /* ----- Label Editor ----- */
+  --le-text:               var(--c-text);
+  --le-text-sub:           var(--c-text-2);
+  --le-text-faint:         var(--c-text-3);
+  --le-border:             var(--c-line);
+  --le-border-strong:      var(--c-line-2);
+  --le-bg-app:             var(--c-bg);
+  --le-bg-card:            var(--c-surface-solid);
+  --le-bg-sidebar:         #262626;
+  --le-bg-muted:           #262626;
+  --le-green-tint:         #23331f;
+  --le-green-border:       #2f5a2f;
+  --le-orange-tint:        #3a2d24;
+  --le-orange-tint-strong: #4d3a2c;
+  --le-shadow-card:        0 1px 2px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.4);
+  --le-shadow-floating:    0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4);
+
+  /* ----- Mockup / Package Design Editor ----- */
+  --pe-text:               var(--c-text);
+  --pe-text-sub:           var(--c-text-2);
+  --pe-text-faint:         var(--c-text-3);
+  --pe-border:             var(--c-line);
+  --pe-border-strong:      var(--c-line-2);
+  --pe-bg-app:             var(--c-bg);
+  --pe-bg-card:            var(--c-surface-solid);
+  --pe-bg-sidebar:         #262626;
+  --pe-orange-tint:        #3a2d24;
+  --pe-orange-tint-strong: #4d3a2c;
+  --pe-blue-tint:          #22303a;
+  --pe-shadow-card:        0 1px 2px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.4);
+  --pe-shadow-floating:    0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4);
+}
+
+/* จุดที่ฮาร์ดโค้ดสีขาว/เทาอ่อนไว้ในไฟล์ editor (hover ฯลฯ) — remap เป็นโทนมืด */
+html[data-theme="dark"] .le-section-header:hover,
+html[data-theme="dark"] .le-accordions > div > button:hover { background: #3a3a3a !important; }
+html[data-theme="dark"] .le-canvas-stage-wrapper { background: var(--le-bg-card); }
+html[data-theme="dark"] .pkgdesign-sidebar-header:hover { background: #3a3a3a; }

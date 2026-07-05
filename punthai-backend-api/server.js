@@ -3738,10 +3738,15 @@ app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
             if (spec_data.colors_used && spec_data.colors_used.length > 0) {
                 yy -= 10;
                 specPage.drawText('COLORS USED', { x: 50, y: yy, size: 13, font: helv }); yy -= 18;
+                specPage.drawText('(RGB 0-255 / RGB% / CMYK% for setting in Illustrator etc.)', { x: 50, y: yy, size: 8, font: helvR }); yy -= 14;
                 spec_data.colors_used.forEach(hex => {
-                    const r = parseInt(hex.slice(1, 3), 16) / 255, g = parseInt(hex.slice(3, 5), 16) / 255, b = parseInt(hex.slice(5, 7), 16) / 255;
+                    const R = parseInt(hex.slice(1, 3), 16), G = parseInt(hex.slice(3, 5), 16), B = parseInt(hex.slice(5, 7), 16);
+                    const r = R / 255, g = G / 255, b = B / 255;
+                    const k = 1 - Math.max(r, g, b);
+                    const c = k >= 1 ? 0 : (1 - r - k) / (1 - k), m = k >= 1 ? 0 : (1 - g - k) / (1 - k), y2 = k >= 1 ? 0 : (1 - b - k) / (1 - k);
+                    const pc = v => Math.round(v * 100);
                     specPage.drawRectangle({ x: 50, y: yy - 10, width: 18, height: 12, color: rgb(r, g, b) });
-                    specPage.drawText(`${hex.toUpperCase()} -> CMYK approx (convert at printer)`, { x: 75, y: yy - 8, size: 10, font: helvR });
+                    specPage.drawText(`${hex.toUpperCase()}  RGB ${R},${G},${B} (${pc(r)}/${pc(g)}/${pc(b)}%)  CMYK ${pc(c)}/${pc(m)}/${pc(y2)}/${pc(k)}%`, { x: 75, y: yy - 8, size: 9, font: helvR });
                     yy -= 18;
                 });
             }
@@ -4183,14 +4188,18 @@ app.post('/api/labels/export-pdf', async (req, res) => {
         if (colors_used && colors_used.length > 0) {
             yy -= 15;
             specPage.drawText('COLORS USED', { x: 50, y: yy, size: 13, font: helv });
-            yy -= 20;
+            yy -= 16;
+            specPage.drawText('(RGB 0-255 / RGB% / CMYK% for setting in Illustrator etc.)', { x: 50, y: yy, size: 8, font: helvR });
+            yy -= 16;
             colors_used.forEach(hex => {
                 if (!hex || hex.length < 7) return;
-                const r = parseInt(hex.slice(1, 3), 16) / 255;
-                const g = parseInt(hex.slice(3, 5), 16) / 255;
-                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                const R = parseInt(hex.slice(1, 3), 16), G = parseInt(hex.slice(3, 5), 16), B = parseInt(hex.slice(5, 7), 16);
+                const r = R / 255, g = G / 255, b = B / 255;
+                const k = 1 - Math.max(r, g, b);
+                const c = k >= 1 ? 0 : (1 - r - k) / (1 - k), m = k >= 1 ? 0 : (1 - g - k) / (1 - k), y2 = k >= 1 ? 0 : (1 - b - k) / (1 - k);
+                const pc = v => Math.round(v * 100);
                 specPage.drawRectangle({ x: 50, y: yy - 10, width: 18, height: 12, color: rgb(r, g, b) });
-                specPage.drawText(`${hex.toUpperCase()} (convert to CMYK at printer)`, { x: 75, y: yy - 8, size: 10, font: helvR });
+                specPage.drawText(`${hex.toUpperCase()}  RGB ${R},${G},${B} (${pc(r)}/${pc(g)}/${pc(b)}%)  CMYK ${pc(c)}/${pc(m)}/${pc(y2)}/${pc(k)}%`, { x: 75, y: yy - 8, size: 9, font: helvR });
                 yy -= 18;
             });
         }
@@ -4268,39 +4277,75 @@ app.post('/api/labels/export-ai', async (req, res) => {
 
         const pdfDoc = await PDFDocument.create();
 
-        // โหลดฟอนต์ Bai Jamjuree ผ่าน fontkit เพื่อดึง "เส้น glyph" มาวาดเป็นเวกเตอร์ (outline)
+        // โหลดฟอนต์ผ่าน fontkit เพื่อดึง "เส้น glyph" มาวาดเป็นเวกเตอร์ (outline)
         // → ภาษาไทยจัดวางสระ/วรรณยุกต์ถูกต้อง, ไม่แยกเป็นตัวอักษร, ไม่มีขีดแดง/ปัญหาฟอนต์ใน Illustrator
         const fontDir = path.join(__dirname, 'assets', 'fonts');
-        const fkReg = fontkit.create(fs.readFileSync(path.join(fontDir, 'BaiJamjuree-Regular.ttf')));
-        const fkSemi = fontkit.create(fs.readFileSync(path.join(fontDir, 'BaiJamjuree-SemiBold.ttf')));
-        const fkBold = fontkit.create(fs.readFileSync(path.join(fontDir, 'BaiJamjuree-Bold.ttf')));
-        const pickFk = (weight) => (weight >= 700 ? fkBold : weight >= 600 ? fkSemi : fkReg);
+        // แมปชื่อฟอนต์ (ตรงกับที่เลือกในเว็บ) → ไฟล์ตามน้ำหนัก (regular/semibold/bold)
+        const FONT_FILE_MAP = {
+            'Bai Jamjuree':      { r: 'BaiJamjuree-Regular.ttf', s: 'BaiJamjuree-SemiBold.ttf', b: 'BaiJamjuree-Bold.ttf' },
+            'Sarabun':           { r: 'Sarabun-Regular.ttf', b: 'Sarabun-Bold.ttf' },
+            'RD Konmek':         { r: 'RDKonmek.ttf' },
+            'RD Konmek SPC':     { r: 'RDKonmekSPC.ttf' },
+            '399PANI TuayJiew':  { r: '399PANITuayJiew.ttf' },
+            'Jao Chathai':       { r: 'JaoChathai.ttf' },
+            'Kart-Thai Esan':    { r: 'KartThaiEsan.ttf' },
+            'Kart-Kean Fome':    { r: 'KartKeanFome.ttf' },
+            'MN Nugget':         { r: 'MNNugget.otf', i: 'MNNuggetItalic.otf' },
+            'MN Tam Thai':       { r: 'MNTamThai.ttf', i: 'MNTamThaiItalic.ttf' },
+            'TCS 4KhaiMook':     { r: 'TCS4KhaiMook.ttf' },
+            'was iittrakorn':    { r: 'wasiittrakorn.ttf' },
+        };
+        const fontCache = {};
+        const loadFk = (file) => {
+            if (!file) return null;
+            if (!fontCache[file]) {
+                try { fontCache[file] = fontkit.create(fs.readFileSync(path.join(fontDir, file))); }
+                catch (e) { fontCache[file] = null; }
+            }
+            return fontCache[file];
+        };
+        // เลือกชุดไฟล์ตามฟอนต์ที่เลือก (ถ้าไม่รู้จัก → Bai Jamjuree)
+        const fontSet = FONT_FILE_MAP[(req.body.font_family || '').trim()] || FONT_FILE_MAP['Bai Jamjuree'];
+        const fkFallback = loadFk('BaiJamjuree-Regular.ttf');
+        const pickFk = (weight) => {
+            const file = (weight >= 700 && fontSet.b) ? fontSet.b
+                       : (weight >= 600 && fontSet.s) ? fontSet.s
+                       : fontSet.r;
+            return loadFk(file) || fkFallback;
+        };
 
         const page = pdfDoc.addPage([pageW, pageH]);
 
-        // วาดข้อความหนึ่งบรรทัดเป็นเส้นเวกเตอร์ — รวมทุก glyph เป็น path เดียว/บรรทัด
-        // (ใน Illustrator จะเป็น 1 ชิ้นต่อบรรทัด ไม่แตกเป็นตัวอักษร)
-        const drawOutlinedLine = (line, fk, sizePt, startXPt, baselineYPt, color) => {
-            const scl = sizePt / fk.unitsPerEm;
-            const run = fk.layout(line);
-            let penX = 0;            // หน่วย font units (drawSvgPath จะ scale ทีเดียว)
-            let combined = '';
-            for (let i = 0; i < run.glyphs.length; i++) {
-                const g = run.glyphs[i];
-                const p = run.positions[i] || {};
-                try {
-                    if (g.path && g.path.toSVG) {
-                        // flip y (path เป็น y-up) แล้วเลื่อนตามตำแหน่ง glyph ในหน่วย font units
-                        const gp = g.path.scale(1, -1).translate(penX + (p.xOffset || 0), -(p.yOffset || 0));
-                        const d = gp.toSVG();
-                        if (d) combined += d + ' ';
-                    }
-                } catch (e) { /* ข้าม glyph ที่มีปัญหา */ }
-                penX += (p.xAdvance || 0);
+        // แบ่งข้อความเป็นช่วงตามฟอนต์ที่มี glyph — ตัวที่ฟอนต์หลักไม่มี (เช่น ° ® ™) ใช้ Bai Jamjuree แทน
+        const segmentByFont = (line, fk) => {
+            const segs = []; let cf = null, cur = '';
+            for (const ch of Array.from(line)) {
+                const has = fk.hasGlyphForCodePoint ? fk.hasGlyphForCodePoint(ch.codePointAt(0)) : true;
+                const uf = (has || !fkFallback) ? fk : fkFallback;
+                if (uf !== cf) { if (cur) segs.push({ f: cf, t: cur }); cur = ch; cf = uf; } else cur += ch;
             }
-            if (combined) page.drawSvgPath(combined, { x: startXPt, y: baselineYPt, scale: scl, color });
+            if (cur) segs.push({ f: cf, t: cur });
+            return segs;
         };
-        const lineWidthPt = (line, fk, sizePt) => (fk.layout(line).advanceWidth || 0) * (sizePt / fk.unitsPerEm);
+        // วาดข้อความหนึ่งบรรทัดเป็นเส้นเวกเตอร์ — รวมทุก glyph เป็น path เดียว/บรรทัด (1 ชิ้น/บรรทัดใน AI)
+        const drawOutlinedLine = (line, fk, sizePt, startXPt, baselineYPt, color) => {
+            const baseEm = fk.unitsPerEm;
+            let penX = 0, combined = '';
+            for (const s of segmentByFont(line, fk)) {
+                const run = s.f.layout(s.t); const norm = baseEm / s.f.unitsPerEm;
+                for (let i = 0; i < run.glyphs.length; i++) {
+                    const g = run.glyphs[i], p = run.positions[i] || {};
+                    try { if (g.path && g.path.toSVG && g.id !== 0) { const d = g.path.scale(norm, -norm).translate(penX + (p.xOffset || 0) * norm, -((p.yOffset || 0) * norm)).toSVG(); if (d) combined += d + ' '; } } catch (e) {}
+                    penX += (p.xAdvance || 0) * norm;
+                }
+            }
+            if (combined) page.drawSvgPath(combined, { x: startXPt, y: baselineYPt, scale: sizePt / baseEm, color });
+        };
+        const lineWidthPt = (line, fk, sizePt) => {
+            const baseEm = fk.unitsPerEm; let w = 0;
+            for (const s of segmentByFont(line, fk)) w += (s.f.layout(s.t).advanceWidth || 0) * (baseEm / s.f.unitsPerEm);
+            return w * (sizePt / baseEm);
+        };
 
         // ---- สีแบบ CMYK (ไฟล์เปิดใน Illustrator เป็นโหมด CMYK พร้อมพิมพ์) ----
         const hexToCmyk = (hex) => {
@@ -4383,6 +4428,157 @@ app.post('/api/labels/export-ai', async (req, res) => {
         res.send(Buffer.from(pdfBytes));
     } catch (err) {
         console.error('Label Export AI Error:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
+// =====================================================================
+// POST /api/mockups/export-vector-ai — ไฟล์ Illustrator เวกเตอร์ของ Mockup (dieline)
+//   • ข้อความ = outline เวกเตอร์ (CMYK, แก้ได้)
+//   • รูป/โลโก้/ตรา/รูปทรง/บาร์โค้ด/QR = object แยกชิ้น (ฝังรูป)
+//   • พื้นหลังต่อ panel + เผื่อขอบตัดตก (bleed) + crop marks + จัดตาม dieline
+// =====================================================================
+app.post('/api/mockups/export-vector-ai', async (req, res) => {
+    try {
+        const { product_name = 'design', bleed_mm = 3, font_family = 'Bai Jamjuree', dieline = {}, panels = [] } = req.body;
+        const dieW = parseFloat(dieline.w_mm), dieH = parseFloat(dieline.h_mm);
+        if (!dieW || !dieH) return res.status(400).json({ status: 'error', message: 'ไม่มีขนาด dieline' });
+
+        const { PDFDocument, cmyk } = await import('pdf-lib');
+        const fontkit = (await import('@pdf-lib/fontkit')).default;
+        const MM_TO_PT = 2.83465;
+        const bleed = parseFloat(bleed_mm) || 3;
+        const pageW = (dieW + bleed * 2) * MM_TO_PT;
+        const pageH = (dieH + bleed * 2) * MM_TO_PT;
+
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage([pageW, pageH]);
+
+        // ---- ฟอนต์ (outline) ----
+        const fontDir = path.join(__dirname, 'assets', 'fonts');
+        const FONT_FILE_MAP = {
+            'Bai Jamjuree': { r: 'BaiJamjuree-Regular.ttf', s: 'BaiJamjuree-SemiBold.ttf', b: 'BaiJamjuree-Bold.ttf' },
+            'Sarabun': { r: 'Sarabun-Regular.ttf', b: 'Sarabun-Bold.ttf' },
+            'RD Konmek': { r: 'RDKonmek.ttf' }, 'RD Konmek SPC': { r: 'RDKonmekSPC.ttf' },
+            '399PANI TuayJiew': { r: '399PANITuayJiew.ttf' }, 'Jao Chathai': { r: 'JaoChathai.ttf' },
+            'Kart-Thai Esan': { r: 'KartThaiEsan.ttf' }, 'Kart-Kean Fome': { r: 'KartKeanFome.ttf' },
+            'MN Nugget': { r: 'MNNugget.otf' }, 'MN Tam Thai': { r: 'MNTamThai.ttf' },
+            'TCS 4KhaiMook': { r: 'TCS4KhaiMook.ttf' }, 'was iittrakorn': { r: 'wasiittrakorn.ttf' },
+        };
+        const fontCache = {};
+        const loadFk = (file) => { if (!file) return null; if (!(file in fontCache)) { try { fontCache[file] = fontkit.create(fs.readFileSync(path.join(fontDir, file))); } catch (e) { fontCache[file] = null; } } return fontCache[file]; };
+        const fkFallback = loadFk('BaiJamjuree-Regular.ttf');
+        const fontSet = FONT_FILE_MAP[(font_family || '').trim()] || FONT_FILE_MAP['Bai Jamjuree'];
+        const pickFk = (w) => loadFk((w >= 700 && fontSet.b) ? fontSet.b : (w >= 600 && fontSet.s) ? fontSet.s : fontSet.r) || fkFallback;
+
+        const hexToCmyk = (hex) => {
+            const h = (hex || '#000000').replace('#', '');
+            const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0');
+            const r = parseInt(v.slice(0, 2), 16) / 255, g = parseInt(v.slice(2, 4), 16) / 255, b = parseInt(v.slice(4, 6), 16) / 255;
+            const k = 1 - Math.max(r, g, b);
+            if (k >= 0.9999) return cmyk(0, 0, 0, 1);
+            return cmyk((1 - r - k) / (1 - k), (1 - g - k) / (1 - k), (1 - b - k) / (1 - k), k);
+        };
+        const embedImg = async (dataUrl) => {
+            const b64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+            const bytes = Buffer.from(b64, 'base64');
+            try { return await pdfDoc.embedPng(bytes); } catch (e) { return await pdfDoc.embedJpg(bytes); }
+        };
+        const sanitize = (s = '') => String(s).replace(/⚠/g, '!').replace(/[•·]/g, '-').replace(/✓/g, '').replace(/[^฀-๿ -~ -ÿ‘’“”–—]/g, '');
+        // แบ่งข้อความเป็นช่วงตามฟอนต์ที่มี glyph — ตัวที่ฟอนต์หลักไม่มี (เช่น ° ® ™) ใช้ Bai Jamjuree แทน
+        const segmentByFont = (line, fk) => {
+            const segs = []; let cf = null, cur = '';
+            for (const ch of Array.from(line)) {
+                const has = fk.hasGlyphForCodePoint ? fk.hasGlyphForCodePoint(ch.codePointAt(0)) : true;
+                const uf = (has || !fkFallback) ? fk : fkFallback;
+                if (uf !== cf) { if (cur) segs.push({ f: cf, t: cur }); cur = ch; cf = uf; } else cur += ch;
+            }
+            if (cur) segs.push({ f: cf, t: cur });
+            return segs;
+        };
+        const drawOutlinedLine = (line, fk, sizePt, startXPt, baselineYPt, color) => {
+            const baseEm = fk.unitsPerEm;
+            let penX = 0, combined = '';
+            for (const s of segmentByFont(line, fk)) {
+                const run = s.f.layout(s.t); const norm = baseEm / s.f.unitsPerEm;
+                for (let i = 0; i < run.glyphs.length; i++) {
+                    const g = run.glyphs[i], p = run.positions[i] || {};
+                    try { if (g.path && g.path.toSVG && g.id !== 0) { const d = g.path.scale(norm, -norm).translate(penX + (p.xOffset || 0) * norm, -((p.yOffset || 0) * norm)).toSVG(); if (d) combined += d + ' '; } } catch (e) {}
+                    penX += (p.xAdvance || 0) * norm;
+                }
+            }
+            if (combined) page.drawSvgPath(combined, { x: startXPt, y: baselineYPt, scale: sizePt / baseEm, color });
+        };
+        const lineWidthPt = (line, fk, sizePt) => {
+            const baseEm = fk.unitsPerEm; let w = 0;
+            for (const s of segmentByFont(line, fk)) w += (s.f.layout(s.t).advanceWidth || 0) * (baseEm / s.f.unitsPerEm);
+            return w * (sizePt / baseEm);
+        };
+
+        // ---- พื้นหลังทั้งหน้า (กัน bleed ขาว) ----
+        page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: cmyk(0, 0, 0, 0) });
+
+        const yTop = (mmFromTop, hMm = 0) => pageH - (bleed + mmFromTop + hMm) * MM_TO_PT; // แปลงพิกัดบน→pdf(y-up)
+
+        for (const panel of panels) {
+            const px = parseFloat(panel.x_mm) || 0, py = parseFloat(panel.y_mm) || 0;
+            const pw = parseFloat(panel.w_mm) || 0, ph = parseFloat(panel.h_mm) || 0;
+            // ขยายพื้นหลังเข้าไปในขอบตัดตกด้านที่ติดขอบ dieline
+            const exL = px <= 0.5 ? bleed : 0, exT = py <= 0.5 ? bleed : 0;
+            const exR = (px + pw) >= dieW - 0.5 ? bleed : 0, exB = (py + ph) >= dieH - 0.5 ? bleed : 0;
+            const bgX = (bleed + px - exL) * MM_TO_PT;
+            const bgY = pageH - (bleed + py + ph + exB) * MM_TO_PT;
+            const bgW = (pw + exL + exR) * MM_TO_PT, bgH = (ph + exT + exB) * MM_TO_PT;
+            if (panel.bgDataUrl) {
+                try { const im = await embedImg(panel.bgDataUrl); page.drawImage(im, { x: bgX, y: bgY, width: bgW, height: bgH }); }
+                catch (e) { page.drawRectangle({ x: bgX, y: bgY, width: bgW, height: bgH, color: hexToCmyk(panel.bgColor) }); }
+            } else {
+                page.drawRectangle({ x: bgX, y: bgY, width: bgW, height: bgH, color: hexToCmyk(panel.bgColor) });
+            }
+
+            for (const el of (panel.elements || [])) {
+                const ax = bleed + px + (parseFloat(el.x_mm) || 0);
+                const ayTop = py + (parseFloat(el.y_mm) || 0);
+                const wPt = (parseFloat(el.w_mm) || 0) * MM_TO_PT, hPt = (parseFloat(el.h_mm) || 0) * MM_TO_PT;
+                if (el.type === 'image' && el.dataUrl) {
+                    try { const im = await embedImg(el.dataUrl); page.drawImage(im, { x: ax * MM_TO_PT, y: yTop(ayTop, el.h_mm), width: wPt, height: hPt }); } catch (e) {}
+                } else if (el.type === 'rect') {
+                    page.drawRectangle({ x: ax * MM_TO_PT, y: yTop(ayTop, el.h_mm), width: wPt, height: hPt, color: hexToCmyk(el.fill || '#cccccc') });
+                } else if (el.type === 'ellipse') {
+                    page.drawEllipse({ x: (ax + (el.w_mm || 0) / 2) * MM_TO_PT, y: yTop(ayTop, (el.h_mm || 0) / 2), xScale: wPt / 2, yScale: hPt / 2, color: hexToCmyk(el.fill || '#cccccc') });
+                } else if (el.type === 'text' && Array.isArray(el.lines)) {
+                    const fk = pickFk(el.weight || 400);
+                    const sizePt = (parseFloat(el.fontMm) || 3) * MM_TO_PT;
+                    const color = hexToCmyk(el.color || '#222222');
+                    const lineHmm = (parseFloat(el.fontMm) || 3) * 1.35;
+                    el.lines.forEach((raw, i) => {
+                        const line = sanitize(raw); if (!line) return;
+                        let lw = 0; try { lw = lineWidthPt(line, fk, sizePt); } catch (e) {}
+                        let startX = ax * MM_TO_PT;
+                        if (el.align === 'center') startX = ax * MM_TO_PT + (wPt - lw) / 2;
+                        else if (el.align === 'right') startX = ax * MM_TO_PT + wPt - lw;
+                        const baseY = yTop(ayTop + (parseFloat(el.fontMm) || 3) + i * lineHmm);
+                        try { drawOutlinedLine(line, fk, sizePt, startX, baseY, color); } catch (e) {}
+                    });
+                }
+            }
+        }
+
+        // ---- crop marks รอบ dieline ----
+        const cropLen = 5 * MM_TO_PT, off = bleed * MM_TO_PT, cc = cmyk(0, 0, 0, 1);
+        const dc = (x, y, dx, dy) => page.drawLine({ start: { x, y }, end: { x: x + dx, y: y + dy }, thickness: 0.25, color: cc });
+        dc(0, off, cropLen, 0); dc(off, 0, 0, cropLen);
+        dc(pageW - cropLen, off, cropLen, 0); dc(pageW - off, 0, 0, cropLen);
+        dc(0, pageH - off, cropLen, 0); dc(off, pageH - cropLen, 0, cropLen);
+        dc(pageW - cropLen, pageH - off, cropLen, 0); dc(pageW - off, pageH - cropLen, 0, cropLen);
+
+        const pdfBytes = await pdfDoc.save();
+        const safeName = (product_name || 'design').replace(/[^\w฀-๿.-]+/g, '_').slice(0, 60);
+        res.setHeader('Content-Type', 'application/illustrator');
+        res.setHeader('Content-Disposition', `attachment; filename="package_${encodeURIComponent(safeName)}_CMYK.ai"`);
+        res.send(Buffer.from(pdfBytes));
+    } catch (err) {
+        console.error('Mockup Export Vector AI Error:', err);
         res.status(500).json({ status: 'error', message: err.message });
     }
 });

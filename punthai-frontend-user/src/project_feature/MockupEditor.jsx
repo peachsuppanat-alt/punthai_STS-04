@@ -1,6 +1,6 @@
 // punthai-frontend-user/src/MockupEditor.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Stage, Layer, Image as KImg, Rect as KRect, Text as KText, Circle as KCircle, Shape as KShape, Group, Transformer } from 'react-konva';
+import { Stage, Layer, Image as KImg, Rect as KRect, Text as KText, Circle as KCircle, Shape as KShape, Group, Transformer, Line as KLine } from 'react-konva';
 import html2canvas from 'html2canvas';
 import { loadLogoTransparent } from './logoUtils';
 import JsBarcode from 'jsbarcode';
@@ -69,11 +69,12 @@ function LabelImageRenderer({ labelData, brandAssets, onReady }) {
                 )}
                 {labelData.certifications?.length > 0 && (
                     <div className="label-render-certs">
-                        {labelData.certifications.map(c => (
-                            <span key={c} className="label-render-cert-badge">
-                                {c}
-                            </span>
-                        ))}
+                        {labelData.certifications.map((c, i) => {
+                            const url = (typeof c === 'object' && c) ? c.url : null;
+                            return url
+                                ? <img key={i} src={url} crossOrigin="anonymous" alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+                                : (typeof c === 'string' ? <span key={i} className="label-render-cert-badge">{c}</span> : null);
+                        })}
                     </div>
                 )}
             </div>
@@ -120,6 +121,9 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     const [mockupHistory, setMockupHistory] = useState([]);
     const [lightboxUrl, setLightboxUrl] = useState(null); // for image popup
     const [mockupPanelSelection, setMockupPanelSelection] = useState({}); // which panels to include
+
+    // เส้นกึ่งกลางกระดาษ (แสดงเมื่อลากวัตถุให้ศูนย์กลางตรงกลาง) — v=แนวตั้ง, h=แนวนอน
+    const [centerGuide, setCenterGuide] = useState({ v: false, h: false });
 
     // Zoom & pan state
     const [stageScale, setStageScale] = useState(1);
@@ -395,10 +399,27 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
             const w = Math.min(canvasW * 0.8, 400);
             el = { id, type: 'text', x: (canvasW - w) / 2, y: canvasH * 0.3 + Math.random() * 60, w, h: 40, rotation: 0, data: t.data, fontSize: t.fontSize, fill: t.fill, fontFamily: brandAssets?.font || "'Bai Jamjuree', sans-serif" };
         } else if (type === 'label_certs') {
-            if (!labelData?.certifications?.length) return;
-            const certs = Array.isArray(labelData.certifications) ? labelData.certifications : JSON.parse(labelData.certifications || '[]');
-            if (certs.length === 0) return;
-            el = { id, type: 'text', x: canvasW * 0.1, y: canvasH * 0.85, w: canvasW * 0.8, h: 30, rotation: 0, data: certs.join('  •  '), fontSize: 11, fill: '#fff', fontFamily: brandAssets?.font || "'Bai Jamjuree', sans-serif" };
+            const raw = labelData?.certifications;
+            const certs = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw || '[]'); } catch { return []; } })();
+            // ตรารับรองถูกเก็บเป็น { id, url } → เพิ่มเป็น "รูปภาพ" แต่ละตราให้ลาก/ปรับขนาดได้
+            const urls = certs.map(c => (typeof c === 'object' && c ? c.url : null)).filter(Boolean);
+            if (!urls.length) return;
+            const size = canvasW * 0.12;
+            const gap = size * 0.28;
+            const totalW = urls.length * size + (urls.length - 1) * gap;
+            const startX = Math.max(0, (canvasW - totalW) / 2);
+            const y = canvasH * 0.82;
+            const newEls = urls.map((url, i) => ({
+                id: `el_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 5)}`,
+                type: 'image', x: startX + i * (size + gap), y, w: size, h: size, rotation: 0, src: url,
+            }));
+            setPanelDesigns(prev => {
+                const d = { ...prev[activePanel.id] };
+                d.elements = [...d.elements, ...newEls];
+                return { ...prev, [activePanel.id]: d };
+            });
+            setSelectedElId(newEls[newEls.length - 1].id);
+            return;
         }
         if (el) {
             setPanelDesigns(prev => {
@@ -710,7 +731,118 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     };
 
     const handleExportPdf = () => exportFile('pdf');
-    const handleExportAi = () => exportFile('ai');
+
+    // === Export Illustrator แบบเวกเตอร์ (เหมือน Label): ข้อความ outline + object แยกชิ้น + CMYK + bleed ===
+    const handleExportAi = async () => {
+        if (!materialData || panels.length === 0) return;
+        if (!savedMockupId) { await handleSave(); }
+        setIsExporting(true);
+        const origIdx = activePanelIdx;
+        try {
+            const dieW = parseFloat(materialData.dieline_width_mm);
+            const dieH = parseFloat(materialData.dieline_height_mm);
+            const fontFamily = (brandAssets?.font || 'Bai Jamjuree').replace(/['"]/g, '').split(',')[0].trim();
+
+            const measureCtx = document.createElement('canvas').getContext('2d');
+            const wrap = (text, fontPx, fam, maxWpx) => {
+                measureCtx.font = `${fontPx}px ${fam}, sans-serif`;
+                const out = [];
+                for (const para of String(text ?? '').split('\n')) {
+                    if (!maxWpx || maxWpx <= 0) { out.push(para); continue; }
+                    const words = para.split(/(\s+)/); let cur = '';
+                    for (const w of words) {
+                        const t = cur + w;
+                        if (measureCtx.measureText(t).width > maxWpx && cur.trim() !== '') { out.push(cur.trimEnd()); cur = w.trimStart(); }
+                        else cur = t;
+                    }
+                    out.push(cur.trimEnd());
+                }
+                return out.length ? out : [String(text ?? '')];
+            };
+            const urlToDataUrl = async (url) => {
+                if (!url) return null;
+                if (url.startsWith('data:')) return url;
+                try { const res = await fetch(url, { mode: 'cors' }); const blob = await res.blob(); return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(blob); }); }
+                catch (e) { return null; }
+            };
+            const loadImage = (src) => new Promise((res) => { const im = new window.Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+
+            // พื้นหลังของ panel (สี + รูป) → dataURL (null = ใช้สีล้วน)
+            const buildPanelBg = async (p, design) => {
+                const scale = 4, cw = Math.max(1, Math.round(p.w_mm * scale)), ch = Math.max(1, Math.round(p.h_mm * scale));
+                const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+                const ctx = cv.getContext('2d');
+                ctx.fillStyle = design?.bg_color || '#FFFFFF'; ctx.fillRect(0, 0, cw, ch);
+                let hasImg = false;
+                if (design?.bg_mode === 'dalle' && aiDielineBgImg) {
+                    const iw = aiDielineBgImg.naturalWidth || aiDielineBgImg.width, ih = aiDielineBgImg.naturalHeight || aiDielineBgImg.height;
+                    ctx.globalAlpha = design?.bg_opacity ?? 1;
+                    ctx.drawImage(aiDielineBgImg, p.x_mm * (iw / dieW), p.y_mm * (ih / dieH), p.w_mm * (iw / dieW), p.h_mm * (ih / dieH), 0, 0, cw, ch);
+                    ctx.globalAlpha = 1; hasImg = true;
+                } else if (design?.bg_mode === 'upload' && design?.bg_image_url) {
+                    const src = design.bg_image_url.startsWith('http') ? design.bg_image_url : `${API}${design.bg_image_url}`;
+                    const im = await loadImage(src);
+                    if (im) { ctx.globalAlpha = design?.bg_opacity ?? 1; ctx.drawImage(im, 0, 0, cw, ch); ctx.globalAlpha = 1; hasImg = true; }
+                }
+                return hasImg ? cv.toDataURL('image/png') : null;
+            };
+
+            const outPanels = [];
+            for (let i = 0; i < panels.length; i++) {
+                const p = panels[i];
+                const design = panelDesigns[p.id] || { bg_color: '#FFFFFF', elements: [] };
+                const mmToPx = Math.min(700 / p.w_mm, 600 / p.h_mm);
+
+                setActivePanelIdx(i);
+                await new Promise(r => setTimeout(r, 400)); // รอ stage เรนเดอร์ + รูปโหลด
+                const stage = stageRef.current;
+
+                const bgDataUrl = await buildPanelBg(p, design);
+                const els = [];
+                for (const el of (design.elements || [])) {
+                    if (el.hidden) continue;
+                    if (el.type === 'text') {
+                        const fontPx = el.fontSize || 20;
+                        els.push({
+                            type: 'text',
+                            x_mm: el.x / mmToPx, y_mm: el.y / mmToPx, w_mm: (el.w || 0) / mmToPx,
+                            fontMm: fontPx / mmToPx, color: el.fill || '#222', weight: (el.fontStyle === 'bold' ? 700 : 400),
+                            align: el.align || 'left', lines: wrap(el.data, fontPx, el.fontFamily || fontFamily, el.w),
+                        });
+                    } else {
+                        // รูป/โลโก้/ตรา/รูปทรง/บาร์โค้ด/QR → จับ node เป็นรูปแยกชิ้น
+                        let dataUrl = null, box = null;
+                        const node = stage?.findOne('#' + el.id);
+                        if (node) {
+                            try { dataUrl = node.toDataURL({ pixelRatio: 3 }); } catch (e) { dataUrl = null; }
+                            const r = node.getClientRect({ skipShadow: true });
+                            box = { x: r.x, y: r.y, w: r.width, h: r.height };
+                        }
+                        if (!dataUrl && el.type === 'image' && el.src) { dataUrl = await urlToDataUrl(el.src); box = { x: el.x, y: el.y, w: el.w, h: el.h }; }
+                        if (dataUrl && box) {
+                            els.push({ type: 'image', x_mm: box.x / mmToPx, y_mm: box.y / mmToPx, w_mm: box.w / mmToPx, h_mm: box.h / mmToPx, dataUrl });
+                        }
+                    }
+                }
+                outPanels.push({ x_mm: p.x_mm, y_mm: p.y_mm, w_mm: p.w_mm, h_mm: p.h_mm, bgColor: design.bg_color || '#FFFFFF', bgDataUrl, elements: els });
+            }
+            setActivePanelIdx(origIdx);
+
+            const payload = { product_name: product.name_product || 'design', bleed_mm: 3, font_family: fontFamily, dieline: { w_mm: dieW, h_mm: dieH }, panels: outPanels };
+            const r = await fetch(`${API}/api/mockups/export-vector-ai`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || 'Export failed'); }
+            const blob = await r.blob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `package_design_${product.name_product || 'design'}_CMYK.ai`;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        } catch (err) {
+            console.error('Mockup vector export error:', err);
+            alert('Export Illustrator ไม่สำเร็จ: ' + err.message);
+            setActivePanelIdx(origIdx);
+        } finally { setIsExporting(false); }
+    };
 
     // === Generate AI Mockup Preview ===
     const handleGenMockup = async () => {
@@ -1084,7 +1216,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
 
                             <div className="label-import-group-title">โลโก้ / เครื่องหมาย</div>
                             <LabelPartBtn icon="mdi:crown" label="โลโก้แบรนด์" available={!!brandAssets?.logoUrl} onClick={() => addElement('label_logo')} />
-                            <LabelPartBtn icon="mdi:medal-outline" label="Certifications" detail={(() => { try { const c = Array.isArray(labelData?.certifications) ? labelData.certifications : JSON.parse(labelData?.certifications || '[]'); return c.join(', '); } catch { return ''; } })()} available={!!labelData?.certifications} onClick={() => addElement('label_certs')} />
+                            <LabelPartBtn icon="mdi:medal-outline" label="ตรารับรอง" detail={(() => { try { const c = Array.isArray(labelData?.certifications) ? labelData.certifications : JSON.parse(labelData?.certifications || '[]'); return c.length ? `${c.length} ตรา` : ''; } catch { return ''; } })()} available={!!(labelData?.certifications?.length)} onClick={() => addElement('label_certs')} />
 
                             <div className="label-import-group-title">Barcode / QR Code</div>
                             <LabelPartBtn icon="mdi:barcode" label="Barcode (EAN-13)" detail={labelData?.barcode_value} available={true} onClick={() => addElement('barcode')} />
@@ -1267,9 +1399,15 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                                             {/* Elements */}
                                             {currentDesign?.elements?.map(el => (
                                                 <PanelElement key={el.id} el={el} isSelected={el.id === selectedElId}
+                                                    canvasW={canvasW} canvasH={canvasH}
+                                                    onCenterGuide={setCenterGuide}
                                                     onSelect={() => setSelectedElId(el.id)}
                                                     onChange={(updates) => updateElement(activePanel.id, el.id, updates)} />
                                             ))}
+
+                                            {/* เส้นกึ่งกลางกระดาษ (สีส้มของเว็บ) — แสดงเมื่อวัตถุอยู่กึ่งกลางพอดี */}
+                                            {centerGuide.v && <KLine points={[canvasW / 2, 0, canvasW / 2, canvasH]} stroke="#E8541F" strokeWidth={1.5} dash={[7, 5]} listening={false} />}
+                                            {centerGuide.h && <KLine points={[0, canvasH / 2, canvasW, canvasH / 2]} stroke="#E8541F" strokeWidth={1.5} dash={[7, 5]} listening={false} />}
 
                                             <Transformer ref={trRef}
                                                 boundBoxFunc={(oldB, newB) => newB.width < 10 ? oldB : newB}
@@ -1775,7 +1913,7 @@ function PanelBackground({ design, width, height, panel, panels, materialData, a
 }
 
 // === Panel Element Renderer ===
-function PanelElement({ el, isSelected, onSelect, onChange }) {
+function PanelElement({ el, isSelected, onSelect, onChange, canvasW, canvasH, onCenterGuide }) {
     const [img, setImg] = useState(null);
 
     useEffect(() => {
@@ -1843,7 +1981,22 @@ function PanelElement({ el, isSelected, onSelect, onChange }) {
         }
     }, [el.type, el.qrValue]);
 
+    // ขณะลาก — ตรวจว่าศูนย์กลางวัตถุตรงกึ่งกลางกระดาษไหม → ดูดเข้าแนว + โชว์เส้นกึ่งกลาง
+    const handleDragMove = (e) => {
+        const node = e.target;
+        if (!canvasW || !canvasH) return;
+        const box = node.getClientRect({ skipShadow: true, skipStroke: true });
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+        const SNAP = 6;
+        let v = false, h = false;
+        if (Math.abs(cx - canvasW / 2) <= SNAP) { node.x(node.x() - (cx - canvasW / 2)); v = true; }
+        if (Math.abs(cy - canvasH / 2) <= SNAP) { node.y(node.y() - (cy - canvasH / 2)); h = true; }
+        onCenterGuide?.({ v, h });
+    };
+
     const handleDragEnd = (e) => {
+        onCenterGuide?.({ v: false, h: false });
         onChange({ x: e.target.x(), y: e.target.y() });
     };
     const handleTransformEnd = (e) => {
@@ -1866,7 +2019,7 @@ function PanelElement({ el, isSelected, onSelect, onChange }) {
         onChange(updates);
     };
 
-    const common = { id: el.id, draggable: true, onClick: onSelect, onTap: onSelect, onDragEnd: handleDragEnd, onTransformEnd: handleTransformEnd };
+    const common = { id: el.id, draggable: true, onClick: onSelect, onTap: onSelect, onDragMove: handleDragMove, onDragEnd: handleDragEnd, onTransformEnd: handleTransformEnd };
 
     // Hidden elements are not rendered on canvas
     if (el.hidden) return null;
