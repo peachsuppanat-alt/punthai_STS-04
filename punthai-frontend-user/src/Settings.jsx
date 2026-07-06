@@ -6,6 +6,7 @@ import './Settings.css';
 
 import logoImg from './assets/logo.png';
 import { API_URL, OMISE_PUBLIC_KEY } from './config';
+import NotificationBell from './components/NotificationBell';
 
 
 
@@ -217,10 +218,7 @@ export const Settings = ({ user, setUser }) => {
           <button className="st-btn-world">
             <iconify-icon icon="iconamoon:search-light"></iconify-icon>
           </button>
-          <button className="st-btn-world st-notif-btn">
-            <iconify-icon icon="ph:bell-ringing-light"></iconify-icon>
-            <span className="st-notif-badge">3</span>
-          </button>
+          <NotificationBell className="st-btn-world" />
           <button className="st-btn-users" style={{ overflow: 'hidden', padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             {getProfileImage(userData.image_profile) ? (
               <img src={getProfileImage(userData.image_profile)} alt="User" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

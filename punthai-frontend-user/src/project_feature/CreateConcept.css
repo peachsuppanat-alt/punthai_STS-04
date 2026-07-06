@@ -407,7 +407,7 @@
 /* ── Palette Grid ────────────────────────────────── */
 .cncpt-palette-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 18px; width: 100%;
 }
 .cncpt-palette-card {
@@ -420,6 +420,8 @@
   transition: var(--trans);
   border: 1.5px solid rgba(255,255,255,0.9);
   animation: cncptCardIn .4s cubic-bezier(.22,1,.36,1) both;
+  display: flex;
+  flex-direction: column;
 }
 .cncpt-palette-card:hover {
   box-shadow: var(--sh-md);
@@ -453,7 +455,7 @@
 }
 .cncpt-swatch-item:hover .cncpt-swatch-hex { opacity: 1; }
 
-.cncpt-pc-actions { display: flex; gap: 8px; margin-top: 14px; }
+.cncpt-pc-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 14px; }
 .cncpt-pc-fav-btn {
   width: 38px; height: 38px;
   border: 1.5px solid var(--line);
@@ -501,9 +503,32 @@
 .cncpt-featured-font-thai { font-size: 28px; font-weight: 700; color: var(--gray-2); flex: 1; }
 .cncpt-feat-mood-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
 
+/* ── ส่วนที่หายไปก่อนหน้านี้: กล่อง featured font + ปุ่ม Use & Save ── */
+.cncpt-featured-font-box {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap; margin-top: 14px;
+}
+.cncpt-featured-font-name { font-size: 14px; font-weight: 600; color: var(--gray-2); margin-bottom: 4px; }
+.cncpt-use-save-btn {
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  background: var(--orange); color: #fff; border: none;
+  padding: 12px 26px; border-radius: 99px; font-size: 14px;
+  font-weight: 600; cursor: pointer;
+  font-family: 'Bai Jamjuree', sans-serif;
+  transition: var(--trans);
+  box-shadow: 0 4px 14px rgba(201,79,36,.28);
+}
+.cncpt-use-save-btn:hover { background: var(--orange-dk); transform: translateY(-2px); }
+
+/* ── ส่วนที่หายไปก่อนหน้านี้: ข้อความในการ์ดฟอนต์แต่ละใบ ── */
+.cncpt-fc-name { font-size: 18px; font-weight: 700; color: var(--charcoal); margin-bottom: 4px; }
+.cncpt-fc-meta { font-size: 12px; font-weight: 600; color: var(--gray-2); text-transform: capitalize; margin-bottom: 4px; }
+.cncpt-fc-sample { font-size: 20px; color: var(--charcoal); margin: 10px 0 4px; line-height: 1.4; }
+.cncpt-fc-lang { font-size: 12px; color: var(--gray-2); margin-bottom: 10px; }
+
 .cncpt-font-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px; width: 100%;
 }
 .cncpt-font-card {
@@ -517,6 +542,8 @@
   transition: var(--trans);
   cursor: pointer;
   animation: cncptCardIn .4s cubic-bezier(.22,1,.36,1) both;
+  display: flex;
+  flex-direction: column;
 }
 .cncpt-font-card:hover {
   box-shadow: var(--sh-md);
@@ -873,13 +900,17 @@
 }
 
 /* ── Responsive ──────────────────────────────────── */
+@media (max-width: 1100px) {
+  .cncpt-palette-grid, .cncpt-font-grid { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 900px) {
   .cncpt-names-grid { grid-template-columns: repeat(2, 1fr); }
-  .cncpt-palette-grid { grid-template-columns: 1fr; }
+  .cncpt-palette-grid, .cncpt-font-grid { grid-template-columns: repeat(2, 1fr); }
   .cncpt-cc-modal-box { width: 96vw; }
 }
 @media (max-width: 600px) {
   .cncpt-tab-content { padding: 20px; }
   .cncpt-names-grid { grid-template-columns: 1fr; }
+  .cncpt-palette-grid, .cncpt-font-grid { grid-template-columns: 1fr; }
   .cncpt-tab-bar { padding: 0 16px; }
 }

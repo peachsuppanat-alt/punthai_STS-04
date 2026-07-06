@@ -5,6 +5,8 @@ import { ConceptSidebarNews } from '../components/ConceptSidebarNews';
 
 import logoImg from '../assets/logo.png';
 import { API_URL } from '../config';
+import NavProfileButton from '../components/NavProfileButton';
+import NotificationBell from '../components/NotificationBell';
 
 /* ============================================================
    COLOR & FONT CONSTANTS  (ported from CreateConcept_News.jsx)
@@ -316,6 +318,20 @@ function cncptInjectLocalFontFaces() {
   document.head.appendChild(style);
 }
 
+// แปลง font ที่ save ไว้ใน DB (font_name) ให้เป็นรูปแบบเดียวกับ pool item ที่ grid ฟอนต์ใช้
+// ถ้าชื่อ font ตรงกับ CNCPT_LOCAL_FONTS จะดึง type/thai/moods ของ local font นั้นมาใช้เลย
+function cncptBuildFontPoolFromDb(dbFonts) {
+  return (dbFonts || []).map(f => {
+    const name = f.font_name;
+    const localMatch = CNCPT_LOCAL_FONTS.find(lf => lf.name === name);
+    const type  = localMatch?.type || 'sans-serif';
+    const thai  = localMatch ? localMatch.thai : CNCPT_THAI_FONTS.has(name);
+    const local = !!localMatch;
+    const moods = localMatch?.moods || cncptClassifyFontMood({ name, type });
+    return { name, gf: name.replace(/ /g,'+'), type, thai, local, moods, file: localMatch?.file };
+  });
+}
+
 /* ── helper functions (Color & Font) ── */
 function cncptClassifyFontMood(font) {
   if (CNCPT_KNOWN_FONT_MOODS[font.name]) return CNCPT_KNOWN_FONT_MOODS[font.name];
@@ -377,6 +393,23 @@ function cncptDetectTones(hexArr) {
     counts[tone]=(counts[tone]||0)+1;
   });
   return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,2).map(e=>e[0]);
+}
+
+// แปลง palette ที่ save ไว้ใน DB (name_palette + color_code_1..5) ให้เป็นรูปแบบเดียวกับ pool item
+// เพื่อเอาไปแสดงบน grid ได้ทันที — ถ้าชื่อ palette ตรงกับ CNCPT_PALETTE_LIBRARY จะดึง mood/tones/biz มาโชว์ด้วย
+function cncptBuildPoolFromDb(dbPalettes) {
+  return (dbPalettes || []).map(p => {
+    const colors = [p.color_code_1, p.color_code_2, p.color_code_3, p.color_code_4, p.color_code_5].filter(Boolean);
+    const libMatch = CNCPT_PALETTE_LIBRARY.find(lib => lib.name === p.name_palette);
+    return {
+      name:   p.name_palette,
+      colors,
+      mood:   libMatch?.mood  || '',
+      tones:  libMatch?.tones || (colors.length ? cncptDetectTones(colors) : []),
+      biz:    libMatch?.biz   || '',
+      source: 'database',
+    };
+  });
 }
 
 const CNCPT_MOOD_SEEDS = {
@@ -562,7 +595,8 @@ export const CreateConcept = () => {
     }
   }, [projectId]);
 
-  // ดึง palette ที่ save แล้วจาก DB เพื่อเอา color_id / concept_id มาใช้กด Favorite & Select
+  // ดึงพาเลทที่ save ไว้แล้วของโปรเจกต์นี้ (ใช้ endpoint เดิมที่มีอยู่จริง — ไม่แตะ server.js)
+  // ใช้ GET /api/color-palettes/:projectId
   const fetchDbPalettes = async () => {
     if (!projectId) return;
     try {
@@ -576,44 +610,107 @@ export const CreateConcept = () => {
         palettes.forEach(p => {
           map[p.name_palette] = {
             color_id:   p.color_id,
-            concept_id: p.concept_id,  // id ใน color_concept (primary key)
+            concept_id: p.concept_id,
             is_liked:   !!p.is_liked,
             is_selected:!!p.is_selected,
           };
         });
         setCncptDbMap(map);
-        // sync is_liked กลับมาที่ state
         const favNames = new Set(palettes.filter(p => p.is_liked).map(p => p.name_palette));
         setCncptFavPalettes(favNames);
-        // sync is_selected
         const selName = palettes.find(p => p.is_selected)?.name_palette || '';
         if (selName) setCncptSelectedPalette(selName);
+
+        // โชว์ dataset เต็ม 178 พาเลทเป็นฐานเสมอ (ไม่ต้องพึ่ง server) + เติมพาเลทที่โปรเจกต์นี้เคย save
+        // ไว้แต่ไม่ได้อยู่ใน dataset (เช่นพาเลทที่มาจาก colormind ตอน generate) เข้าไปด้วย
+        const libNames = new Set(CNCPT_PALETTE_LIBRARY.map(p => p.name));
+        const dbOnlyPalettes = cncptBuildPoolFromDb(palettes).filter(p => !libNames.has(p.name));
+        const pool = [...CNCPT_PALETTE_LIBRARY.map(p => ({...p, source:'dataset'})), ...dbOnlyPalettes];
+        setCncptColorPool(pool);
+        const filtered = cncptApplyColorFilters(pool, '', '', '', false, favNames);
+        setCncptColorFiltered(filtered);
+        setCncptColorShown(Math.min(cncptColorPageSize, filtered.length));
+        setCncptColorResult(true);
       }
-    } catch(err) { console.error('fetchDbPalettes error:', err); }
+    } catch(err) {
+      console.error('fetchDbPalettes error:', err);
+      // fallback: ถ้า API มีปัญหา ใช้ dataset ในเครื่องไปก่อน กันหน้าว่าง
+      const pool = CNCPT_PALETTE_LIBRARY.map(p=>({...p, source:'dataset'}));
+      setCncptColorPool(pool);
+      setCncptColorFiltered(pool);
+      setCncptColorShown(Math.min(cncptColorPageSize, pool.length));
+      setCncptColorResult(true);
+    }
   };
   useEffect(() => { if (projectId) fetchDbPalettes(); }, [projectId]);
 
-  // ดึง font ที่ save แล้วจาก DB พร้อม sync like/select state
-  const fetchDbFonts = async () => {
-    if (!projectId) return;
+  // ดึง Google Fonts (cache ไว้ใน cncptRawFonts กันยิงซ้ำ) — ใช้ร่วมกันทั้งตอนโหลดหน้าแรกและตอนกดในป็อปอัพ
+  async function cncptFetchGoogleFonts() {
+    if (cncptRawFonts.length) return cncptRawFonts;
     try {
-      const res = await fetch(`${API_URL}/api/fonts/${projectId}`);
+      const res = await fetch(`https://www.googleapis.com/webfonts/v1/webfonts?key=${CNCPT_GOOGLE_FONTS_API_KEY}&sort=popularity`);
+      if (!res.ok) throw new Error('google fonts api error');
       const data = await res.json();
-      if (data.status === 'success') {
-        const map = {};
-        const likedNames = new Set();
-        data.fonts.forEach(f => {
-          map[f.font_name] = { font_id: f.font_id, concept_id: f.concept_id, is_liked: !!f.is_liked, is_selected: !!f.is_selected };
-          if (f.is_liked) likedNames.add(f.font_name);
-        });
-        setCncptDbFontMap(map);
-        setCncptFavFonts(likedNames);
-        const selFont = data.fonts.find(f => f.is_selected);
-        if (selFont) setCncptSelectedFontName(selFont.font_name);
-      }
-    } catch(err) { console.error('fetchDbFonts error:', err); }
+      const googleFonts = data.items.map(font => {
+        const f = { name:font.family, gf:font.family.replace(/ /g,'+'), type:font.category, thai:CNCPT_THAI_FONTS.has(font.family), local:false };
+        f.moods = cncptClassifyFontMood(f);
+        return f;
+      });
+      setCncptRawFonts(googleFonts);
+      // sync Google Fonts ลง table font (background, ไม่ block UI)
+      fetch(`${API_URL}/api/fonts/sync-google`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fonts: googleFonts.map(f => ({ font_name: f.name })) }),
+      }).catch(err => console.warn('[sync-google]', err));
+      return googleFonts;
+    } catch(err) {
+      console.warn('[Fonts] Google API failed, using local only:', err.message);
+      return [];
+    }
+  }
+
+  // ดึง font ทั้งหมดจากตาราง font (master) พร้อมสถานะ like/select ของโปรเจกต์นี้ ในคิวรีเดียว
+  // ใช้ GET /api/fonts/all/:projectId (endpoint นี้มีอยู่แล้วใน backend) + เสริม Google Fonts สดๆ เข้าไปด้วย
+  const fetchAllFonts = async () => {
+    if (!projectId) return;
+    cncptInjectLocalFontFaces();
+    const googleFonts = await cncptFetchGoogleFonts();
+    const localNames  = new Set(CNCPT_LOCAL_FONTS.map(f=>f.name));
+    const googleNames = new Set(googleFonts.map(f=>f.name));
+
+    let dbRows = [];
+    try {
+      const res = await fetch(`${API_URL}/api/fonts/all/${projectId}`);
+      const data = await res.json();
+      if (data.status === 'success') dbRows = data.fonts || [];
+    } catch(err) {
+      console.error('fetchAllFonts error:', err);
+    }
+
+    // sync สถานะ like/select ของโปรเจกต์นี้ (มาจาก LEFT JOIN font_concept)
+    const map = {};
+    const favNames = new Set();
+    dbRows.forEach(f => {
+      map[f.font_name] = { font_id: f.font_id, concept_id: f.concept_id, is_liked: !!f.is_liked, is_selected: !!f.is_selected };
+      if (f.is_liked) favNames.add(f.font_name);
+    });
+    setCncptDbFontMap(map);
+    setCncptFavFonts(favNames);
+    const selFont = dbRows.find(f => f.is_selected);
+    if (selFont) setCncptSelectedFontName(selFont.font_name);
+
+    // pool ที่โชว์ = local fonts + Google Fonts (ทั้งหมด, สดจาก API) + font ใน DB ที่ยังไม่ซ้ำกับ 2 แหล่งแรก
+    const dbOnlyFonts = cncptBuildFontPoolFromDb(dbRows).filter(f=>!localNames.has(f.name) && !googleNames.has(f.name));
+    const pool = [...CNCPT_LOCAL_FONTS, ...googleFonts, ...dbOnlyFonts];
+    setCncptFontPool(pool);
+    const filtered = cncptApplyFontFilters(pool, '', '', '');
+    setCncptFontsFiltered(filtered);
+    setCncptFontsShown(Math.min(cncptFontPageSize, filtered.length));
+    setCncptFontResult(true);
+    setCncptFeaturedIdx(0);
+    cncptLoadGoogleFont(filtered[0]);
   };
-  useEffect(() => { if (projectId) fetchDbFonts(); }, [projectId]);
+  useEffect(() => { if (projectId) fetchAllFonts(); }, [projectId]);
 
   const fetchNames = async () => {
     try {
@@ -893,26 +990,7 @@ export const CreateConcept = () => {
     // inject @font-face สำหรับ local fonts
     cncptInjectLocalFontFaces();
 
-    let googleFonts = cncptRawFonts;
-    if (!googleFonts.length) {
-      try {
-        const res = await fetch(`https://www.googleapis.com/webfonts/v1/webfonts?key=${CNCPT_GOOGLE_FONTS_API_KEY}&sort=popularity`);
-        if (res.ok) {
-          const data = await res.json();
-          googleFonts = data.items.map(font => {
-            const f = { name:font.family, gf:font.family.replace(/ /g,'+'), type:font.category, thai:CNCPT_THAI_FONTS.has(font.family), local:false };
-            f.moods = cncptClassifyFontMood(f);
-            return f;
-          });
-          setCncptRawFonts(googleFonts);
-          // sync Google Fonts ลง table font (background, ไม่ block UI)
-          fetch(`${API_URL}/api/fonts/sync-google`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fonts: googleFonts.map(f => ({ font_name: f.name })) }),
-          }).catch(err => console.warn('[sync-google]', err));
-        }
-      } catch(err) { console.warn('[Fonts] Google API failed, using local only:', err.message); }
-    }
+    const googleFonts = await cncptFetchGoogleFonts();
 
     // รวม local fonts (ขึ้นก่อน) + Google Fonts
     const pool = [...CNCPT_LOCAL_FONTS, ...googleFonts];
@@ -998,8 +1076,8 @@ export const CreateConcept = () => {
         <div className="cncpt-logo"><Link to="/"><img src={logoImg} alt="logo" className="cncpt-logo-img" /></Link></div>
         <div className="cncpt-nav-icons">
           <button className="cncpt-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
-          <button className="cncpt-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
-          <button className="cncpt-btn-users"><iconify-icon icon="solar:user-linear"></iconify-icon></button>
+          <NotificationBell className="cncpt-btn-world" />
+          <NavProfileButton className="cncpt-btn-users" />
         </div>
       </header>
 
@@ -1097,13 +1175,6 @@ export const CreateConcept = () => {
               ════════════════════════════════════ */}
           {activeTab === 'color' && (
             <div className="cncpt-tab-content">
-              {!cncptColorResult ? (
-                <div className="cncpt-empty-state">
-                  <div className="cncpt-empty-icon"><CncptIcon icon="mdi:palette-outline"/></div>
-                  <p className="cncpt-empty-title">Find the perfect color palette for your brand.</p>
-                  <button className="cncpt-get-start-btn" onClick={() => setColorModal(true)}>Get Start</button>
-                </div>
-              ) : (
                 <div style={{width:'100%'}}>
                   {/* Filter bar */}
                   <div className="cncpt-filter-bar">
@@ -1186,12 +1257,18 @@ export const CreateConcept = () => {
                     </div>
                     <span className="cncpt-font-count-badge">{cncptColorFiltered.length} palettes</span>
                     <button className="cncpt-rename-btn" style={{marginLeft:'auto'}} onClick={()=>{setColorModal(true);setCncptShowFavOnly(false);}}>
-                      <CncptIcon icon="mdi:refresh"/> ทำใหม่
+                      <CncptIcon icon="mdi:palette-outline"/> Generate Palette
                     </button>
                   </div>
 
                   {/* Palette grid */}
-                  {cncptColorFiltered.length === 0 ? (
+                  {cncptColorPool.length === 0 ? (
+                    <div className="cncpt-empty-state">
+                      <div className="cncpt-empty-icon"><CncptIcon icon="mdi:palette-outline"/></div>
+                      <p className="cncpt-empty-title">Find the perfect color palette for your brand.</p>
+                      <button className="cncpt-get-start-btn" onClick={() => setColorModal(true)}>Generate Palette</button>
+                    </div>
+                  ) : cncptColorFiltered.length === 0 ? (
                     <div className="cncpt-filter-empty-state">
                       <div className="cncpt-filter-empty-icon"><CncptIcon icon="mdi:filter-remove-outline" width="48"/></div>
                       <p className="cncpt-filter-empty-title">ไม่พบพาเลทที่ตรงกัน</p>
@@ -1340,7 +1417,6 @@ export const CreateConcept = () => {
                     </>
                   )}
                 </div>
-              )}
             </div>
           )}
 
@@ -1349,13 +1425,6 @@ export const CreateConcept = () => {
               ════════════════════════════════════ */}
           {activeTab === 'fonts' && (
             <div className="cncpt-tab-content">
-              {!cncptFontResult ? (
-                <div className="cncpt-empty-state">
-                  <div className="cncpt-empty-icon"><CncptIcon icon="mdi:format-font"/></div>
-                  <p className="cncpt-empty-title">Find the perfect font for your brand.</p>
-                  <button className="cncpt-get-start-btn" onClick={()=>setFontsModal(true)}>Get Start</button>
-                </div>
-              ) : (
                 <div style={{width:'100%'}}>
                   {/* Filter bar */}
                   <div className="cncpt-filter-bar">
@@ -1409,12 +1478,12 @@ export const CreateConcept = () => {
                         value={cncptFontSearch} onChange={e=>setCncptFontSearch(e.target.value)}/>
                     </div>
                     <button className="cncpt-rename-btn" style={{marginLeft:'auto'}} onClick={()=>setFontsModal(true)}>
-                      <CncptIcon icon="mdi:refresh"/> ทำใหม่
+                      <CncptIcon icon="mdi:tune-variant"/> ตัวช่วยเลือก Font
                     </button>
                   </div>
 
                   {/* Featured banner */}
-                  {cncptFeaturedFont && (
+                  {cncptFeaturedFont && cncptFontPool.length > 0 && (
                     <div className="cncpt-suggested-banner">
                       <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
                         <button className="cncpt-suggested-pill">✦ Suggested for you</button>
@@ -1469,7 +1538,13 @@ export const CreateConcept = () => {
                   )}
 
                   {/* Font grid / empty */}
-                  {cncptFontsFiltered.length === 0 ? (
+                  {cncptFontPool.length === 0 ? (
+                    <div className="cncpt-empty-state">
+                      <div className="cncpt-empty-icon"><CncptIcon icon="mdi:format-font"/></div>
+                      <p className="cncpt-empty-title">Find the perfect font for your brand.</p>
+                      <button className="cncpt-get-start-btn" onClick={()=>setFontsModal(true)}>ตัวช่วยเลือก Font</button>
+                    </div>
+                  ) : cncptFontsFiltered.length === 0 ? (
                     <div className="cncpt-filter-empty-state">
                       <div className="cncpt-filter-empty-icon"><CncptIcon icon="mdi:filter-remove-outline" width="48"/></div>
                       <p className="cncpt-filter-empty-title">ไม่พบฟ้อนต์ที่ตรงกัน</p>
@@ -1567,7 +1642,6 @@ export const CreateConcept = () => {
                     </>
                   )}
                 </div>
-              )}
             </div>
           )}
         </main>

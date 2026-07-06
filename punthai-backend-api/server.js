@@ -567,12 +567,112 @@ app.post('/api/brand_product', upload.single('image_product'), async (req, res) 
     try {
         const connection = await pool.getConnection();
         const sql = `INSERT INTO brand_product (project_id, name_product, type_product, image_product) VALUES (?, ?, ?, ?)`;
-        await connection.query(sql, [project_id, name_product, type_product, image_product]);
+        const [result] = await connection.query(sql, [project_id, name_product, type_product, image_product]);
         connection.release();
-        res.json({ status: 'success', message: 'เพิ่มสินค้าสำเร็จ' });
+        res.json({ status: 'success', message: 'เพิ่มสินค้าสำเร็จ', product_id: result.insertId });
     } catch (err) {
         console.error("Insert product error:", err);
         res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// แก้ไขข้อมูลพื้นฐานของสินค้า (ชื่อ / ประเภท / รูป) จากหน้า Product
+app.patch('/api/brand_product/:id', upload.single('image_product'), async (req, res) => {
+    const { id } = req.params;
+    const { name_product, type_product } = req.body;
+    if (!name_product || !type_product) {
+        return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
+    }
+    try {
+        const connection = await pool.getConnection();
+        if (req.file) {
+            await connection.query(
+                'UPDATE brand_product SET name_product = ?, type_product = ?, image_product = ? WHERE product_id = ?',
+                [name_product, type_product, req.file.filename, id]
+            );
+        } else {
+            await connection.query(
+                'UPDATE brand_product SET name_product = ?, type_product = ? WHERE product_id = ?',
+                [name_product, type_product, id]
+            );
+        }
+        // ให้ชื่อสินค้าใน label_design ตรงกันด้วย (ถ้ามี label แล้ว)
+        await connection.query('UPDATE label_design SET product_name = ? WHERE product_id = ?', [name_product, id]);
+        connection.release();
+        res.json({ status: 'success', message: 'แก้ไขสินค้าสำเร็จ' });
+    } catch (err) {
+        console.error("Update product error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// ลบสินค้า (label_design / marketing_content จะถูกลบตาม ON DELETE CASCADE)
+app.delete('/api/brand_product/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const connection = await pool.getConnection();
+        await connection.query('DELETE FROM brand_product WHERE product_id = ?', [id]);
+        connection.release();
+        res.json({ status: 'success', message: 'ลบสินค้าสำเร็จ' });
+    } catch (err) {
+        console.error("Delete product error:", err);
+        res.status(500).json({ status: 'error', message: 'Database error' });
+    }
+});
+
+// ===== รายละเอียดสินค้า (content-only) — เก็บใน label_design เพื่อนำไปใช้ต่อในฟีเจอร์ Label / Mockup =====
+// อัปเดตเฉพาะฟิลด์เนื้อหา ไม่แตะฟิลด์ดีไซน์/เลย์เอาต์ (layout, bg, elem_positions, certifications, qr/barcode)
+// เพื่อไม่ให้ทับงานดีไซน์ที่ผู้ใช้ทำไว้ใน LabelEditor
+app.post('/api/product-details/:productId', async (req, res) => {
+    const { productId } = req.params;
+    const {
+        project_id, product_name, tagline, net_weight, ingredients,
+        usage_instruction, storage_instruction, warnings,
+        manufacturer_info, fda_number, mfg_date, exp_date, lot_number
+    } = req.body;
+
+    if (!project_id || !product_name) {
+        return res.status(400).json({ status: 'error', message: 'project_id and product_name are required' });
+    }
+
+    try {
+        const connection = await pool.getConnection();
+        const [existing] = await connection.query('SELECT label_id FROM label_design WHERE product_id = ?', [productId]);
+
+        const manufacturerJson = (manufacturer_info && Object.values(manufacturer_info).some(v => v))
+            ? JSON.stringify(manufacturer_info) : null;
+        const fMfg = mfg_date ? mfg_date.split('T')[0] : null;
+        const fExp = exp_date ? exp_date.split('T')[0] : null;
+
+        if (existing.length > 0) {
+            await connection.query(
+                `UPDATE label_design SET
+                    product_name = ?, tagline = ?, net_weight = ?, ingredients = ?,
+                    usage_instruction = ?, storage_instruction = ?, warnings = ?,
+                    manufacturer_info = ?, fda_number = ?, mfg_date = ?, exp_date = ?, lot_number = ?
+                 WHERE product_id = ?`,
+                [product_name, tagline || null, net_weight || null, ingredients || null,
+                 usage_instruction || null, storage_instruction || null, warnings || null,
+                 manufacturerJson, fda_number || null, fMfg, fExp, lot_number || null, productId]
+            );
+        } else {
+            await connection.query(
+                `INSERT INTO label_design
+                    (project_id, product_id, product_name, tagline, net_weight, ingredients,
+                     usage_instruction, storage_instruction, warnings,
+                     manufacturer_info, fda_number, mfg_date, exp_date, lot_number)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [project_id, productId, product_name, tagline || null, net_weight || null, ingredients || null,
+                 usage_instruction || null, storage_instruction || null, warnings || null,
+                 manufacturerJson, fda_number || null, fMfg, fExp, lot_number || null]
+            );
+        }
+
+        connection.release();
+        res.json({ status: 'success', message: 'บันทึกรายละเอียดสินค้าสำเร็จ' });
+    } catch (err) {
+        console.error("Save product details error:", err);
+        res.status(500).json({ status: 'error', message: err.message || 'Database error' });
     }
 });
 

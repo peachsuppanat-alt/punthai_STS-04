@@ -58,6 +58,14 @@ const Navbar = ({ user, onOpenLogin, onLogout }) => {
 
                 <div className="nav-icons">
                     <button
+                        className="btn-world"
+                        aria-label="ค้นหา"
+                        title="ค้นหา (Ctrl+K)"
+                        onClick={() => window.dispatchEvent(new Event('punthai:open-search'))}
+                    >
+                        <iconify-icon icon="iconamoon:search-light"></iconify-icon>
+                    </button>
+                    <button
                         className="btn-users"
                         onClick={handleProfileClick}
                         style={{ overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'pointer', padding: 0 }}

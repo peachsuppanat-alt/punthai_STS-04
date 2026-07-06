@@ -5,6 +5,7 @@ import './Profile.css';
 // อิมพอร์ตรูปภาพ
 import logoImg from './assets/logo.png';
 import { API_URL } from './config';
+import NotificationBell from './components/NotificationBell';
 
 export const Profile = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -140,50 +141,7 @@ export const Profile = ({ user, setUser }) => {
           <button className="pf-btn-world">
             <iconify-icon icon="iconamoon:search-light"></iconify-icon>
           </button>
-          <div className="pf-notif-wrapper">
-            <button className="pf-btn-world pf-notif-btn" onClick={() => setShowNotifications(!showNotifications)}>
-              <iconify-icon icon="ph:bell-ringing-light"></iconify-icon>
-              {unreadCount > 0 && <span className="pf-notif-badge">{unreadCount}</span>}
-            </button>
-            {showNotifications && (
-              <div className="pf-notif-dropdown">
-                <div className="pf-notif-header">
-                  <span className="pf-notif-title">การแจ้งเตือน</span>
-                  {unreadCount > 0 && (
-                    <button className="pf-notif-mark-read" onClick={markAllRead}>อ่านทั้งหมด</button>
-                  )}
-                </div>
-                <div className="pf-notif-list">
-                  {notifications.length === 0 ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#999', fontSize: 14 }}>
-                      ไม่มีการแจ้งเตือน
-                    </div>
-                  ) : (
-                    notifications.map(notif => (
-                      <div key={notif.id} className={`pf-notif-item ${!notif.read ? 'pf-notif-unread' : ''}`}
-                        onClick={() => {
-                          if (!notif.read) {
-                            fetch(`${API_URL}/api/user/notifications/${notif.id}/read`, { method: 'PUT' });
-                            setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
-                          }
-                        }}
-                        style={{ cursor: !notif.read ? 'pointer' : 'default' }}
-                      >
-                        <div className="pf-notif-dot-wrap">
-                          {!notif.read && <span className="pf-notif-dot"></span>}
-                        </div>
-                        <div className="pf-notif-content">
-                          <p className="pf-notif-msg" style={{ fontWeight: !notif.read ? 600 : 400 }}>{notif.title || notif.message}</p>
-                          {notif.title && <p style={{ fontSize: 12, color: '#888', margin: '2px 0 0' }}>{notif.message}</p>}
-                          <span className="pf-notif-time">{notif.time}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <NotificationBell className="pf-btn-world" />
 
           <button className="pf-btn-users" style={{ overflow: 'hidden', padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             {getProfileImage(userData.image_profile) ? (

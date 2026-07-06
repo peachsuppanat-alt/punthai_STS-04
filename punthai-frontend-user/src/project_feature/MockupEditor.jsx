@@ -98,6 +98,9 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     const [aspectLocked, setAspectLocked] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    // ยุบ sidebar/props-panel ได้เพื่อคืนพื้นที่ให้ canvas — เริ่มต้นยุบอัตโนมัติถ้าจอแคบ
+    const [sidebarOpen, setSidebarOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 1200);
+    const [propsPanelOpen, setPropsPanelOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 1200);
     const [savedMockupId, setSavedMockupId] = useState(null);
     const [saveMsg, setSaveMsg] = useState('');
     const [showProModal, setShowProModal] = useState(false);
@@ -203,6 +206,34 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
         const fitScale = clampScale(Math.min((aW - padding) / canvasW, (aH - padding) / canvasH));
         setStageScale(fitScale);
     };
+
+    // Auto fit-to-screen: รันครั้งแรกตอน panel/canvas พร้อม และรันซ้ำตอนย่อ-ขยายหน้าต่าง
+    // กันไม่ให้ canvas ล้น/บีบ layout ตอนเปิดใช้งานบนจอคอมพิวเตอร์ที่เล็กกว่าปกติ
+    useEffect(() => {
+        if (!activePanel) return;
+        handleFitToScreen();
+    }, [activePanel?.id, canvasW, canvasH]);
+
+    useEffect(() => {
+        let resizeTimer;
+        const onWindowResize = () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => handleFitToScreen(), 150);
+        };
+        window.addEventListener('resize', onWindowResize);
+        return () => {
+            window.removeEventListener('resize', onWindowResize);
+            clearTimeout(resizeTimer);
+        };
+    }, [canvasW, canvasH]);
+
+    // ยุบ/ขยาย sidebar หรือ props-panel ก็เปลี่ยนพื้นที่ที่ canvas มีได้เหมือนกัน
+    // รอ transition ของ panel (250ms) เสร็จก่อนค่อยคำนวณ fit-to-screen ใหม่
+    useEffect(() => {
+        if (!activePanel) return;
+        const t = setTimeout(() => handleFitToScreen(), 260);
+        return () => clearTimeout(t);
+    }, [sidebarOpen, propsPanelOpen]);
 
     useEffect(() => { fetchMaterial(); }, [product]);
 
@@ -984,7 +1015,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
     return (
         <div className="pkgdesign-root">
             {/* === SIDEBAR === */}
-            <div className="pkgdesign-sidebar">
+            <div className={`pkgdesign-sidebar${sidebarOpen ? '' : ' pkgdesign-panel-collapsed'}`}>
                 <button onClick={onBack} className="back-link">
                     <iconify-icon icon="mdi:chevron-left"></iconify-icon> กลับ
                 </button>
@@ -1361,6 +1392,10 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                 {/* Panel info */}
                 <div className="canvas-panel-nav">
                     <div className="canvas-panel-nav-left">
+                        <button onClick={() => setSidebarOpen(o => !o)} title={sidebarOpen ? 'ซ่อนแผงด้านซ้าย' : 'แสดงแผงด้านซ้าย'}
+                            className="canvas-panel-toggle-btn">
+                            <iconify-icon icon={sidebarOpen ? 'mdi:page-first' : 'mdi:page-last'}></iconify-icon>
+                        </button>
                         <button onClick={() => { const prev = (activePanelIdx - 1 + panels.length) % panels.length; setActivePanelIdx(prev); setSelectedElId(null); }}
                             className="canvas-panel-nav-btn"><iconify-icon icon="mdi:chevron-left"></iconify-icon></button>
                         <span className="canvas-panel-nav-label">
@@ -1373,6 +1408,10 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                         <button onClick={handleSave} disabled={isSaving} className="canvas-save-btn">
                             <iconify-icon icon="mdi:content-save-outline"></iconify-icon>
                             {isSaving ? 'กำลังบันทึก...' : 'บันทึก'}
+                        </button>
+                        <button onClick={() => setPropsPanelOpen(o => !o)} title={propsPanelOpen ? 'ซ่อนแผงด้านขวา' : 'แสดงแผงด้านขวา'}
+                            className="canvas-panel-toggle-btn">
+                            <iconify-icon icon={propsPanelOpen ? 'mdi:page-last' : 'mdi:page-first'}></iconify-icon>
                         </button>
                     </div>
                 </div>
@@ -1460,7 +1499,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
             </div>
 
             {/* === RIGHT PROPERTIES PANEL === */}
-            <div className="pkgdesign-props-panel">
+            <div className={`pkgdesign-props-panel${propsPanelOpen ? '' : ' pkgdesign-panel-collapsed'}`}>
                 {/* Tabs */}
                 <div className="props-tabs">
                     <button
@@ -2172,10 +2211,18 @@ function PanelElement({ el, isSelected, onSelect, onChange, canvasW, canvasH, on
 
 // === Die-line Mini Map ===
 function DielineMiniMap({ panels, activePanelIdx, onClickPanel, materialData, panelDesigns, aiDielineBgImg }) {
+    // หดขนาด mini-map ลงจริงๆ (ไม่ใช่แค่ transform scale) ตอนจอเล็กลง เพื่อคืนพื้นที่ให้ canvas
+    const [compact, setCompact] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 1440);
+    useEffect(() => {
+        const onResize = () => setCompact(window.innerWidth <= 1440);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
     if (!materialData) return null;
     const dW = parseFloat(materialData.dieline_width_mm);
     const dH = parseFloat(materialData.dieline_height_mm);
-    const maxW = 200, maxH = 300;
+    const maxW = compact ? 120 : 200, maxH = compact ? 180 : 300;
     const scale = Math.min(maxW / dW, maxH / dH);
     const mapW = dW * scale, mapH = dH * scale;
 

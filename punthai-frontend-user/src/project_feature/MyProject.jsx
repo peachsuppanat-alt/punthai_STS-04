@@ -7,6 +7,7 @@ import { ProjectSidebar } from '../components/sidebar';
 import logoImg from '../assets/logo.png';
 import createImg from '../assets/create.png';
 import { API_URL } from '../config';
+import NotificationBell from '../components/NotificationBell';
 
 export const MyProject = ({ user }) => {
     // 🟢 1. หัวใจสำคัญ: ดึงข้อมูล User มาตรงๆ แบบเดียวกับ Navbar (ไม่มี State ไม่ต้องรอโหลด)
@@ -147,7 +148,7 @@ export const MyProject = ({ user }) => {
                 
                 <div className="mp-nav-icons">
                     <button className="mp-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
-                    <button className="mp-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
+                    <NotificationBell className="mp-btn-world" />
                     
                     {/* 🟢 2. โค้ดแสดงรูปโปรไฟล์ ก๊อปปี้มาจาก Navbar.jsx เป๊ะๆ ทุกบรรทัด 🟢 */}
                     <button 

@@ -7,6 +7,8 @@ import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
 import { API_URL } from '../config';
+import NavProfileButton from '../components/NavProfileButton';
+import NotificationBell from '../components/NotificationBell';
 //import createLogoImg from './assets/create logo.png';
 
 export const CreateLogo = () => {
@@ -249,8 +251,8 @@ export const CreateLogo = () => {
         </div>
         <div className="clg-nav-icons">
           <button className="clg-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
-          <button className="clg-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
-          <button className="clg-btn-users"><iconify-icon icon="solar:user-linear"></iconify-icon></button>
+          <NotificationBell className="clg-btn-world" />
+          <NavProfileButton className="clg-btn-users" />
         </div>
       </header>
 

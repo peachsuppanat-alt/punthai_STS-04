@@ -273,6 +273,12 @@
   overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
+/* กรอบรูปสินค้า: ขนาดเล็กแบบ thumbnail (ไม่ยืดเต็มความกว้าง) */
+.pd-image-main {
+  flex: 0 0 auto;
+  width: 108px;
+  height: 108px;
+}
 .pd-image-main iconify-icon { font-size: 32px; color: var(--gray-4); }
 .pd-image-box img {
   width: 100%; height: 100%;
@@ -290,6 +296,7 @@
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
+  position: relative;
 }
 .pd-card-name {
   font-size: 17px; font-weight: 700;
@@ -397,6 +404,246 @@
 }
 .pd-change-btn:hover { background: var(--orange); color: #fff; border-color: var(--orange); }
 
+/* ── Kebab menu (มุมขวาบนของการ์ด) ───────────────── */
+.pd-card-menu-btn {
+  position: absolute;
+  top: 14px; right: 14px;
+  z-index: 3;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--gray-2);
+  box-shadow: 0 2px 8px rgba(80, 40, 20, 0.15);
+  transition: var(--trans);
+}
+.pd-card-menu-btn iconify-icon { font-size: 20px; }
+.pd-card-menu-btn:hover { background: var(--orange); color: #fff; }
+
+.pd-card-menu {
+  position: absolute;
+  top: 50px; right: 14px;
+  z-index: 6;
+  min-width: 176px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--sh-md);
+  padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+  animation: pdCardIn 0.15s ease both;
+}
+.pd-card-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none; background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px; font-weight: 600;
+  color: var(--charcoal);
+  transition: var(--trans);
+}
+.pd-card-menu-item iconify-icon { font-size: 18px; color: var(--gray-2); }
+.pd-card-menu-item:hover { background: var(--cream-dark); }
+.pd-menu-danger { color: #d63a2e; }
+.pd-menu-danger iconify-icon { color: #d63a2e; }
+.pd-menu-danger:hover { background: #fdecea; }
+
+/* ── Clickable card hint ──────────────────────────── */
+.pd-card-clickable { cursor: pointer; }
+.pd-card-hint {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 12px;
+  font-size: 12px; font-weight: 600;
+  color: var(--orange);
+  opacity: 0;
+  transition: var(--trans);
+}
+.pd-card-hint iconify-icon { font-size: 15px; }
+.pd-product-card.pd-card-clickable:hover .pd-card-hint { opacity: 1; }
+
+/* ── Modal box: scrollable when form grows tall ──── */
+.pd-modal-box,
+.pd-detail-box {
+  max-height: 90vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-dk) transparent;
+}
+.pd-modal-box::-webkit-scrollbar,
+.pd-detail-box::-webkit-scrollbar { width: 6px; }
+.pd-modal-box::-webkit-scrollbar-thumb,
+.pd-detail-box::-webkit-scrollbar-thumb { background: var(--line-dk); border-radius: 99px; }
+
+.pd-modal-title {
+  font-family: 'Poppins', 'Bai Jamjuree', sans-serif;
+  font-size: 20px; font-weight: 700;
+  color: var(--charcoal);
+  padding-top: 22px !important;
+}
+
+/* ── Extra info note ──────────────────────────────── */
+.pd-extra-note {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 6px 0 4px;
+  font-size: 12.5px; line-height: 1.55;
+  color: var(--gray-2);
+  background: var(--orange-lt);
+  border: 1px solid var(--orange-mid);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px !important;
+}
+.pd-extra-note iconify-icon { font-size: 18px; color: var(--orange); flex-shrink: 0; margin-top: 1px; }
+
+/* ── Collapsible form sections ────────────────────── */
+.pd-form-section {
+  margin: 10px 0 !important;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.pd-section-head {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 16px;
+  background: none; border: none; cursor: pointer;
+  font-family: 'Bai Jamjuree', sans-serif;
+  color: var(--charcoal);
+  transition: var(--trans);
+}
+.pd-section-head:hover { background: var(--cream-dark); }
+.pd-section-title {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 15px; font-weight: 700;
+}
+.pd-section-title iconify-icon { font-size: 19px; color: var(--orange); }
+.pd-section-head > iconify-icon { font-size: 20px; color: var(--gray-3); }
+.pd-section-body {
+  padding: 6px 16px 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* ── Labeled fields ───────────────────────────────── */
+.pd-field { margin-bottom: 12px; }
+.pd-field:last-child { margin-bottom: 0; }
+.pd-field-label {
+  display: block;
+  font-size: 13px; font-weight: 600;
+  color: var(--gray-2);
+  margin-bottom: 6px;
+}
+.pd-field-input {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--line);
+  font-family: 'Bai Jamjuree', sans-serif;
+  font-size: 14px;
+  outline: none; box-sizing: border-box;
+  background: var(--surface);
+  color: var(--charcoal);
+  transition: var(--trans);
+}
+.pd-field-input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 4px rgba(201,79,36,.10);
+}
+.pd-field-input::placeholder { color: var(--gray-4); }
+.pd-field-textarea { resize: vertical; min-height: 44px; line-height: 1.5; }
+.pd-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 14px;
+}
+.pd-field-grid .pd-field { margin-bottom: 0; }
+
+/* ── Detail popup ─────────────────────────────────── */
+/* เอาการเบลอ/ฝ้าพื้นหลังออก — พื้น overlay เป็นสีเข้มเรียบๆ ไม่มี blur
+   (!important เพื่อชนะทั้ง .cncpt-cc-modal เดิม และกฎ [class*="modal"] ใน theme-dark) */
+.cncpt-cc-modal.pd-no-blur,
+.pd-no-blur {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(12, 12, 14, 0.55) !important;
+}
+.pd-detail-header {
+  display: flex; align-items: center; gap: 16px;
+  padding-top: 24px !important;
+}
+.pd-detail-image {
+  width: 84px; height: 84px; flex-shrink: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--cream-dark);
+  border: 1.5px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+}
+.pd-detail-image img { width: 100%; height: 100%; object-fit: cover; }
+.pd-detail-image iconify-icon { font-size: 36px; color: var(--gray-4); }
+.pd-detail-head-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pd-detail-name {
+  font-family: 'Poppins', 'Bai Jamjuree', sans-serif;
+  font-size: 21px; font-weight: 700;
+  color: var(--charcoal);
+  word-break: break-word;
+}
+.pd-detail-head-info .pd-card-type { align-self: flex-start; }
+
+.pd-detail-body { padding-top: 16px !important; padding-bottom: 8px !important; }
+.pd-detail-group {
+  margin-bottom: 16px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.pd-detail-group-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 700;
+  color: var(--charcoal);
+  background: var(--cream-dark);
+  padding: 10px 14px;
+}
+.pd-detail-group-title iconify-icon { font-size: 18px; color: var(--orange); }
+.pd-info-row {
+  display: flex; gap: 12px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.pd-info-label {
+  flex: 0 0 120px;
+  color: var(--gray-3); font-weight: 600;
+}
+.pd-info-value {
+  flex: 1;
+  color: var(--charcoal);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.pd-detail-loading {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 40px 0 !important;
+  color: var(--gray-3); font-size: 14px;
+}
+.pd-detail-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 36px 24px !important;
+  text-align: center;
+  color: var(--gray-3);
+}
+.pd-detail-empty iconify-icon { font-size: 46px; color: var(--gray-4); }
+.pd-detail-empty p { font-size: 15px; font-weight: 700; color: var(--gray-2); }
+.pd-detail-empty span { font-size: 12.5px; max-width: 320px; line-height: 1.55; }
+.pd-spin { animation: pdSpin 0.9s linear infinite; }
+@keyframes pdSpin { to { transform: rotate(360deg); } }
+
 /* ── Responsive ───────────────────────────────────── */
 @media (max-width: 1200px) {
   .pd-cards-grid { grid-template-columns: repeat(2, 1fr); }
@@ -405,4 +652,81 @@
   .pd-cards-grid { grid-template-columns: 1fr; }
   .pd-main { padding: 20px; }
   .pd-fab { bottom: 20px; right: 20px; }
+  .pd-field-grid { grid-template-columns: 1fr; }
 }
+
+/* =====================================================================
+   โหมดมืด — popup รายละเอียดสินค้า + ฟอร์มเพิ่ม/แก้ไข
+   (token เดิม map เป็นเทาสว่าง #7e7e7e ทำให้พื้น/ตัวอักษรจมกัน → กำหนดสีเทาเข้มเอง)
+   ===================================================================== */
+
+/* ---- popup รายละเอียด ---- */
+html[data-theme="dark"] .pd-detail-image {
+  background: #262626;
+  border-color: #4a4a4a;
+}
+html[data-theme="dark"] .pd-detail-image iconify-icon { color: #7a7a7a; }
+html[data-theme="dark"] .pd-detail-name { color: #ffffff; }
+
+html[data-theme="dark"] .pd-detail-group {
+  background: #242424;
+  border-color: #3d3d3d;
+}
+html[data-theme="dark"] .pd-detail-group-title {
+  background: #333333;
+  color: #ffffff;
+}
+html[data-theme="dark"] .pd-detail-group-title iconify-icon { color: #e8845a; }
+
+html[data-theme="dark"] .pd-info-row { border-top-color: #3a3a3a; }
+html[data-theme="dark"] .pd-info-label { color: #b0b0b0; }
+html[data-theme="dark"] .pd-info-value { color: #ffffff; }
+
+html[data-theme="dark"] .pd-detail-empty { color: #a0a0a0; }
+html[data-theme="dark"] .pd-detail-empty iconify-icon { color: #5a5a5a; }
+html[data-theme="dark"] .pd-detail-empty p { color: #e9e9e9; }
+html[data-theme="dark"] .pd-detail-loading { color: #a0a0a0; }
+
+/* ป้ายประเภทสินค้า (pill) ให้เป็นเทาเข้ม ไม่ใช่เทาสว่าง */
+html[data-theme="dark"] .pd-card-type {
+  background: #3a3a3a;
+  color: #d0d0d0;
+  border-color: #4a4a4a;
+}
+
+/* ---- ฟอร์มเพิ่ม/แก้ไข (ให้เข้าชุดกับ popup) ---- */
+html[data-theme="dark"] .pd-form-section {
+  background: #242424;
+  border-color: #3d3d3d;
+}
+html[data-theme="dark"] .pd-section-head { color: #ffffff; }
+html[data-theme="dark"] .pd-section-head:hover { background: #333333; }
+html[data-theme="dark"] .pd-section-title iconify-icon { color: #e8845a; }
+html[data-theme="dark"] .pd-section-head > iconify-icon { color: #a0a0a0; }
+html[data-theme="dark"] .pd-section-body { border-top-color: #3a3a3a; }
+
+/* ---- kebab menu ---- */
+html[data-theme="dark"] .pd-card-menu-btn {
+  background: rgba(55, 55, 55, 0.92);
+  color: #e0e0e0;
+}
+html[data-theme="dark"] .pd-card-menu-btn:hover { background: var(--orange); color: #fff; }
+html[data-theme="dark"] .pd-card-menu {
+  background: #2d2d2d;
+  border-color: #4a4a4a;
+}
+html[data-theme="dark"] .pd-card-menu-item { color: #ffffff; }
+html[data-theme="dark"] .pd-card-menu-item iconify-icon { color: #c0c0c0; }
+html[data-theme="dark"] .pd-card-menu-item:hover { background: #3a3a3a; }
+html[data-theme="dark"] .pd-menu-danger { color: #ff6b5e; }
+html[data-theme="dark"] .pd-menu-danger iconify-icon { color: #ff6b5e; }
+html[data-theme="dark"] .pd-menu-danger:hover { background: #3a2523; }
+
+html[data-theme="dark"] .pd-field-label { color: #b0b0b0; }
+/* ช่องกรอกให้เป็นเทาเข้ม (ทับ global input override ที่เป็นเทาสว่าง #7e7e7e) */
+html[data-theme="dark"] .pd-field-input {
+  background: #2d2d2d;
+  color: #ffffff;
+  border-color: #4a4a4a;
+}
+html[data-theme="dark"] .pd-field-input::placeholder { color: #7a7a7a; }

@@ -8,6 +8,8 @@ import LabelEditor from './LabelEditor';
 import logoImg from '../assets/logo.png';
 import { ProjectSidebar } from '../components/sidebar';
 import { API_URL } from '../config';
+import NavProfileButton from '../components/NavProfileButton';
+import NotificationBell from '../components/NotificationBell';
 
 const TABS = [
   { id: 'package', label: 'Package' },
@@ -47,8 +49,8 @@ export const Result = () => {
                 </div>
                 <div className="rs-nav-icons">
                     <button className="rs-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
-                    <button className="rs-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
-                    <button className="rs-btn-users"><iconify-icon icon="solar:user-linear"></iconify-icon></button>
+                    <NotificationBell className="rs-btn-world" />
+                    <NavProfileButton className="rs-btn-users" />
                 </div>
             </header>
 

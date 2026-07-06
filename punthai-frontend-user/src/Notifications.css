@@ -1,0 +1,110 @@
+/* =====================================================================
+   Notifications.css — หน้ารวมการแจ้งเตือนทั้งหมด
+   ===================================================================== */
+.ntfpage-body {
+  min-height: 100vh;
+  background: #fefaf7;
+  font-family: 'Bai Jamjuree', sans-serif;
+}
+
+.ntfpage-navbar {
+  height: 72px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px;
+  background: #fff;
+  border-bottom: 1px solid #ecddd3;
+  position: sticky; top: 0; z-index: 10;
+}
+.ntfpage-logo { height: 42px; width: auto; object-fit: contain; }
+.ntfpage-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1.5px solid #ddd0c4; background: #fff;
+  border-radius: 99px; padding: 8px 18px;
+  font-family: inherit; font-size: 14px; font-weight: 600; color: #5a4a40;
+  cursor: pointer; transition: all 0.2s ease;
+}
+.ntfpage-back:hover { background: #f5ede4; }
+.ntfpage-back iconify-icon { font-size: 18px; }
+
+.ntfpage-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+}
+.ntfpage-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 22px; flex-wrap: wrap;
+}
+.ntfpage-title { font-family: 'Poppins', 'Bai Jamjuree', sans-serif; font-size: 24px; font-weight: 700; color: #2a1f17; }
+.ntfpage-sub { font-size: 14px; color: #9a8880; margin-top: 2px; }
+.ntfpage-markall {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1.5px solid #fde0d0; background: #fff3ee;
+  border-radius: 99px; padding: 9px 18px;
+  font-family: inherit; font-size: 13px; font-weight: 600; color: #c94f24;
+  cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
+}
+.ntfpage-markall:hover { background: #c94f24; color: #fff; border-color: #c94f24; }
+.ntfpage-markall iconify-icon { font-size: 18px; }
+
+.ntfpage-list { display: flex; flex-direction: column; gap: 12px; }
+.ntfpage-item {
+  display: flex; gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1.5px solid #ecddd3;
+  border-radius: 16px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+.ntfpage-item:hover { border-color: #fac4a8; box-shadow: 0 4px 16px rgba(80, 40, 20, 0.08); }
+.ntfpage-item.ntfpage-unread { background: #fff8f4; border-color: #fde0d0; }
+
+.ntfpage-icon {
+  position: relative;
+  flex: 0 0 44px;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: #fff3ee;
+  display: flex; align-items: center; justify-content: center;
+}
+.ntfpage-icon iconify-icon { font-size: 22px; color: #c94f24; }
+.ntfpage-dot {
+  position: absolute; top: 2px; right: 2px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #e5432c; box-shadow: 0 0 0 2px #fff;
+}
+
+.ntfpage-item-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ntfpage-item-title { font-size: 15px; font-weight: 600; color: #2a1f17; line-height: 1.4; word-break: break-word; }
+.ntfpage-item.ntfpage-unread .ntfpage-item-title { font-weight: 700; }
+.ntfpage-item-msg { font-size: 13.5px; color: #6f5f55; line-height: 1.5; word-break: break-word; }
+.ntfpage-item-time { font-size: 12px; color: #a89a90; margin-top: 2px; }
+
+.ntfpage-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 80px 20px; text-align: center;
+  color: #9a8880; font-size: 15px;
+}
+.ntfpage-empty iconify-icon { font-size: 56px; color: #d8c8bd; }
+.ntfpage-spin { animation: ntfpageSpin 0.9s linear infinite; font-size: 22px !important; }
+@keyframes ntfpageSpin { to { transform: rotate(360deg); } }
+
+/* ── โหมดมืด ── */
+html[data-theme="dark"] .ntfpage-body { background: #1e1e1e; }
+html[data-theme="dark"] .ntfpage-navbar { background: #2d2d2d; border-bottom-color: #3d3d3d; }
+html[data-theme="dark"] .ntfpage-back { background: #333; border-color: #4a4a4a; color: #e0e0e0; }
+html[data-theme="dark"] .ntfpage-back:hover { background: #3a3a3a; }
+html[data-theme="dark"] .ntfpage-title { color: #fff; }
+html[data-theme="dark"] .ntfpage-sub { color: #9a9a9a; }
+html[data-theme="dark"] .ntfpage-item { background: #2d2d2d; border-color: #3d3d3d; }
+html[data-theme="dark"] .ntfpage-item:hover { border-color: #6b4a38; }
+html[data-theme="dark"] .ntfpage-item.ntfpage-unread { background: #3a2d24; border-color: #5a4030; }
+html[data-theme="dark"] .ntfpage-icon { background: #3a2d24; }
+html[data-theme="dark"] .ntfpage-item-title { color: #fff; }
+html[data-theme="dark"] .ntfpage-item-msg { color: #b8aaa0; }
+html[data-theme="dark"] .ntfpage-item-time { color: #8c8c8c; }
+html[data-theme="dark"] .ntfpage-empty { color: #9a9a9a; }

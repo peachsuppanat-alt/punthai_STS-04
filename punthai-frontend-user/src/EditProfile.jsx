@@ -5,6 +5,7 @@ import './Profile.css';
 import logoImg from './assets/logo.png';
 import helpImg from './assets/help.png';
 import { API_URL } from './config';
+import NotificationBell from './components/NotificationBell';
 
 export const EditProfile = ({ user, setUser }) => {
   const navigate = useNavigate();
@@ -123,7 +124,7 @@ export const EditProfile = ({ user, setUser }) => {
         </div>
         <div className="pf-nav-icons">
           <button className="pf-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
-          <button className="pf-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
+          <NotificationBell className="pf-btn-world" />
           <button className="pf-btn-users" style={{ overflow: 'hidden', padding: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             {getProfileImage(userData.image_profile) ? (
                 <img src={getProfileImage(userData.image_profile)} alt="User" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

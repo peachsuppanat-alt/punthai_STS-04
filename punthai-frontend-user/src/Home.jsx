@@ -27,6 +27,7 @@ import elementContent   from './assets/home/element_content.png'
 import bgHeadHome       from './assets/home/BG-headhome.png'
 import homeLogo         from './assets/home/homelogo.png'
 import { API_URL } from './config';
+import NotificationBell from './components/NotificationBell';
 
 const Home = ({ user }) => {
   const [activeCard, setActiveCard]           = useState(null);
@@ -668,6 +669,8 @@ const Home = ({ user }) => {
           </div>
         </div>
       )}
+      {/* ปุ่มแจ้งเตือนลอย มุมล่างขวา (คงตำแหน่งเมื่อเลื่อนหน้าจอ) */}
+      {user && <NotificationBell floating />}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import './App.css';
 
@@ -21,16 +21,44 @@ import ContentOnline from './ContentOnline';
 import Subscription from './Subscription';
 import { Settings } from './Settings';
 import About from './About';
+import Notifications from './Notifications';
+import GlobalSearch from './components/GlobalSearch';
 
 
 
 
 
 function App() {
-  const [user, setUser] = useState(null);       // (null = ยังไม่ Login)
+  // อ่านสถานะล็อกอินกลับจาก localStorage ตอนโหลด/รีเฟรชหน้า → คงการล็อกอินไว้
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      const parsed = stored ? JSON.parse(stored) : null;
+      // กันเคส object ว่าง {} ถูกมองว่าล็อกอินอยู่
+      return parsed && Object.keys(parsed).length > 0 ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
   const [showAuth, setShowAuth] = useState(false); //  Popup
 
-  // ดึงข้อมูล URL 
+  // Sync ข้ามแท็บ: เมื่อ localStorage 'user' เปลี่ยนในอีกแท็บ (ล็อกอิน/ล็อกเอาต์)
+  // event 'storage' จะยิงเฉพาะแท็บ "อื่น" ที่ไม่ได้เป็นคนเปลี่ยน → อัปเดต state ให้ตรงกัน
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key !== 'user') return;
+      try {
+        const parsed = e.newValue ? JSON.parse(e.newValue) : null;
+        setUser(parsed && Object.keys(parsed).length > 0 ? parsed : null);
+      } catch {
+        setUser(null);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  // ดึงข้อมูล URL
   const location = useLocation();
 
   // isProjectPage เพื่อซ่อน Navbar ตัวหลัก
@@ -45,6 +73,7 @@ function App() {
                       location.pathname === '/profile' ||
                       location.pathname === '/edit_profile' ||
                       location.pathname === '/my-package' ||
+                      location.pathname === '/notifications' ||
                       location.pathname === '/settings';
 
 
@@ -81,8 +110,12 @@ function App() {
         <Route path="/subscription" element={<Subscription user={user} setUser={setUser} />} />
         <Route path="/settings" element={<Settings user={user} setUser={setUser} />} />
         <Route path="/about" element={<About />} />
+        <Route path="/notifications" element={<Notifications />} />
       </Routes>
 
+
+      {/* ค้นหาทั้งเว็บ (command palette) — ทำงานกับ icon ค้นหาทุกจุด + Ctrl/Cmd+K */}
+      <GlobalSearch />
 
       {/* แสดง Popup เมื่อ showAuth เป็น true */}
       {showAuth && (

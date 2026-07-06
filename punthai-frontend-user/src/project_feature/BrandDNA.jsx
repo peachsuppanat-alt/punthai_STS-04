@@ -5,6 +5,8 @@ import { ProjectSidebar } from '../components/sidebar';
 
 import logoImg from '../assets/logo.png';
 import { API_URL } from '../config';
+import NavProfileButton from '../components/NavProfileButton';
+import NotificationBell from '../components/NotificationBell';
 
 export const BrandDNA = () => {
   const navigate = useNavigate();
@@ -334,8 +336,8 @@ export const BrandDNA = () => {
         <div className="bdna-logo"><Link to="/"><img src={logoImg} alt="logo" className="bdna-logo-img" /></Link></div>
         <div className="bdna-nav-icons">
           <button className="bdna-btn-world"><iconify-icon icon="iconamoon:search-light"></iconify-icon></button>
-          <button className="bdna-btn-world"><iconify-icon icon="ph:bell-ringing-light"></iconify-icon></button>
-          <button className="bdna-btn-users"><iconify-icon icon="solar:user-linear"></iconify-icon></button>
+          <NotificationBell className="bdna-btn-world" />
+          <NavProfileButton className="bdna-btn-users" />
         </div>
       </header>
 

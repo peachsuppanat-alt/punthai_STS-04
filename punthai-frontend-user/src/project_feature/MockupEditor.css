@@ -144,7 +144,11 @@
     overflow-y: auto;
     background: var(--pe-bg-card);
     padding: 20px 18px;
+    scrollbar-width: none;       /* Firefox */
+    -ms-overflow-style: none;    /* IE/Edge legacy */
+    transition: width 0.22s ease, min-width 0.22s ease, padding 0.22s ease, opacity 0.15s ease;
 }
+.pkgdesign-sidebar::-webkit-scrollbar { display: none; } /* Chrome/Safari/Edge */
 
 .back-link {
     background: none;
@@ -847,6 +851,7 @@
     background: var(--pe-bg-card);
     display: flex;
     flex-direction: column;
+    transition: width 0.22s ease, min-width 0.22s ease, opacity 0.15s ease;
 }
 .props-tabs {
     display: flex;
@@ -1642,6 +1647,22 @@
 }
 .canvas-panel-nav-btn:hover {
     border-color: var(--pe-border-strong);
+}
+.canvas-panel-toggle-btn {
+    background: var(--pe-bg-card);
+    border: 1px solid var(--pe-border);
+    border-radius: 8px;
+    padding: 5px 9px;
+    cursor: pointer;
+    font-size: 17px;
+    display: flex;
+    align-items: center;
+    color: var(--pe-primary, #2563eb);
+    transition: border-color 0.1s, background 0.1s;
+}
+.canvas-panel-toggle-btn:hover {
+    border-color: var(--pe-border-strong);
+    background: var(--pe-bg-hover, #f3f4f6);
 }
 .canvas-panel-nav-label {
     font-size: 15px;
@@ -2542,4 +2563,28 @@
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+/* ---------- Responsive (จอคอมพิวเตอร์ที่เล็กกว่าปกติ) ----------
+   ย่อความกว้าง sidebar/props-panel ลงเพื่อเหลือพื้นที่ canvas มากขึ้น
+   ตัว canvas เองจะ auto fit-to-screen อยู่แล้ว (ดู handleFitToScreen ใน .jsx) */
+@media (max-width: 1440px) {
+    .pkgdesign-sidebar { width: 280px; min-width: 280px; }
+    .pkgdesign-props-panel { width: 230px; min-width: 230px; }
+}
+@media (max-width: 1200px) {
+    .pkgdesign-sidebar { width: 240px; min-width: 240px; }
+    .pkgdesign-props-panel { width: 200px; min-width: 200px; }
+}
+
+/* ---------- ยุบ sidebar/props-panel เพื่อคืนพื้นที่ให้ canvas ----------
+   toggle ผ่านปุ่มใน canvas-panel-nav (setSidebarOpen / setPropsPanelOpen) */
+.pkgdesign-panel-collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    opacity: 0;
 }
