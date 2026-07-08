@@ -14,6 +14,7 @@ import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import Omise from 'omise';
 import cron from 'node-cron';
+import { saveBuffer, saveUpload, loadBuffer, uploadsHandler } from './storage.js';
 
 // สร้าง Client สำหรับตรวจสอบ Token จาก Google
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -41,7 +42,7 @@ app.use(cors({
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', uploadsHandler); // serve local file if present, else redirect to R2
 
 // Middleware: track last_active_at สำหรับทุก request ที่มี user_id
 const activeUserCache = new Map(); // เก็บ cache ไม่ให้ UPDATE ถี่เกินไป
@@ -101,22 +102,14 @@ if (!fs.existsSync(generatedDir)) {
     fs.mkdirSync(generatedDir, { recursive: true });
 }
 
-// ตั้งค่า Multer สำหรับรูปภาพที่ User อัปโหลดมาเอง
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/') // 👈 เก็บในโฟลเดอร์ uploads/
-    },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname))
-    }
-});
-const upload = multer({ storage: storage });
+// ตั้งค่า Multer สำหรับรูปภาพที่ User อัปโหลดมาเอง (memoryStorage → อัปขึ้น R2 ผ่าน storage.js)
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ================= API LOGIN & REGISTER =================
 // ================= API LOGIN & REGISTER (อัปเดตใหม่) =================
 app.post('/api/register', upload.single('img_profile'), async (req, res) => {
     const { user_name, password, email, first_name, last_name } = req.body;
-    const image_profile = req.file ? req.file.filename : null;
+    const image_profile = req.file ? (await saveUpload(req.file)).filename : null;
     const subscription_status = 'STANDARD';
 
     if (!user_name || !password || !email) {
@@ -296,7 +289,7 @@ app.post('/api/auth/google', async (req, res) => {
 app.put('/api/users/profile/:userId', upload.single('image_profile'), async (req, res) => {
     const { userId } = req.params;
     const { first_name, last_name, user_name, password } = req.body;
-    const image_profile = req.file ? req.file.filename : null;
+    const image_profile = req.file ? (await saveUpload(req.file)).filename : null;
 
     try {
         const connection = await pool.getConnection();
@@ -560,7 +553,7 @@ app.get('/api/brand_product/:projectId', async (req, res) => {
 
 app.post('/api/brand_product', upload.single('image_product'), async (req, res) => {
     const { project_id, name_product, type_product } = req.body;
-    const image_product = req.file ? req.file.filename : null;
+    const image_product = req.file ? (await saveUpload(req.file)).filename : null;
     if (!project_id || !name_product || !type_product) {
         return res.status(400).json({ status: 'error', message: 'ข้อมูลไม่ครบถ้วน' });
     }
@@ -586,9 +579,10 @@ app.patch('/api/brand_product/:id', upload.single('image_product'), async (req, 
     try {
         const connection = await pool.getConnection();
         if (req.file) {
+            const image_product = (await saveUpload(req.file)).filename;
             await connection.query(
                 'UPDATE brand_product SET name_product = ?, type_product = ?, image_product = ? WHERE product_id = ?',
-                [name_product, type_product, req.file.filename, id]
+                [name_product, type_product, image_product, id]
             );
         } else {
             await connection.query(
@@ -1543,7 +1537,7 @@ app.get('/api/generate-logo', async (req, res) => {
 
         const fileName = `logo_${Date.now()}.png`;
         const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
-        fs.writeFileSync(filePath, base64Data, 'base64');
+        await saveBuffer(`generated/${fileName}`, Buffer.from(base64Data, 'base64'));
         const imageUrl = `/uploads/generated/${fileName}`;
 
         const conn2 = await pool.getConnection();
@@ -1787,8 +1781,8 @@ app.post('/api/packages', upload.fields([{ name: 'thumbnail', maxCount: 1 }, { n
 
     const thumbFile = req.files?.thumbnail?.[0];
     const imageFiles = req.files?.images || [];
-    const thumbPath = thumbFile ? `/uploads/${thumbFile.filename}` : '';
-    const imagePaths = imageFiles.map(f => `/uploads/${f.filename}`);
+    const thumbPath = thumbFile ? (await saveUpload(thumbFile)).url : '';
+    const imagePaths = await Promise.all(imageFiles.map(async f => (await saveUpload(f)).url));
     // ใช้รูปแรกเป็น thumbnail ถ้าไม่ได้อัปโหลด thumbnail แยก
     const finalThumb = thumbPath || imagePaths[0] || '';
 
@@ -2866,7 +2860,7 @@ ${toneMap[tone] ? 'TONE: ' + toneMap[tone] : ''}
         const fileName = `labelbg_${Date.now()}.png`;
         // ✅ เปลี่ยนให้เซฟลงโฟลเดอร์ uploads/generated/
         const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
-        fs.writeFileSync(filePath, base64Data, 'base64');
+        await saveBuffer(`generated/${fileName}`, Buffer.from(base64Data, 'base64'));
 
         // เวลาส่ง URL กลับไปให้ Frontend ต้องมี /generated/ ด้วย
         const imageUrl = `/uploads/generated/${fileName}`;
@@ -2957,7 +2951,7 @@ app.post('/api/labels', async (req, res) => {
             const base64Clean = label_image_base64.replace(/^data:image\/\w+;base64,/, '');
             const fileName = `label_snap_${product_id}.png`;
             const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
-            fs.writeFileSync(filePath, base64Clean, 'base64');
+            await saveBuffer(`generated/${fileName}`, Buffer.from(base64Clean, 'base64'));
             finalLabelUrl = `/uploads/generated/${fileName}`;
         }
 
@@ -3030,16 +3024,12 @@ app.get('/api/label-bg-history/:projectId', async (req, res) => {
 
 // 7. อัปโหลดรูปพื้นหลัง label (custom upload)
 if (!fs.existsSync('./uploads/generated')) fs.mkdirSync('./uploads/generated', { recursive: true });
-const labelBgStorage = multer.diskStorage({
-    destination: 'uploads/generated/',
-    filename: (req, file, cb) => cb(null, `labelbg_upload_${Date.now()}${path.extname(file.originalname)}`)
-});
-const labelBgUpload = multer({ storage: labelBgStorage });
+const labelBgUpload = multer({ storage: multer.memoryStorage() });
 
 app.post('/api/label-bg-upload', labelBgUpload.single('image'), async (req, res) => {
     if (!req.file) return res.status(400).json({ status: 'error', message: 'No file uploaded' });
     const { project_id, user_id } = req.body;
-    const imageUrl = `/uploads/generated/${req.file.filename}`;
+    const imageUrl = (await saveUpload(req.file, 'generated')).url;
 
     try {
         const conn = await pool.getConnection();
@@ -3065,11 +3055,7 @@ app.post('/api/label-bg-upload', labelBgUpload.single('image'), async (req, res)
 
 // ----- Multer สำหรับ admin upload pattern -----
 if (!fs.existsSync('./uploads/patterns')) fs.mkdirSync('./uploads/patterns', { recursive: true });
-const patternStorage = multer.diskStorage({
-    destination: 'uploads/patterns/',
-    filename: (req, file, cb) => cb(null, `pat_${Date.now()}${path.extname(file.originalname)}`)
-});
-const patternUpload = multer({ storage: patternStorage });
+const patternUpload = multer({ storage: multer.memoryStorage() });
 
 // ----- 1) GET selected packages ของ project -----
 app.get('/api/mockup/selected-packages/:projectId', async (req, res) => {
@@ -3162,7 +3148,7 @@ app.get('/api/pattern-library', async (req, res) => {
 app.post('/api/admin/upload-pattern', patternUpload.single('pattern_image'), async (req, res) => {
     const { name, category } = req.body;
     if (!req.file) return res.status(400).json({ status: 'error', message: 'no file uploaded' });
-    const url = `/uploads/patterns/${req.file.filename}`;
+    const url = (await saveUpload(req.file, 'patterns')).url;
     try {
         const conn = await pool.getConnection();
         const [r] = await conn.query(
@@ -3224,7 +3210,7 @@ STRICT RULES:
             model: 'Gemini 2.5 Flash Preview Image', prompt, n: 1, size: '1024x1024', response_format: 'b64_json'
         });
         const fname = `mockup_pat_${Date.now()}.png`;
-        fs.writeFileSync(path.join('uploads', fname), response.data[0].b64_json, 'base64');
+        await saveBuffer(fname, Buffer.from(response.data[0].b64_json, 'base64'));
         const imageUrl = `/uploads/${fname}`;
 
         const c2 = await pool.getConnection();
@@ -3253,7 +3239,7 @@ STRICT RULES:
 app.post('/api/mockup/upload-pattern', patternUpload.single('pattern_image'), async (req, res) => {
     if (!req.file) return res.status(400).json({ status: 'error', message: 'no file' });
     const { user_id } = req.body;
-    const url = `/uploads/patterns/${req.file.filename}`;
+    const url = (await saveUpload(req.file, 'patterns')).url;
     try {
         const conn = await pool.getConnection();
         const [r] = await conn.query(
@@ -3309,7 +3295,7 @@ STRICT RULES:
             model: 'gemini-2.5-flash-image', prompt, n: 1, size: '1024x1024', response_format: 'b64_json'
         });
         const fname = `dieline_bg_${Date.now()}.png`;
-        fs.writeFileSync(path.join('uploads', fname), response.data[0].b64_json, 'base64');
+        await saveBuffer(fname, Buffer.from(response.data[0].b64_json, 'base64'));
         const imageUrl = `/uploads/${fname}`;
 
         const c2 = await pool.getConnection();
@@ -3401,21 +3387,14 @@ app.post('/api/mockup/generate-package-mockup', async (req, res) => {
 
         // Image 1: Package photo (if available)
         if (package_image_url) {
-            const possiblePaths = [
-                path.join(process.cwd(), package_image_url.replace(/^\//, '')),
-                path.join(process.cwd(), '..', 'punthai-frontend-user', 'public', package_image_url.replace(/^\//, ''))
-            ];
-            for (const pkgPath of possiblePaths) {
-                if (fs.existsSync(pkgPath)) {
-                    const buf = await sharp(pkgPath)
-                        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-                        .jpeg({ quality: 85 })
-                        .toBuffer();
-                    imageParts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
-                    imgIdx++;
-                    break;
-                }
-            }
+            try {
+                const buf = await sharp(await loadBuffer(package_image_url))
+                    .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+                    .jpeg({ quality: 85 })
+                    .toBuffer();
+                imageParts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
+                imgIdx++;
+            } catch (e) { /* source image not found — skip */ }
         }
         const hasPackageImg = imgIdx > 1;
 
@@ -3555,7 +3534,7 @@ PHOTOGRAPHY: Professional studio photo, soft lighting, shadow under product, sha
         const dirPath = path.join(process.cwd(), 'uploads', 'generated');
         if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
         const filePath = path.join(dirPath, fileName);
-        fs.writeFileSync(filePath, resizedBuf);
+        await saveBuffer(`generated/${fileName}`, resizedBuf);
         const imageUrl = `/uploads/generated/${fileName}`;
 
         try {
@@ -3856,7 +3835,7 @@ app.post('/api/mockups/:mockupId/export-pdf', async (req, res) => {
         const ext = format === 'ai' ? 'ai' : 'pdf';
         const fname = `mockup_${mockupId}_${Date.now()}.${ext}`;
         const fpath = path.join('uploads', fname);
-        fs.writeFileSync(fpath, pdfBytes);
+        await saveBuffer(fname, pdfBytes);
 
         const c2 = await pool.getConnection();
         await c2.query(`UPDATE mockup_design SET print_pdf_url=?, status='exported' WHERE mockup_id=?`, [`/uploads/${fname}`, mockupId]);
@@ -3987,32 +3966,24 @@ app.post('/api/mockup/generate-ai-image', async (req, res) => {
 
         // Image 1: บีบอัด package เป็น JPEG 1024px
         if (package_image_url) {
-            const possiblePaths = [
-                path.join(process.cwd(), package_image_url.replace(/^\//, '')),
-                path.join(process.cwd(), '..', 'punthai-frontend-user', 'public', package_image_url.replace(/^\//, ''))
-            ];
-            for (const pkgPath of possiblePaths) {
-                if (fs.existsSync(pkgPath)) {
-                    const buf = await sharp(pkgPath)
-                        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-                        .jpeg({ quality: 80 })
-                        .toBuffer();
-                    imageParts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
-                    break;
-                }
-            }
+            try {
+                const buf = await sharp(await loadBuffer(package_image_url))
+                    .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+                    .jpeg({ quality: 80 })
+                    .toBuffer();
+                imageParts.push({ inlineData: { mimeType: 'image/jpeg', data: buf.toString('base64') } });
+            } catch (e) { /* skip */ }
         }
 
         // Image 2: บีบอัด label เป็น PNG 2048px (คงคุณภาพสูง)
         if (label_image_url) {
-            const lblPath = path.join(process.cwd(), label_image_url.replace(/^\//, ''));
-            if (fs.existsSync(lblPath)) {
-                const buf = await sharp(lblPath)
+            try {
+                const buf = await sharp(await loadBuffer(label_image_url))
                     .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
                     .png()
                     .toBuffer();
                 imageParts.push({ inlineData: { mimeType: 'image/png', data: buf.toString('base64') } });
-            }
+            } catch (e) { /* skip */ }
         }
 
         if (imageParts.length === 0) {
@@ -4154,7 +4125,7 @@ Professional studio photography, white background, soft lighting, no people/hand
         const ext = mimeType.includes('jpeg') ? 'jpg' : 'png';
         const fileName = `mockup_ai_${Date.now()}.${ext}`;
         const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
-        fs.writeFileSync(filePath, base64Data, 'base64');
+        await saveBuffer(`generated/${fileName}`, Buffer.from(base64Data, 'base64'));
         const imageUrl = `/uploads/generated/${fileName}`;
 
         try {
@@ -4332,7 +4303,7 @@ app.post('/api/labels/export-pdf', async (req, res) => {
         const pdfBytes = await pdfDoc.save();
         const fname = `label_${product_id || 'design'}_${Date.now()}.pdf`;
         const fpath = path.join('uploads', fname);
-        fs.writeFileSync(fpath, pdfBytes);
+        await saveBuffer(fname, pdfBytes);
         const url = `/uploads/${fname}`;
 
         res.json({ status: 'success', pdf_url: url });
@@ -4907,25 +4878,16 @@ app.post('/api/content-online/generate', async (req, res) => {
             let imageParts = [];
             if (source_image_url) {
                 try {
-                    let imgPath;
-                    if (source_image_url.startsWith('/uploads/')) {
-                        imgPath = path.join(process.cwd(), source_image_url);
-                    } else {
-                        imgPath = path.join(process.cwd(), 'uploads', source_image_url);
-                    }
-
-                    if (fs.existsSync(imgPath)) {
-                        const imgBuffer = await sharp(imgPath)
-                            .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
-                            .jpeg({ quality: 85 })
-                            .toBuffer();
-                        imageParts.push({
-                            inlineData: {
-                                mimeType: 'image/jpeg',
-                                data: imgBuffer.toString('base64')
-                            }
-                        });
-                    }
+                    const imgBuffer = await sharp(await loadBuffer(source_image_url))
+                        .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+                        .jpeg({ quality: 85 })
+                        .toBuffer();
+                    imageParts.push({
+                        inlineData: {
+                            mimeType: 'image/jpeg',
+                            data: imgBuffer.toString('base64')
+                        }
+                    });
                 } catch (imgErr) {
                     console.warn('Could not load source image:', imgErr.message);
                 }
@@ -4968,7 +4930,7 @@ app.post('/api/content-online/generate', async (req, res) => {
             const ext = mimeType.includes('jpeg') ? 'jpg' : 'png';
             const fileName = `content_ad_${Date.now()}.${ext}`;
             const filePath = path.join(process.cwd(), 'uploads', 'generated', fileName);
-            fs.writeFileSync(filePath, Buffer.from(imgBase64, 'base64'));
+            await saveBuffer(`generated/${fileName}`, Buffer.from(imgBase64, 'base64'));
             finalImageUrl = `/uploads/generated/${fileName}`;
             logGeminiUsage({ userId: user_id || null, projectId: project_id, endpoint: '/api/content-online/generate', usageType: 'image', modelName: 'gemini-3.1-flash-image-preview', feature: 'content_online_image', promptSent: imagePrompt?.substring(0, 10000), responseSummary: finalImageUrl });
         }
@@ -5051,7 +5013,7 @@ app.post('/api/content-online/upload-image', upload.single('image'), async (req,
     if (!req.file) {
         return res.status(400).json({ status: 'error', message: 'ไม่พบไฟล์รูปภาพ' });
     }
-    const imageUrl = `/uploads/${req.file.filename}`;
+    const imageUrl = (await saveUpload(req.file)).url;
     res.json({ status: 'success', image_url: imageUrl });
 });
 
@@ -5774,7 +5736,7 @@ app.post('/api/subscription/check-expired', async (req, res) => {
 // POST /api/third-party/register — ลงทะเบียนโรงพิมพ์
 app.post('/api/third-party/register', upload.single('image_profile'), async (req, res) => {
     const { third_party_name, email, password, phone } = req.body;
-    const image_profile = req.file ? req.file.filename : null;
+    const image_profile = req.file ? (await saveUpload(req.file)).filename : null;
 
     if (!third_party_name || !email || !password || !phone) {
         return res.status(400).json({
@@ -5936,7 +5898,7 @@ app.get('/api/third-party/:id', async (req, res) => {
 app.put('/api/third-party/:id', upload.single('image_profile'), async (req, res) => {
     const { id } = req.params;
     const { third_party_name, phone, password, address, map_url, line_id, facebook, website, about, open_hours } = req.body;
-    const image_profile = req.file ? req.file.filename : null;
+    const image_profile = req.file ? (await saveUpload(req.file)).filename : null;
 
     try {
         const connection = await pool.getConnection();
