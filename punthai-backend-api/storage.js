@@ -29,11 +29,19 @@ export const USE_R2 = Boolean(
 const PUBLIC_BASE = (R2_PUBLIC_URL || '').replace(/\/+$/, '');
 const LOCAL_ROOT = path.join(process.cwd(), 'uploads');
 
+// Accept either the bare account id OR a full endpoint URL pasted by mistake
+// (e.g. "https://<id>.r2.cloudflarestorage.com") — normalise to just the id.
+const ACCOUNT_ID = (R2_ACCOUNT_ID || '')
+    .replace(/^https?:\/\//i, '')
+    .replace(/\.r2\.cloudflarestorage\.com.*$/i, '')
+    .replace(/\/+$/, '')
+    .trim();
+
 let s3 = null;
 if (USE_R2) {
     s3 = new S3Client({
         region: 'auto',
-        endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        endpoint: `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`,
         credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
     });
     console.log(`🗄️  Storage: Cloudflare R2 enabled (bucket: ${R2_BUCKET})`);
