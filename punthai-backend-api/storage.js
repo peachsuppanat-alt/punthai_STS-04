@@ -9,7 +9,7 @@
 //  - When R2 env vars are NOT set -> behave exactly like before (local disk).
 //    This makes the migration safe to deploy incrementally.
 // ============================================================================
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
@@ -126,12 +126,27 @@ export async function loadBuffer(ref) {
     throw new Error(`loadBuffer: not found -> ${ref}`);
 }
 
-// Express handler for GET /uploads/*  (serve local, else redirect to R2).
-export function uploadsHandler(req, res) {
+// Express handler for GET /uploads/*.
+// Serves the local file if present; otherwise streams the object FROM R2 through
+// this backend (same-origin) instead of redirecting. Same-origin serving means
+// the app's existing CORS applies and there is no cross-origin redirect — which
+// some browsers (e.g. Samsung Internet) mishandle for crossOrigin <img>/canvas.
+export async function uploadsHandler(req, res) {
     const key = toKey(decodeURIComponent(req.path));
     if (!key || key.includes('..')) return res.status(400).end();
     const local = path.join(LOCAL_ROOT, key);
     if (fs.existsSync(local)) return res.sendFile(local);
-    if (USE_R2) return res.redirect(302, publicUrl(key));
-    return res.status(404).end();
+    if (!USE_R2) return res.status(404).end();
+    try {
+        const obj = await s3.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+        if (obj.ContentType) res.setHeader('Content-Type', obj.ContentType);
+        if (obj.ContentLength != null) res.setHeader('Content-Length', obj.ContentLength);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        obj.Body.on('error', () => { res.headersSent ? res.destroy() : res.status(502).end(); });
+        obj.Body.pipe(res);
+    } catch (e) {
+        if (e?.$metadata?.httpStatusCode === 404 || e?.name === 'NoSuchKey') return res.status(404).end();
+        console.error('uploadsHandler R2 error:', e?.message);
+        return res.status(502).end();
+    }
 }
