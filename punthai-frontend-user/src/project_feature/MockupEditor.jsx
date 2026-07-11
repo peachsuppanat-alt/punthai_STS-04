@@ -854,7 +854,7 @@ function PackageDesignEditor({ projectId, userId, projectName, product, brandAss
                             const r = node.getClientRect({ skipShadow: true });
                             box = { x: r.x, y: r.y, w: r.width, h: r.height };
                         }
-                        if (!dataUrl && el.type === 'image' && el.src) { dataUrl = await urlToDataUrl(el.src); box = { x: el.x, y: el.y, w: el.w, h: el.h }; }
+                        if (!dataUrl && el.type === 'image' && el.src) { dataUrl = await urlToDataUrl(resolveAssetUrl(el.src)); box = { x: el.x, y: el.y, w: el.w, h: el.h }; }
                         if (dataUrl && box) {
                             els.push({ type: 'image', x_mm: box.x / mmToPx, y_mm: box.y / mmToPx, w_mm: box.w / mmToPx, h_mm: box.h / mmToPx, dataUrl });
                         }
@@ -1957,6 +1957,19 @@ function PanelBackground({ design, width, height, panel, panels, materialData, a
 }
 
 // === Panel Element Renderer ===
+// รูป asset ที่ Vite bundle — ใช้ remap src แบบ dev ("/src/assets/...") ที่ถูกเก็บใน design เก่า
+// ให้เป็น URL ของ build ปัจจุบัน (production build ไม่มี /src/assets/ → ไม่งั้นโหลดเป็นรูปไม่ได้)
+const ASSET_URL_MODULES = import.meta.glob('../assets/**/*.{png,jpg,jpeg,svg,webp}', { eager: true, query: '?url', import: 'default' });
+const ASSET_LOOKUP = {};
+for (const k in ASSET_URL_MODULES) ASSET_LOOKUP[k.replace(/^\.\.\/assets\//, '')] = ASSET_URL_MODULES[k];
+function resolveAssetUrl(src) {
+    if (!src || typeof src !== 'string') return src;
+    const m = src.match(/\/src\/assets\/(.+)$/);
+    if (!m) return src;
+    let logical; try { logical = decodeURIComponent(m[1]); } catch { logical = m[1]; }
+    return ASSET_LOOKUP[logical] || src;
+}
+
 function PanelElement({ el, isSelected, onSelect, onChange, canvasW, canvasH, onCenterGuide }) {
     const [img, setImg] = useState(null);
 
@@ -1964,7 +1977,7 @@ function PanelElement({ el, isSelected, onSelect, onChange, canvasW, canvasH, on
         if (el.type === 'image' && el.src) {
             const i = new window.Image();
             i.crossOrigin = 'anonymous';
-            i.src = el.src;
+            i.src = resolveAssetUrl(el.src);
             i.onload = () => setImg(i);
         }
     }, [el.src]);
