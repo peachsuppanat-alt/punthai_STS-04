@@ -11,7 +11,7 @@ const captureLabelCanvas = async (node, scale = 2) => {
     return await htiToCanvas(node, {
         pixelRatio: scale,
         backgroundColor: null,
-        cacheBust: true,
+        cacheBust: false, // true จะเติม ?query ต่อท้าย src รวมถึง data URL ของโลโก้ → data URL พัง → img error → canvas taint
         style: { transform: 'none', margin: '0' }, // กันการ scale/zoom ของพรีวิวติดไปด้วย
     });
 };
