@@ -1300,7 +1300,7 @@ export default function LabelEditor({ projectId, userId }) {
             let labelImageBase64 = null;
             if (labelRef.current) {
                 try {
-                    const canvas = await captureLabelCanvas(labelRef.current, 2);
+                    const canvas = await captureLabelSafe(2);
                     labelImageBase64 = canvas.toDataURL('image/png');
                 } catch (e) { console.warn('label capture error:', e); }
             }
@@ -1352,7 +1352,7 @@ export default function LabelEditor({ projectId, userId }) {
         if (!labelRef.current) return;
         handleSaveLabel(true);
         try {
-            const canvas = await captureLabelCanvas(labelRef.current, 2);
+            const canvas = await captureLabelSafe(2);
             const link = document.createElement("a");
             link.href = canvas.toDataURL("image/png");
             link.download = `Label_Preview_${labelForm.productName || 'design'}.png`;
@@ -1377,7 +1377,7 @@ export default function LabelEditor({ projectId, userId }) {
         }
         try {
             const scale = calculateScaleFor300DPI();
-            const canvas = await captureLabelCanvas(labelRef.current, scale);
+            const canvas = await captureLabelSafe(scale);
             const link = document.createElement("a");
             link.href = canvas.toDataURL("image/png", 1.0);
             link.download = `Label_PrintReady_${labelForm.productName || 'design'}_300dpi.png`;
@@ -1393,7 +1393,7 @@ export default function LabelEditor({ projectId, userId }) {
         handleSaveLabel(true);
         try {
             const scale = calculateScaleFor300DPI();
-            const canvas = await captureLabelCanvas(labelRef.current, scale);
+            const canvas = await captureLabelSafe(scale);
             const imageData = canvas.toDataURL("image/png", 1.0);
 
             const widthCm = labelDimensions.width;
@@ -1504,6 +1504,39 @@ export default function LabelEditor({ projectId, userId }) {
                 fr.readAsDataURL(blob);
             });
         } catch (e) { return null; }
+    };
+
+    // จับภาพฉลากแบบปลอดภัย: pre-inline รูปทุกอัน (<img> src + CSS background-image)
+    // เป็น data URL ก่อน แล้วค่อยให้ html-to-image จับภาพ → ไม่มี cross-origin ให้ taint canvas
+    // (แก้ปัญหา PNG/PDF ดาวน์โหลดไม่ได้ "รูปภาพมาจากแหล่งที่บล็อก CORS")
+    const captureLabelSafe = async (scale) => {
+        const node = labelRef.current;
+        const restores = [];
+        // 1) <img> elements
+        await Promise.all([...node.querySelectorAll('img')].map(async (img) => {
+            const src = img.getAttribute('src') || '';
+            if (!src || src.startsWith('data:')) return;
+            const du = await imageToDataUrl(src);
+            if (!du) return;
+            restores.push(() => img.setAttribute('src', src));
+            await new Promise((res) => { img.onload = img.onerror = res; img.setAttribute('src', du); });
+        }));
+        // 2) inline background-image url(http...)
+        await Promise.all([node, ...node.querySelectorAll('*')].map(async (el) => {
+            const bg = el.style && el.style.backgroundImage;
+            const m = bg && bg.match(/url\(["']?(https?:[^"')]+)["']?\)/i);
+            if (!m) return;
+            const du = await imageToDataUrl(m[1]);
+            if (!du) return;
+            const orig = el.style.backgroundImage;
+            restores.push(() => { el.style.backgroundImage = orig; });
+            el.style.backgroundImage = `url("${du}")`;
+        }));
+        try {
+            return await captureLabelCanvas(node, scale);
+        } finally {
+            restores.forEach((fn) => fn());
+        }
     };
 
     // ข้อความแต่ละ "ย่อหน้า" ของแต่ละ element (ก่อนตัดบรรทัดตามความกว้าง)
