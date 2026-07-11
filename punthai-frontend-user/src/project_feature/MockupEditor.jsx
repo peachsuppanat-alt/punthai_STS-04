@@ -67,16 +67,21 @@ function LabelImageRenderer({ labelData, brandAssets, onReady }) {
                         <div className="label-render-ingredients-text">{labelData.ingredients}</div>
                     </div>
                 )}
-                {labelData.certifications?.length > 0 && (
-                    <div className="label-render-certs">
-                        {labelData.certifications.map((c, i) => {
-                            const url = (typeof c === 'object' && c) ? c.url : null;
-                            return url
-                                ? <img key={i} src={url} crossOrigin="anonymous" alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
-                                : (typeof c === 'string' ? <span key={i} className="label-render-cert-badge">{c}</span> : null);
-                        })}
-                    </div>
-                )}
+                {(() => {
+                    const raw = labelData.certifications;
+                    const certs = Array.isArray(raw) ? raw : (() => { try { return JSON.parse(raw || '[]'); } catch { return []; } })();
+                    if (!certs.length) return null;
+                    return (
+                        <div className="label-render-certs">
+                            {certs.map((c, i) => {
+                                const url = (typeof c === 'object' && c) ? c.url : null;
+                                return url
+                                    ? <img key={i} src={url} crossOrigin="anonymous" alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+                                    : (typeof c === 'string' ? <span key={i} className="label-render-cert-badge">{c}</span> : null);
+                            })}
+                        </div>
+                    );
+                })()}
             </div>
         </div>
     );
